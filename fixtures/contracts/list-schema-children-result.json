@@ -1,0 +1,34 @@
+{
+  "connectionId": "conn-local-postgres",
+  "parentKind": "schema",
+  "parentPath": "schema/public",
+  "cacheStatus": "fresh",
+  "refreshInFlight": false,
+  "refreshedAt": "2026-03-09T18:15:00.000Z",
+  "nodes": [
+    {
+      "kind": "table",
+      "id": "table/public/users",
+      "connectionId": "conn-local-postgres",
+      "name": "users",
+      "path": "table/public/users",
+      "parentPath": "schema/public",
+      "schemaName": "public",
+      "relationName": "users",
+      "hasChildren": true,
+      "refreshedAt": "2026-03-09T18:15:00.000Z"
+    },
+    {
+      "kind": "view",
+      "id": "view/public/active_users",
+      "connectionId": "conn-local-postgres",
+      "name": "active_users",
+      "path": "view/public/active_users",
+      "parentPath": "schema/public",
+      "schemaName": "public",
+      "relationName": "active_users",
+      "hasChildren": true,
+      "refreshedAt": "2026-03-09T18:15:00.000Z"
+    }
+  ]
+}

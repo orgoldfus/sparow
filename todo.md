@@ -1,43 +1,53 @@
-# Phase 2 Todo
+# Phase 3 Todo
 
 ## Objective
-Build the Phase 2 PostgreSQL connection management layer for Sparow: secure saved connections, typed connection contracts, a single active PostgreSQL session in Rust, a native-feeling connection workspace, and AI-friendly verification that does not require a live database by default.
+Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
-- [completed] Fix Phase 2 regressions in password persistence and TLS-only remote connections
-- [completed] Stabilize the Phase 2 verification baseline and runtime selection
-- [completed] Lock Phase 2 connection contracts and JSON fixtures
-- [completed] Extend SQLite persistence for saved connection metadata and selection state
-- [completed] Implement pluggable secret storage with runtime and test adapters
-- [completed] Implement PostgreSQL test/connect/disconnect/save/delete services in Rust
-- [completed] Replace the placeholder shell with the connection management workspace
-- [completed] Add frontend and backend coverage for connection lifecycle flows
-- [completed] Add opt-in PostgreSQL smoke coverage and Phase 2 debugging docs
-- [completed] Run final Phase 2 verification and record results
+- [completed] Investigate and fix schema expansion hanging on column deserialization panic
+- [completed] Stabilize the Phase 3 baseline and record verification results
+- [completed] Lock schema contracts, JSON fixtures, and runtime guards in Rust and TypeScript
+- [completed] Extend SQLite with Phase 3 schema cache tables, indexes, and repository methods
+- [completed] Implement the Rust schema subsystem with runtime and fake drivers
+- [completed] Add schema commands, refresh events, diagnostics integration, and app-state wiring
+- [completed] Build the frontend schema workspace while preserving Phase 2 connection flows
+- [completed] Add frontend and backend coverage for schema browsing, refresh, and cache fallback flows
+- [completed] Extend smoke coverage, debugging docs, and schema cache inspection tooling
+- [completed] Run final Phase 3 verification and record results
 
 ## Blockers And Decisions
 - Current blocker: none.
 - Database engine: PostgreSQL only.
-- SSL scope: `disable`, `prefer`, and `require` only for Phase 2.
-- Session scope: one active saved-profile-backed PostgreSQL session at a time.
-- Secret strategy: pluggable secret store with OS-backed runtime implementation and deterministic test implementation.
-- Save and test remain separate actions; unsaved drafts may be tested but not connected.
-- Regression decision: saving a connection must forward a typed password whenever the draft contains a new secret, even for unsaved profiles that are not in replacement mode yet.
-- TLS compatibility decision: the current basic SSL modes will accept provider-managed certificates and hostnames through the runtime TLS connector until explicit CA-file support exists in a later phase.
-- Verification baseline fix: repo scripts now self-pin to `.node-version`, and the frontend test environment uses `happy-dom` because the previous `jsdom` stack failed during Vitest worker startup in this environment.
+- Schema browser scope: active saved-profile-backed PostgreSQL session only.
+- Metadata scope: schemas, tables, views, columns, and indexes only.
+- Search scope: cached metadata only; no live global catalog search in Phase 3.
+- Cache freshness: cached schema scopes become stale after 2 minutes and should refresh in the background.
+- Root scope persistence: SQLite stores the root scope path as an empty string; the TypeScript boundary uses `null`.
+- Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
-- `node ./scripts/run-with-node-version.mjs node -v` ✅
-  - `v24.13.0`
-- `node ./scripts/run-with-node-version.mjs npm run test` ✅
-- `node ./scripts/run-with-node-version.mjs npm run test -- src/test/app-shell.test.tsx` ✅
-- `node ./scripts/run-with-node-version.mjs npm run verify` ✅
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-- `cargo test --manifest-path src-tauri/Cargo.toml connections::service::tests` ✅
-- `npm run smoke:postgres` not run
-  - Requires `SPAROW_PG_HOST`, `SPAROW_PG_DATABASE`, `SPAROW_PG_USERNAME`, and `SPAROW_PG_PASSWORD` at minimum.
+  - Full Rust suite passed, including the new schema refresh panic regression test.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after the schema refresh panic guard and PostgreSQL `relkind::text` fix.
+- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::releases_in_flight_refresh_when_driver_panics -- --exact` ✅
+  - Added panic-regression coverage for schema refresh cleanup; the new backend test passed.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
+- `npm run verify` ✅
+  - Frontend typecheck, lint, tests, foundation smoke, and Rust tests all passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ❌
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - Phase 3 backend contracts, repository tests, and schema service tests passed.
+- `npm run verify` ❌
+  - Failed in lint on `src/features/schema/useSchemaBrowser.ts` (`useEffectEvent` called outside effects/effect events) and `src/test/schema-browser.test.tsx` (`async` test callback without `await`).
+- `npm run verify` ❌
+  - Failed in test run after lint fixes because `useSchemaBrowser` referenced `loadScope` before initialization, breaking the app shell and schema browser tests.
+- `npm run test` ✅
+  - Frontend contract, shell, foundation smoke, and schema browser tests all passed after fixing the schema hook dependency regression.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after the schema hook and repository cleanup fixes.
 
 ## Dependency Notes
-- Preferred backend stack for Phase 2: `keyring`, `tokio-postgres`, `deadpool-postgres`, `native-tls`, and `postgres-native-tls` unless compatibility forces a narrower choice.
-- Frontend verification baseline now uses `happy-dom 20.8.3` with `vitest 4.0.18`.
-- Runtime added for Phase 2: `keyring 3.6.3`, `tokio-postgres 0.7.16`, `deadpool-postgres 0.14.1`, `native-tls 0.2.18`, `postgres-native-tls 0.5.2`, and `time 0.3.47`.
+- Keep the current Node 24 baseline and `happy-dom` frontend test environment unless a concrete Phase 3 compatibility issue forces a change.
+- Reuse the existing PostgreSQL runtime stack for schema introspection unless implementation uncovers a real blocker.

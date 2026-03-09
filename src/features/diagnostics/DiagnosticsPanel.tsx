@@ -1,13 +1,24 @@
 import { Bug, DatabaseZap, FileClock, ShieldAlert } from 'lucide-react';
-import type { AppBootstrap, AppError, BackgroundJobProgressEvent } from '../../lib/contracts';
+import type {
+  AppBootstrap,
+  AppError,
+  BackgroundJobProgressEvent,
+  SchemaRefreshProgressEvent,
+} from '../../lib/contracts';
 
 type DiagnosticsPanelProps = {
   bootstrap: AppBootstrap | null;
   lastError: AppError | null;
   recentEvents: BackgroundJobProgressEvent[];
+  recentSchemaEvents: SchemaRefreshProgressEvent[];
 };
 
-export function DiagnosticsPanel({ bootstrap, lastError, recentEvents }: DiagnosticsPanelProps) {
+export function DiagnosticsPanel({
+  bootstrap,
+  lastError,
+  recentEvents,
+  recentSchemaEvents,
+}: DiagnosticsPanelProps) {
   return (
     <aside className="flex h-full min-h-[320px] flex-col">
       <div className="border-b border-[var(--line-soft)] px-4 py-3">
@@ -61,8 +72,20 @@ export function DiagnosticsPanel({ bootstrap, lastError, recentEvents }: Diagnos
             <h3 className="font-medium">Recent events</h3>
           </div>
           <ul className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-            {recentEvents.length > 0 ? (
-              recentEvents.slice(0, 5).map((event) => (
+            {recentEvents.length > 0 || recentSchemaEvents.length > 0 ? (
+              <>
+                {recentSchemaEvents.slice(0, 3).map((event) => (
+                  <li
+                    className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
+                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
+                  >
+                    <p>{event.message}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
+                      {event.status} / {event.scopePath ?? 'root'} / {event.correlationId}
+                    </p>
+                  </li>
+                ))}
+                {recentEvents.slice(0, 3).map((event) => (
                 <li
                   className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
                   key={`${event.jobId}-${event.status}-${event.timestamp}`}
@@ -72,7 +95,8 @@ export function DiagnosticsPanel({ bootstrap, lastError, recentEvents }: Diagnos
                     {event.status} / {event.correlationId}
                   </p>
                 </li>
-              ))
+                ))}
+              </>
             ) : (
               <li className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2">
                 Event history will appear here as background tasks report status.

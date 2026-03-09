@@ -1,10 +1,15 @@
 export const BACKGROUND_JOB_EVENT = 'foundation://job-progress';
+export const SCHEMA_REFRESH_EVENT = 'schema://refresh-progress';
 
 export type AppEnvironment = 'development' | 'production' | 'test';
 export type BackgroundJobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
 export type DatabaseEngine = 'postgresql';
 export type SecretProvider = 'os-keychain' | 'memory';
 export type SslMode = 'disable' | 'prefer' | 'require';
+export type SchemaNodeKind = 'schema' | 'table' | 'view' | 'column' | 'index';
+export type SchemaScopeKind = 'root' | 'schema' | 'table' | 'view';
+export type SchemaCacheStatus = 'empty' | 'fresh' | 'stale';
+export type SchemaRefreshStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export type ConnectionSummary = {
   id: string;
@@ -105,6 +110,104 @@ export type SchemaCacheEntry = {
   refreshedAt: string;
 };
 
+type SchemaNodeBase = {
+  id: string;
+  connectionId: string;
+  name: string;
+  path: string;
+  parentPath: string | null;
+  schemaName: string;
+  relationName: string | null;
+  hasChildren: boolean;
+  refreshedAt: string;
+};
+
+export type SchemaSchemaNode = SchemaNodeBase & {
+  kind: 'schema';
+  relationName: null;
+  hasChildren: true;
+};
+
+export type SchemaRelationNode = SchemaNodeBase & {
+  kind: 'table' | 'view';
+  relationName: string;
+};
+
+export type SchemaColumnNode = SchemaNodeBase & {
+  kind: 'column';
+  relationName: string;
+  hasChildren: false;
+  dataType: string;
+  isNullable: boolean;
+  ordinalPosition: number;
+};
+
+export type SchemaIndexNode = SchemaNodeBase & {
+  kind: 'index';
+  relationName: string;
+  hasChildren: false;
+  columnNames: string[];
+  isUnique: boolean;
+};
+
+export type SchemaNode = SchemaSchemaNode | SchemaRelationNode | SchemaColumnNode | SchemaIndexNode;
+
+export type ListSchemaChildrenRequest = {
+  connectionId: string;
+  parentKind: SchemaScopeKind;
+  parentPath: string | null;
+};
+
+export type ListSchemaChildrenResult = {
+  connectionId: string;
+  parentKind: SchemaScopeKind;
+  parentPath: string | null;
+  cacheStatus: SchemaCacheStatus;
+  refreshInFlight: boolean;
+  refreshedAt: string | null;
+  nodes: SchemaNode[];
+};
+
+export type RefreshSchemaScopeRequest = {
+  connectionId: string;
+  scopeKind: SchemaScopeKind;
+  scopePath: string | null;
+};
+
+export type SchemaRefreshAccepted = {
+  jobId: string;
+  correlationId: string;
+  connectionId: string;
+  scopeKind: SchemaScopeKind;
+  scopePath: string | null;
+  startedAt: string;
+};
+
+export type SchemaRefreshProgressEvent = {
+  jobId: string;
+  correlationId: string;
+  connectionId: string;
+  scopeKind: SchemaScopeKind;
+  scopePath: string | null;
+  status: SchemaRefreshStatus;
+  nodesWritten: number;
+  message: string;
+  timestamp: string;
+  lastError: AppError | null;
+};
+
+export type SchemaSearchRequest = {
+  connectionId: string;
+  query: string;
+  limit: number;
+};
+
+export type SchemaSearchResult = {
+  connectionId: string;
+  query: string;
+  nodes: SchemaNode[];
+};
+
 export type AppError = {
   code: string;
   message: string;
@@ -170,6 +273,22 @@ function isStringArray(value: unknown): value is string[] {
 
 function isDatabaseEngine(value: unknown): value is DatabaseEngine {
   return value === 'postgresql';
+}
+
+function isSchemaNodeKind(value: unknown): value is SchemaNodeKind {
+  return value === 'schema' || value === 'table' || value === 'view' || value === 'column' || value === 'index';
+}
+
+function isSchemaScopeKind(value: unknown): value is SchemaScopeKind {
+  return value === 'root' || value === 'schema' || value === 'table' || value === 'view';
+}
+
+function isSchemaCacheStatus(value: unknown): value is SchemaCacheStatus {
+  return value === 'empty' || value === 'fresh' || value === 'stale';
+}
+
+function isSchemaRefreshStatus(value: unknown): value is SchemaRefreshStatus {
+  return value === 'queued' || value === 'running' || value === 'completed' || value === 'failed';
 }
 
 function isSecretProvider(value: unknown): value is SecretProvider {
@@ -319,6 +438,132 @@ export function isDeleteConnectionResult(value: unknown): value is DeleteConnect
 
 export function isDisconnectSessionResult(value: unknown): value is DisconnectSessionResult {
   return isRecord(value) && (typeof value.connectionId === 'string' || value.connectionId === null);
+}
+
+function isSchemaNodeBase(value: unknown): value is SchemaNodeBase {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.connectionId === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.path === 'string' &&
+    isSchemaNodeKind(value.kind) &&
+    (typeof value.parentPath === 'string' || value.parentPath === null) &&
+    typeof value.schemaName === 'string' &&
+    (typeof value.relationName === 'string' || value.relationName === null) &&
+    typeof value.hasChildren === 'boolean' &&
+    typeof value.refreshedAt === 'string'
+  );
+}
+
+export function isSchemaNode(value: unknown): value is SchemaNode {
+  if (!isSchemaNodeBase(value)) {
+    return false;
+  }
+
+  switch (value.kind) {
+    case 'schema':
+      return value.relationName === null && value.hasChildren === true;
+    case 'table':
+    case 'view':
+      return typeof value.relationName === 'string';
+    case 'column':
+      return (
+        typeof value.relationName === 'string' &&
+        value.hasChildren === false &&
+        typeof value.dataType === 'string' &&
+        typeof value.isNullable === 'boolean' &&
+        typeof value.ordinalPosition === 'number'
+      );
+    case 'index':
+      return (
+        typeof value.relationName === 'string' &&
+        value.hasChildren === false &&
+        isStringArray(value.columnNames) &&
+        typeof value.isUnique === 'boolean'
+      );
+    default:
+      return false;
+  }
+}
+
+export function isListSchemaChildrenRequest(value: unknown): value is ListSchemaChildrenRequest {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    isSchemaScopeKind(value.parentKind) &&
+    (typeof value.parentPath === 'string' || value.parentPath === null)
+  );
+}
+
+export function isListSchemaChildrenResult(value: unknown): value is ListSchemaChildrenResult {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    isSchemaScopeKind(value.parentKind) &&
+    (typeof value.parentPath === 'string' || value.parentPath === null) &&
+    isSchemaCacheStatus(value.cacheStatus) &&
+    typeof value.refreshInFlight === 'boolean' &&
+    isNullableString(value.refreshedAt) &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every(isSchemaNode)
+  );
+}
+
+export function isRefreshSchemaScopeRequest(value: unknown): value is RefreshSchemaScopeRequest {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    isSchemaScopeKind(value.scopeKind) &&
+    (typeof value.scopePath === 'string' || value.scopePath === null)
+  );
+}
+
+export function isSchemaRefreshAccepted(value: unknown): value is SchemaRefreshAccepted {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    isSchemaScopeKind(value.scopeKind) &&
+    (typeof value.scopePath === 'string' || value.scopePath === null) &&
+    typeof value.startedAt === 'string'
+  );
+}
+
+export function isSchemaRefreshProgressEvent(value: unknown): value is SchemaRefreshProgressEvent {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    isSchemaScopeKind(value.scopeKind) &&
+    (typeof value.scopePath === 'string' || value.scopePath === null) &&
+    isSchemaRefreshStatus(value.status) &&
+    typeof value.nodesWritten === 'number' &&
+    typeof value.message === 'string' &&
+    typeof value.timestamp === 'string' &&
+    (value.lastError === null || isAppError(value.lastError))
+  );
+}
+
+export function isSchemaSearchRequest(value: unknown): value is SchemaSearchRequest {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    typeof value.query === 'string' &&
+    typeof value.limit === 'number'
+  );
+}
+
+export function isSchemaSearchResult(value: unknown): value is SchemaSearchResult {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    typeof value.query === 'string' &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every(isSchemaNode)
+  );
 }
 
 export function isAppBootstrap(value: unknown): value is AppBootstrap {

@@ -1,0 +1,8 @@
+{
+  "jobId": "schema-job-2026",
+  "correlationId": "schema-corr-2026",
+  "connectionId": "conn-local-postgres",
+  "scopeKind": "schema",
+  "scopePath": "schema/public",
+  "startedAt": "2026-03-09T18:15:00.000Z"
+}

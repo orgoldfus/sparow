@@ -1,16 +1,20 @@
 import { useDeferredValue, useEffect, useEffectEvent, useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DiagnosticsPanel } from './features/diagnostics/DiagnosticsPanel';
-import { ConnectionResults, ConnectionEditor, ConnectionsRail } from './features/connections/ConnectionWorkspace';
+import { ConnectionEditor } from './features/connections/ConnectionWorkspace';
 import { useConnectionWorkspace } from './features/connections/useConnectionWorkspace';
+import { SchemaDetailsPanel, SchemaSidebar } from './features/schema/SchemaWorkspace';
+import { useSchemaBrowser } from './features/schema/useSchemaBrowser';
 import { AppShell } from './features/shell/AppShell';
 import {
   BACKGROUND_JOB_EVENT,
+  SCHEMA_REFRESH_EVENT,
   type AppBootstrap,
   type AppError,
   type BackgroundJobProgressEvent,
+  type SchemaRefreshProgressEvent,
 } from './lib/contracts';
-import { bootstrapApp, subscribeToEvent } from './lib/ipc';
+import { bootstrapApp, subscribeToEvent, subscribeToSchemaRefreshEvent } from './lib/ipc';
 import { logger } from './lib/logger';
 
 export default function App() {
@@ -18,11 +22,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
   const [recentEvents, setRecentEvents] = useState<BackgroundJobProgressEvent[]>([]);
+  const [schemaEvents, setSchemaEvents] = useState<SchemaRefreshProgressEvent[]>([]);
 
   const deferredRecentEvents = useDeferredValue(recentEvents);
+  const deferredSchemaEvents = useDeferredValue(schemaEvents);
 
   const workspace = useConnectionWorkspace({
     bootstrap,
+    onError: setError,
+  });
+  const schemaBrowser = useSchemaBrowser({
+    activeConnectionId: workspace.activeSession?.connectionId ?? null,
+    schemaEvents: deferredSchemaEvents,
     onError: setError,
   });
 
@@ -40,6 +51,10 @@ export default function App() {
           }
         : current,
     );
+  });
+
+  const handleSchemaEvent = useEffectEvent((event: SchemaRefreshProgressEvent) => {
+    setSchemaEvents((current) => [event, ...current].slice(0, 12));
   });
 
   useEffect(() => {
@@ -92,11 +107,33 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    let unsubscribe = () => {};
+
+    subscribeToSchemaRefreshEvent(SCHEMA_REFRESH_EVENT, (event) => {
+      if (active) {
+        handleSchemaEvent(event);
+      }
+    })
+      .then((cleanup) => {
+        unsubscribe = cleanup;
+      })
+      .catch((caught) => {
+        setError(logger.asAppError(caught, 'listen_schema_refresh_event'));
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
   const statusHeadline = error
     ? 'The connection workspace loaded with a degraded service. Review diagnostics before trusting the current state.'
     : workspace.activeSession
-      ? 'One PostgreSQL session is active in Rust. The UI stays focused on selection, editing, and verification.'
-      : 'Phase 2 promotes saved PostgreSQL targets to a first-class native workspace with explicit, inspectable state.';
+      ? 'One PostgreSQL session is active in Rust. The shell now exposes cached schema exploration without giving up the explicit connection workspace.'
+      : 'Phase 3 keeps connection management intact while adding a native-feeling schema browser that wakes up only after a saved profile is connected.';
 
   return (
     <ErrorBoundary>
@@ -127,14 +164,20 @@ export default function App() {
           />
         }
         connectionResults={
-          <ConnectionResults activeSession={workspace.activeSession} latestTestResult={workspace.latestTestResult} />
+          <SchemaDetailsPanel
+            activeSession={workspace.activeSession}
+            latestRefreshEvent={schemaBrowser.latestRefreshEvent}
+            latestTestResult={workspace.latestTestResult}
+            selectedNode={schemaBrowser.selectedNode}
+          />
         }
         connectionsRail={
-          <ConnectionsRail
+          <SchemaSidebar
             activeSession={workspace.activeSession}
             connections={workspace.connections}
             onCreateConnection={workspace.createConnection}
             onSelectConnection={workspace.selectConnection}
+            schema={schemaBrowser}
             selectedConnectionId={workspace.selectedConnectionId}
           />
         }
@@ -143,6 +186,7 @@ export default function App() {
             bootstrap={bootstrap}
             lastError={error ?? bootstrap?.diagnostics.lastError ?? null}
             recentEvents={deferredRecentEvents}
+            recentSchemaEvents={deferredSchemaEvents}
           />
         }
         error={error}

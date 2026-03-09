@@ -171,13 +171,13 @@ export function ConnectionEditor({
     <div className="grid h-full min-h-[300px] grid-rows-[auto_minmax(0,1fr)_auto] bg-[var(--surface-1)]">
       <div className="grid gap-4 border-b border-[var(--line-soft)] px-5 py-5 lg:grid-cols-[1.4fr_0.8fr]">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-[var(--ink-3)]">PostgreSQL workspace</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--ink-3)]">PostgreSQL connection editor</p>
           <h3 className="mt-2 font-display text-3xl text-[var(--ink-1)]">
             {isNewConnection ? 'Draft a new target' : draft.name || 'Edit selected connection'}
           </h3>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--ink-2)]">
-            Save metadata separately from secrets, test drafts without persistence, and only connect from a saved
-            profile.
+            Save metadata separately from secrets, test drafts without persistence, and connect a saved profile before
+            opening the schema browser.
           </p>
         </div>
         <div className="grid gap-3 border border-[var(--line-soft)] bg-[color-mix(in_oklch,_var(--surface-0)_90%,_white_10%)] p-4 text-sm text-[var(--ink-2)]">

@@ -34,17 +34,17 @@ export function AppShell({
           <div className="space-y-4">
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.28em] text-[var(--ink-3)]">
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[var(--accent-strong)]" />
-              Sparow / Phase 2 Connections
+              Sparow / Phase 3 Schema Browser
             </div>
             <div className="max-w-3xl">
               <h1 className="font-display text-4xl leading-none text-[var(--ink-1)] sm:text-5xl">
-                Secure PostgreSQL targets with native-feeling control surfaces.
+                Native-feeling PostgreSQL browsing with explicit cached metadata.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-2)]">{statusHeadline}</p>
             </div>
             <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
               <span className="border border-[var(--line-soft)] px-3 py-2">Typed IPC only</span>
-              <span className="border border-[var(--line-soft)] px-3 py-2">Secrets stay outside SQLite</span>
+              <span className="border border-[var(--line-soft)] px-3 py-2">SQLite-backed schema cache</span>
               <span className="border border-[var(--line-soft)] px-3 py-2">One active session</span>
             </div>
           </div>
@@ -80,11 +80,9 @@ export function AppShell({
             <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
               <div className="flex items-center gap-2">
                 <PanelLeftClose className="h-4 w-4 text-[var(--accent-strong)]" />
-                <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">
-                  Connections
-                </h2>
+                  <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">Explorer</h2>
               </div>
-              <span className="text-xs text-[var(--ink-3)]">Native workspace rail</span>
+              <span className="text-xs text-[var(--ink-3)]">Connections and schema</span>
             </div>
             {connectionsRail}
           </aside>
@@ -106,10 +104,10 @@ export function AppShell({
                   Connection editor
                 </div>
                 <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Secure secrets
+                  Schema browser
                 </div>
                 <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Session status
+                  Cached refresh state
                 </div>
               </div>
             </div>
@@ -124,10 +122,10 @@ export function AppShell({
                 <div className="flex items-center gap-2">
                   <PanelBottom className="h-4 w-4 text-[var(--accent-strong)]" />
                   <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">
-                    Connection status
+                    Schema details
                   </h2>
                 </div>
-                <span className="text-xs text-[var(--ink-3)]">Tests and live session state</span>
+                <span className="text-xs text-[var(--ink-3)]">Session, refresh, and selected node state</span>
               </div>
               {connectionResults}
             </section>
@@ -145,7 +143,7 @@ export function AppShell({
           <div className="flex flex-wrap gap-3">
             <span>Selection persists</span>
             <span>Secrets externalized</span>
-            <span>Rust owns sessions</span>
+            <span>Rust owns sessions and schema cache</span>
           </div>
         </footer>
       </div>
