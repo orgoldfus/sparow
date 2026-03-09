@@ -69,6 +69,7 @@ pub struct SaveConnectionRecord {
 #[derive(Debug, Clone)]
 pub struct CachedSchemaScopeRecord {
     pub refreshed_at: Option<String>,
+    pub refresh_status: Option<String>,
     pub nodes: Vec<SchemaNode>,
 }
 
@@ -566,6 +567,9 @@ impl Repository {
             refreshed_at: scope_row
                 .as_ref()
                 .map(|(refreshed_at, _)| refreshed_at.clone()),
+            refresh_status: scope_row
+                .as_ref()
+                .map(|(_, refresh_status)| refresh_status.clone()),
             nodes,
         })
     }
@@ -1052,6 +1056,34 @@ mod tests {
             replaced.refreshed_at.as_deref(),
             Some("2026-03-09T18:15:00.000Z")
         );
+        assert_eq!(replaced.refresh_status.as_deref(), Some("fresh"));
+    }
+
+    #[test]
+    fn loads_failed_schema_scope_metadata_for_empty_scope() {
+        let database_path = test_database_path("schema-cache-failure.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .record_schema_scope_failure(
+                "conn-1",
+                SchemaScopeKind::Table,
+                Some("table/public/users"),
+                "2026-03-09T18:15:00.000Z",
+            )
+            .expect("failure metadata should store");
+
+        let loaded = repository
+            .load_schema_scope("conn-1", Some("table/public/users"))
+            .expect("schema scope should load");
+
+        assert_eq!(
+            loaded.refreshed_at.as_deref(),
+            Some("2026-03-09T18:15:00.000Z")
+        );
+        assert_eq!(loaded.refresh_status.as_deref(), Some("failed"));
+        assert!(loaded.nodes.is_empty());
     }
 
     #[test]

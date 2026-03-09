@@ -4,6 +4,7 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Preserve failed schema scope refresh status through cache loads and retry classification
 - [completed] Investigate and fix schema expansion hanging on column deserialization panic
 - [completed] Stabilize the Phase 3 baseline and record verification results
 - [completed] Lock schema contracts, JSON fixtures, and runtime guards in Rust and TypeScript
@@ -26,6 +27,8 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - Full Rust suite passed after preserving schema scope `refresh_status` on cache loads and retry classification.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - Full Rust suite passed, including the new schema refresh panic regression test.
 - `npm run verify` ✅

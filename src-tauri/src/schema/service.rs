@@ -677,6 +677,14 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
 }
 
 fn cache_status_for(cached: &crate::persistence::CachedSchemaScopeRecord) -> SchemaCacheStatus {
+    if cached.refresh_status.as_deref() == Some("failed") {
+        return if cached.nodes.is_empty() {
+            SchemaCacheStatus::Empty
+        } else {
+            SchemaCacheStatus::Stale
+        };
+    }
+
     match cached.refreshed_at.as_deref() {
         None => SchemaCacheStatus::Empty,
         Some(refreshed_at) => {
@@ -1082,6 +1090,43 @@ mod tests {
 
         assert_eq!(loaded.cache_status, SchemaCacheStatus::Stale);
         assert_eq!(loaded.nodes.len(), 1);
+    }
+
+    #[test]
+    fn classifies_failed_empty_cache_as_empty() {
+        let cached = crate::persistence::CachedSchemaScopeRecord {
+            refreshed_at: Some("2026-03-09T18:15:00.000Z".to_string()),
+            refresh_status: Some("failed".to_string()),
+            nodes: Vec::new(),
+        };
+
+        assert_eq!(cache_status_for(&cached), SchemaCacheStatus::Empty);
+    }
+
+    #[test]
+    fn classifies_failed_cache_with_nodes_as_stale() {
+        let cached = crate::persistence::CachedSchemaScopeRecord {
+            refreshed_at: Some("2026-03-09T18:15:00.000Z".to_string()),
+            refresh_status: Some("failed".to_string()),
+            nodes: vec![SchemaNode::Column {
+                base: SchemaNodeBase {
+                    id: "column/public/users/email".to_string(),
+                    connection_id: "conn-local-postgres".to_string(),
+                    name: "email".to_string(),
+                    path: "column/public/users/email".to_string(),
+                    parent_path: Some("table/public/users".to_string()),
+                    schema_name: "public".to_string(),
+                    relation_name: Some("users".to_string()),
+                    has_children: false,
+                    refreshed_at: "2026-03-09T18:15:00.000Z".to_string(),
+                },
+                data_type: "text".to_string(),
+                is_nullable: false,
+                ordinal_position: 1,
+            }],
+        };
+
+        assert_eq!(cache_status_for(&cached), SchemaCacheStatus::Stale);
     }
 
     #[tokio::test]
