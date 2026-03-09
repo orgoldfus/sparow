@@ -35,6 +35,7 @@
 - Confirm `schema://refresh-progress` still matches on both sides.
 - Use the diagnostics panel to inspect the latest schema refresh status, scope path, and correlation id.
 - Use `node ./scripts/inspect-schema-cache.mjs --db <sqlite-path> --connection <connection-id> [--scope <scope-path>]` to inspect cached scope rows without opening SQLite manually.
+- `scripts/inspect-schema-cache.mjs` currently shells out to `python3`; install Python 3 before relying on it.
 - Root scope uses an empty string in SQLite and `null` in the TypeScript boundary.
 - Cache entries older than 2 minutes are treated as stale and should trigger a background refresh.
 - For real PostgreSQL validation, run `npm run smoke:postgres`.

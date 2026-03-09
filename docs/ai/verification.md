@@ -20,6 +20,8 @@ This runs, in order:
 - `cargo test --manifest-path src-tauri/Cargo.toml`
 - `npm run tauri dev`
 
+The schema cache inspection helper requires `python3` on `PATH`.
+
 ## Expected Outcome
 - Frontend fixtures deserialize and validate.
 - Shell region tests pass.

@@ -121,4 +121,54 @@ describe('contract fixtures', () => {
   it('validate the schema search result fixture', () => {
     expect(isSchemaSearchResult(schemaSearchResultFixture)).toBe(true);
   });
+
+  it('rejects schema nodes without a kind discriminant', () => {
+    const nodeWithoutKind = { ...schemaNodeFixture };
+    delete (nodeWithoutKind as { kind?: string }).kind;
+    expect(isSchemaNode(nodeWithoutKind)).toBe(false);
+  });
+
+  it('rejects root schema requests with non-null paths', () => {
+    expect(
+      isListSchemaChildrenRequest({
+        connectionId: 'conn-local-postgres',
+        parentKind: 'root',
+        parentPath: 'schema/public',
+      }),
+    ).toBe(false);
+
+    expect(
+      isRefreshSchemaScopeRequest({
+        connectionId: 'conn-local-postgres',
+        scopeKind: 'root',
+        scopePath: 'schema/public',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects non-root schema payloads with null paths', () => {
+    expect(
+      isListSchemaChildrenResult({
+        ...listSchemaChildrenResultFixture,
+        parentKind: 'schema',
+        parentPath: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      isSchemaRefreshAccepted({
+        ...schemaRefreshAcceptedFixture,
+        scopeKind: 'schema',
+        scopePath: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      isSchemaRefreshProgressEvent({
+        ...schemaRefreshProgressFixture,
+        scopeKind: 'table',
+        scopePath: null,
+      }),
+    ).toBe(false);
+  });
 });

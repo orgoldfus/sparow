@@ -113,6 +113,7 @@ export function SchemaSidebar({
           <label className="mt-3 flex items-center gap-2 border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--ink-2)]">
             <Search className="h-4 w-4 text-[var(--ink-3)]" />
             <input
+              aria-label="Search schema cache"
               className="w-full bg-transparent outline-none"
               disabled={schema.isDisabled}
               onChange={(event) => {
@@ -156,11 +157,13 @@ export function SchemaSidebar({
             </div>
           ) : (
             <div
+              aria-label="Schema browser"
               className="grid gap-1 outline-none"
               data-testid="schema-tree"
               onKeyDown={(event) => {
                 void handleTreeKeyDown(event, schema);
               }}
+              role="tree"
               tabIndex={0}
             >
               {schema.isLoadingRoot ? (
@@ -173,6 +176,9 @@ export function SchemaSidebar({
                   const isSelected = schema.selectedNode?.path === row.node.path;
                   return (
                     <button
+                      aria-expanded={row.node.hasChildren ? row.isExpanded : undefined}
+                      aria-level={row.depth + 1}
+                      aria-selected={isSelected}
                       className={`flex items-center gap-2 px-3 py-2 text-left text-sm transition ${
                         isSelected ? 'bg-[var(--accent-soft)] text-[var(--ink-1)]' : 'text-[var(--ink-2)] hover:bg-[var(--surface-1)]'
                       }`}
@@ -184,6 +190,7 @@ export function SchemaSidebar({
                       onDoubleClick={() => {
                         void schema.toggleNode(row.node);
                       }}
+                      role="treeitem"
                       style={{ paddingLeft: `${row.depth * 18 + 12}px` }}
                       type="button"
                     >
@@ -241,7 +248,14 @@ export function SchemaDetailsPanel({
               <p>
                 {activeSession.host}:{activeSession.port}
               </p>
-              <p>SSL: {activeSession.sslInUse ? 'enabled' : 'disabled'}</p>
+              <p>
+                SSL:{' '}
+                {activeSession.sslInUse === true
+                  ? 'enabled'
+                  : activeSession.sslInUse === false
+                    ? 'disabled'
+                    : 'unknown'}
+              </p>
             </div>
           ) : (
             <div className="mt-3 flex items-center gap-2 text-sm text-[var(--ink-2)]">

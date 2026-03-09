@@ -117,7 +117,11 @@ export default function App() {
       }
     })
       .then((cleanup) => {
-        unsubscribe = cleanup;
+        if (active) {
+          unsubscribe = cleanup;
+        } else {
+          cleanup();
+        }
       })
       .catch((caught) => {
         setError(logger.asAppError(caught, 'listen_schema_refresh_event'));

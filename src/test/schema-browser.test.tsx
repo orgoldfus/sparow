@@ -81,6 +81,14 @@ describe('schema browser', () => {
 
     await screen.findByTestId('schema-node-schema/public');
     const tree = screen.getByTestId('schema-tree');
+    expect(tree).toHaveAttribute('role', 'tree');
+    expect(tree).toHaveAttribute('aria-label', 'Schema browser');
+
+    const rootNode = screen.getByTestId('schema-node-schema/public');
+    expect(rootNode).toHaveAttribute('role', 'treeitem');
+    expect(rootNode).toHaveAttribute('aria-selected', 'true');
+    expect(rootNode).toHaveAttribute('aria-expanded', 'false');
+
     tree.focus();
 
     fireEvent.keyDown(tree, { key: 'ArrowRight' });
@@ -92,6 +100,7 @@ describe('schema browser', () => {
     render(<App />);
 
     const searchInput = await screen.findByPlaceholderText(/Search cached schema/i);
+    expect(searchInput).toHaveAttribute('aria-label', 'Search schema cache');
     fireEvent.change(searchInput, { target: { value: 'user' } });
 
     const emailResult = await screen.findByText('email');
@@ -117,5 +126,19 @@ describe('schema browser', () => {
         expect(screen.getAllByText(new RegExp(schemaRefreshProgressFixture.correlationId)).length).toBeGreaterThan(0);
       });
     });
+  });
+
+  it('renders unknown SSL state explicitly', async () => {
+    vi.mocked(bootstrapApp).mockResolvedValue({
+      ...appBootstrapFixture,
+      activeSession: {
+        ...databaseSessionSnapshotFixture,
+        sslInUse: null,
+      },
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('SSL: unknown')).toBeInTheDocument();
   });
 });

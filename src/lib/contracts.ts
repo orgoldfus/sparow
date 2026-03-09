@@ -113,6 +113,7 @@ export type SchemaCacheEntry = {
 type SchemaNodeBase = {
   id: string;
   connectionId: string;
+  kind: SchemaNodeKind;
   name: string;
   path: string;
   parentPath: string | null;
@@ -311,6 +312,10 @@ function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
 }
 
+function isScopePathForKind(kind: SchemaScopeKind, path: unknown): path is string | null {
+  return kind === 'root' ? path === null : typeof path === 'string';
+}
+
 function isConnectionShape(value: unknown): value is Omit<ConnectionSummary, 'updatedAt'> & { updatedAt?: string } {
   return (
     isRecord(value) &&
@@ -492,7 +497,7 @@ export function isListSchemaChildrenRequest(value: unknown): value is ListSchema
     isRecord(value) &&
     typeof value.connectionId === 'string' &&
     isSchemaScopeKind(value.parentKind) &&
-    (typeof value.parentPath === 'string' || value.parentPath === null)
+    isScopePathForKind(value.parentKind, value.parentPath)
   );
 }
 
@@ -501,7 +506,7 @@ export function isListSchemaChildrenResult(value: unknown): value is ListSchemaC
     isRecord(value) &&
     typeof value.connectionId === 'string' &&
     isSchemaScopeKind(value.parentKind) &&
-    (typeof value.parentPath === 'string' || value.parentPath === null) &&
+    isScopePathForKind(value.parentKind, value.parentPath) &&
     isSchemaCacheStatus(value.cacheStatus) &&
     typeof value.refreshInFlight === 'boolean' &&
     isNullableString(value.refreshedAt) &&
@@ -515,7 +520,7 @@ export function isRefreshSchemaScopeRequest(value: unknown): value is RefreshSch
     isRecord(value) &&
     typeof value.connectionId === 'string' &&
     isSchemaScopeKind(value.scopeKind) &&
-    (typeof value.scopePath === 'string' || value.scopePath === null)
+    isScopePathForKind(value.scopeKind, value.scopePath)
   );
 }
 
@@ -526,7 +531,7 @@ export function isSchemaRefreshAccepted(value: unknown): value is SchemaRefreshA
     typeof value.correlationId === 'string' &&
     typeof value.connectionId === 'string' &&
     isSchemaScopeKind(value.scopeKind) &&
-    (typeof value.scopePath === 'string' || value.scopePath === null) &&
+    isScopePathForKind(value.scopeKind, value.scopePath) &&
     typeof value.startedAt === 'string'
   );
 }
@@ -538,7 +543,7 @@ export function isSchemaRefreshProgressEvent(value: unknown): value is SchemaRef
     typeof value.correlationId === 'string' &&
     typeof value.connectionId === 'string' &&
     isSchemaScopeKind(value.scopeKind) &&
-    (typeof value.scopePath === 'string' || value.scopePath === null) &&
+    isScopePathForKind(value.scopeKind, value.scopePath) &&
     isSchemaRefreshStatus(value.status) &&
     typeof value.nodesWritten === 'number' &&
     typeof value.message === 'string' &&

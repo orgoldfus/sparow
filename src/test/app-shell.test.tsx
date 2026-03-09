@@ -7,7 +7,7 @@ import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-se
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
 import type { SaveConnectionRequest } from '../lib/contracts';
-import { getSavedConnection, saveConnection } from '../lib/ipc';
+import { getSavedConnection, saveConnection, subscribeToSchemaRefreshEvent } from '../lib/ipc';
 
 const rootSchemaChildrenFixture = {
   connectionId: databaseSessionSnapshotFixture.connectionId,
@@ -52,13 +52,16 @@ vi.mock('../lib/ipc', () => ({
 
 const saveConnectionMock = vi.mocked(saveConnection);
 const getSavedConnectionMock = vi.mocked(getSavedConnection);
+const subscribeToSchemaRefreshEventMock = vi.mocked(subscribeToSchemaRefreshEvent);
 
 describe('App shell', () => {
   beforeEach(() => {
     saveConnectionMock.mockClear();
     getSavedConnectionMock.mockReset();
+    subscribeToSchemaRefreshEventMock.mockReset();
     getSavedConnectionMock.mockResolvedValue(connectionDetailsFixture);
     saveConnectionMock.mockResolvedValue(connectionDetailsFixture);
+    subscribeToSchemaRefreshEventMock.mockResolvedValue(() => {});
   });
 
   it('renders the five shell regions after bootstrap', async () => {
@@ -148,5 +151,26 @@ describe('App shell', () => {
 
     expect(request.id).toBe(connectionWithoutSecret.id);
     expect(request.draft.password).toBe('sup3r-secret');
+  });
+
+  it('cleans up a schema listener that resolves after unmount', async () => {
+    let resolveCleanup: ((cleanup: () => void) => void) | undefined;
+    const cleanup = vi.fn();
+
+    subscribeToSchemaRefreshEventMock.mockImplementation(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveCleanup = resolve;
+        }),
+    );
+
+    const view = render(<App />);
+    await screen.findByText(/Native-feeling PostgreSQL browsing with explicit cached metadata/i);
+
+    view.unmount();
+    resolveCleanup?.(cleanup);
+    await Promise.resolve();
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 });

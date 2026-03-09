@@ -61,6 +61,11 @@ print(json.dumps({
   });
 
   if (result.error) {
+    if (result.error.code === 'ENOENT') {
+      throw new Error(
+        'Python 3 is required for scripts/inspect-schema-cache.mjs. Install python3 or inspect the SQLite database with another tool.',
+      );
+    }
     throw result.error;
   }
 

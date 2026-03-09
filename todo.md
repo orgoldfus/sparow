@@ -4,6 +4,7 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Review unresolved CodeRabbit feedback, verify each finding against current code, and apply only still-valid fixes
 - [completed] Preserve failed schema scope refresh status through cache loads and retry classification
 - [completed] Investigate and fix schema expansion hanging on column deserialization panic
 - [completed] Stabilize the Phase 3 baseline and record verification results
@@ -27,6 +28,14 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after the CodeRabbit autofixes and regression coverage updates.
+- `cargo test --manifest-path src-tauri/Cargo.toml persistence::repository::tests::replaces_schema_scope_by_clearing_descendant_cache_rows -- --exact` ✅
+  - The recursive subtree cleanup regression test passed after switching scope deletion from string-prefix matching to graph-based descendant traversal.
+- `npm run verify` ❌
+  - Frontend checks passed, but Rust failed in `persistence::repository::tests::replaces_schema_scope_by_clearing_descendant_cache_rows`; the first subtree cleanup patch used string-prefix scope matching, which does not cover kind-prefixed descendant scope paths like `table/public/users`.
+- `npm run verify` ❌
+  - Failed in lint on `src/test/contract-fixtures.test.ts` because the new invalid-schema-node test kept an unused `_kind` binding.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - Full Rust suite passed after preserving schema scope `refresh_status` on cache loads and retry classification.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅

@@ -351,7 +351,50 @@ impl Repository {
 
         transaction
             .execute(
-                "delete from schema_cache where connection_profile_id = ?1 and coalesce(parent_path, '') = ?2",
+                "with recursive descendant_paths(path) as (
+                    select object_path
+                    from schema_cache
+                    where connection_profile_id = ?1 and coalesce(parent_path, '') = ?2
+                    union
+                    select schema_cache.object_path
+                    from schema_cache
+                    join descendant_paths on coalesce(schema_cache.parent_path, '') = descendant_paths.path
+                    where schema_cache.connection_profile_id = ?1
+                 )
+                 delete from schema_cache_scopes
+                 where connection_profile_id = ?1
+                   and (
+                     scope_path = ?2
+                     or scope_path in (select path from descendant_paths)
+                   )",
+                params![record.connection_id, persisted_scope_path],
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "schema_scope_delete_failed",
+                    "Failed to replace cached schema scope metadata.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        transaction
+            .execute(
+                "with recursive descendant_paths(path) as (
+                    select object_path
+                    from schema_cache
+                    where connection_profile_id = ?1 and coalesce(parent_path, '') = ?2
+                    union
+                    select schema_cache.object_path
+                    from schema_cache
+                    join descendant_paths on coalesce(schema_cache.parent_path, '') = descendant_paths.path
+                    where schema_cache.connection_profile_id = ?1
+                 )
+                 delete from schema_cache
+                 where connection_profile_id = ?1
+                   and (
+                     coalesce(parent_path, '') = ?2
+                     or coalesce(parent_path, '') in (select path from descendant_paths)
+                   )",
                 params![record.connection_id, persisted_scope_path],
             )
             .map_err(|error| {
@@ -1136,6 +1179,63 @@ mod tests {
 
         assert!(conn1.nodes.is_empty());
         assert_eq!(conn2.nodes.len(), 1);
+    }
+
+    #[test]
+    fn replaces_schema_scope_by_clearing_descendant_cache_rows() {
+        let database_path = test_database_path("schema-cache-subtree.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .replace_schema_scope(ReplaceSchemaScopeRecord {
+                connection_id: "conn-1".to_string(),
+                scope_kind: SchemaScopeKind::Schema,
+                scope_path: Some("schema/public".to_string()),
+                refreshed_at: "2026-03-09T18:15:00.000Z".to_string(),
+                refresh_status: "fresh".to_string(),
+                nodes: vec![SchemaNode::Table {
+                    base: SchemaNodeBase {
+                        id: "table/public/users".to_string(),
+                        connection_id: "conn-1".to_string(),
+                        name: "users".to_string(),
+                        path: "table/public/users".to_string(),
+                        parent_path: Some("schema/public".to_string()),
+                        schema_name: "public".to_string(),
+                        relation_name: Some("users".to_string()),
+                        has_children: true,
+                        refreshed_at: "2026-03-09T18:15:00.000Z".to_string(),
+                    },
+                }],
+            })
+            .expect("schema scope should store");
+
+        repository
+            .replace_schema_scope(sample_schema_scope("conn-1"))
+            .expect("table scope should store");
+
+        repository
+            .replace_schema_scope(ReplaceSchemaScopeRecord {
+                connection_id: "conn-1".to_string(),
+                scope_kind: SchemaScopeKind::Schema,
+                scope_path: Some("schema/public".to_string()),
+                refreshed_at: "2026-03-09T18:30:00.000Z".to_string(),
+                refresh_status: "fresh".to_string(),
+                nodes: Vec::new(),
+            })
+            .expect("schema scope replacement should clear descendants");
+
+        let table_scope = repository
+            .load_schema_scope("conn-1", Some("table/public/users"))
+            .expect("descendant scope should load after replacement");
+        let search_results = repository
+            .search_schema_nodes("conn-1", "email", 10)
+            .expect("search should succeed");
+
+        assert!(table_scope.nodes.is_empty());
+        assert!(table_scope.refreshed_at.is_none());
+        assert!(table_scope.refresh_status.is_none());
+        assert!(search_results.is_empty());
     }
 
     fn sample_schema_scope(connection_id: &str) -> ReplaceSchemaScopeRecord {

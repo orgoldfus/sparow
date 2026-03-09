@@ -88,7 +88,8 @@ impl SchemaService {
             cache_status,
             SchemaCacheStatus::Empty | SchemaCacheStatus::Stale
         ) {
-            refresh_in_flight = self.ensure_refresh(app, session, scope).await?.is_some();
+            let refresh_started = self.ensure_refresh(app, session, scope).await?.is_some();
+            refresh_in_flight = refresh_in_flight || refresh_started;
         }
 
         if matches!(cache_status, SchemaCacheStatus::Empty)
@@ -195,25 +196,28 @@ impl SchemaService {
         drop(guard);
 
         if let Some(app) = app.as_ref() {
-            emit_schema_refresh_event(
-                app,
-                &SchemaRefreshProgressEvent {
-                    job_id: accepted.job_id.clone(),
-                    correlation_id: accepted.correlation_id.clone(),
-                    connection_id: accepted.connection_id.clone(),
-                    scope_kind: accepted.scope_kind,
-                    scope_path: accepted.scope_path.clone(),
-                    status: SchemaRefreshStatus::Queued,
-                    nodes_written: 0,
-                    message: schema_scope_message(
-                        "Queued refresh for",
-                        scope.kind,
-                        scope.path.as_deref(),
-                    ),
-                    timestamp: accepted.started_at.clone(),
-                    last_error: None,
-                },
-            )?;
+            let queued_event = SchemaRefreshProgressEvent {
+                job_id: accepted.job_id.clone(),
+                correlation_id: accepted.correlation_id.clone(),
+                connection_id: accepted.connection_id.clone(),
+                scope_kind: accepted.scope_kind,
+                scope_path: accepted.scope_path.clone(),
+                status: SchemaRefreshStatus::Queued,
+                nodes_written: 0,
+                message: schema_scope_message(
+                    "Queued refresh for",
+                    scope.kind,
+                    scope.path.as_deref(),
+                ),
+                timestamp: accepted.started_at.clone(),
+                last_error: None,
+            };
+
+            if let Err(error) = emit_schema_refresh_event(app, &queued_event) {
+                let mut guard = self.in_flight.lock().await;
+                let _ = guard.remove(&key);
+                return Err(error);
+            }
         }
 
         let service = self.clone();
@@ -337,24 +341,41 @@ impl SchemaService {
                             "refreshed schema scope"
                         );
                     }
-                    Ok(Err(error)) => self.record_refresh_failure(
-                        app.as_ref(),
-                        &accepted,
-                        scope.kind,
-                        scope.path.as_deref(),
-                        error,
-                    ),
-                    Err(error) => self.record_refresh_failure(
-                        app.as_ref(),
-                        &accepted,
-                        scope.kind,
-                        scope.path.as_deref(),
-                        AppError::internal(
+                    Ok(Err(error)) => {
+                        self.persist_refresh_failure(
+                            accepted.connection_id.clone(),
+                            scope.kind,
+                            scope.path.clone(),
+                        )
+                        .await;
+                        self.record_refresh_failure(
+                            app.as_ref(),
+                            &accepted,
+                            scope.kind,
+                            scope.path.as_deref(),
+                            error,
+                        );
+                    }
+                    Err(error) => {
+                        let join_error = AppError::internal(
                             "schema_cache_write_failed",
                             "Failed to join schema cache write task.",
                             Some(error.to_string()),
-                        ),
-                    ),
+                        );
+                        self.persist_refresh_failure(
+                            accepted.connection_id.clone(),
+                            scope.kind,
+                            scope.path.clone(),
+                        )
+                        .await;
+                        self.record_refresh_failure(
+                            app.as_ref(),
+                            &accepted,
+                            scope.kind,
+                            scope.path.as_deref(),
+                            join_error,
+                        );
+                    }
                 }
             }
             Err(error) => {
@@ -1198,6 +1219,46 @@ mod tests {
 
         assert!(!first.job_id.is_empty());
         assert_eq!(error.code, "schema_refresh_already_running");
+    }
+
+    #[tokio::test]
+    async fn reports_in_flight_refresh_while_empty_scope_is_loading() {
+        let service = test_service(FakeSchemaDriver {
+            fail_scopes: Arc::new(HashSet::new()),
+            panic_scopes: Arc::new(HashSet::new()),
+        })
+        .await;
+
+        let accepted = service
+            .refresh_scope(
+                None,
+                RefreshSchemaScopeRequest {
+                    connection_id: "conn-local-postgres".to_string(),
+                    scope_kind: SchemaScopeKind::Root,
+                    scope_path: None,
+                },
+            )
+            .await
+            .expect("refresh should start");
+
+        let loaded = service
+            .list_children(
+                None,
+                ListSchemaChildrenRequest {
+                    connection_id: "conn-local-postgres".to_string(),
+                    parent_kind: SchemaScopeKind::Root,
+                    parent_path: None,
+                },
+            )
+            .await
+            .expect("list should report the in-flight refresh");
+
+        wait_for_idle(&service).await;
+
+        assert!(!accepted.job_id.is_empty());
+        assert_eq!(loaded.cache_status, SchemaCacheStatus::Empty);
+        assert!(loaded.refresh_in_flight);
+        assert!(loaded.nodes.is_empty());
     }
 
     #[tokio::test]
