@@ -240,12 +240,12 @@ impl SchemaService {
             .await;
 
             if let Err(error) = join_result {
-                    service
-                        .persist_refresh_failure(
-                            accepted_for_cleanup.connection_id.clone(),
-                            scope_kind,
-                            scope_path.clone(),
-                        )
+                service
+                    .persist_refresh_failure(
+                        accepted_for_cleanup.connection_id.clone(),
+                        scope_kind,
+                        scope_path.clone(),
+                    )
                     .await
                     .unwrap_or_else(|persist_error| {
                         service.report_refresh_failure_persistence_error(
@@ -716,15 +716,31 @@ fn schema_path(schema_name: &str) -> String {
 }
 
 fn relation_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str) -> String {
-    format!("{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name)
+    format!(
+        "{}/{}/{}",
+        schema_kind_prefix(kind),
+        schema_name,
+        relation_name
+    )
 }
 
 fn relation_parent_path(schema_name: &str) -> String {
     schema_path(schema_name)
 }
 
-fn relation_child_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str, name: &str) -> String {
-    format!("{}/{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name, name)
+fn relation_child_path(
+    kind: SchemaNodeKind,
+    schema_name: &str,
+    relation_name: &str,
+    name: &str,
+) -> String {
+    format!(
+        "{}/{}/{}/{}",
+        schema_kind_prefix(kind),
+        schema_name,
+        relation_name,
+        name
+    )
 }
 
 fn schema_kind_prefix(kind: SchemaNodeKind) -> &'static str {
