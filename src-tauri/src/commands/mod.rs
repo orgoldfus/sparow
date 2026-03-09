@@ -4,7 +4,9 @@ use crate::foundation::{
     AppBootstrap, AppError, AppState, BackgroundJobAccepted, BackgroundJobProgressEvent,
     BackgroundJobRequest, CancelJobResult, ConnectionDetails, ConnectionSummary,
     ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult, DisconnectSessionResult,
-    SaveConnectionRequest, TestConnectionRequest, BACKGROUND_JOB_EVENT,
+    ListSchemaChildrenRequest, ListSchemaChildrenResult, RefreshSchemaScopeRequest,
+    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
+    TestConnectionRequest, BACKGROUND_JOB_EVENT,
 };
 
 #[tauri::command]
@@ -64,6 +66,32 @@ pub async fn delete_saved_connection(
     id: String,
 ) -> Result<DeleteConnectionResult, AppError> {
     state.delete_saved_connection(&id).await
+}
+
+#[tauri::command]
+pub async fn list_schema_children(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: ListSchemaChildrenRequest,
+) -> Result<ListSchemaChildrenResult, AppError> {
+    state.list_schema_children(app, request).await
+}
+
+#[tauri::command]
+pub async fn refresh_schema_scope(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: RefreshSchemaScopeRequest,
+) -> Result<SchemaRefreshAccepted, AppError> {
+    state.refresh_schema_scope(app, request).await
+}
+
+#[tauri::command]
+pub async fn search_schema_cache(
+    state: State<'_, AppState>,
+    request: SchemaSearchRequest,
+) -> Result<SchemaSearchResult, AppError> {
+    state.search_schema_cache(request).await
 }
 
 #[tauri::command]

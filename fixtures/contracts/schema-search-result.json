@@ -1,0 +1,33 @@
+{
+  "connectionId": "conn-local-postgres",
+  "query": "user",
+  "nodes": [
+    {
+      "kind": "table",
+      "id": "conn-local-postgres:table/public/users",
+      "connectionId": "conn-local-postgres",
+      "name": "users",
+      "path": "table/public/users",
+      "parentPath": "schema/public",
+      "schemaName": "public",
+      "relationName": "users",
+      "hasChildren": true,
+      "refreshedAt": "2026-03-09T18:15:00.000Z"
+    },
+    {
+      "kind": "column",
+      "id": "conn-local-postgres:column/public/users/email",
+      "connectionId": "conn-local-postgres",
+      "name": "email",
+      "path": "column/public/users/email",
+      "parentPath": "table/public/users",
+      "schemaName": "public",
+      "relationName": "users",
+      "hasChildren": false,
+      "refreshedAt": "2026-03-09T18:15:00.000Z",
+      "dataType": "text",
+      "isNullable": false,
+      "ordinalPosition": 3
+    }
+  ]
+}

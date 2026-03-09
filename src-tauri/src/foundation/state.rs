@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     commands::emit_background_job_event, connections::ConnectionService, persistence::Repository,
+    schema::SchemaService,
 };
 
 use super::{
@@ -21,7 +22,9 @@ use super::{
     BackgroundJobAccepted, BackgroundJobProgressEvent, BackgroundJobRequest, BackgroundJobStatus,
     CancelJobResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
     DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
-    JobRegistry, SaveConnectionRequest, TestConnectionRequest,
+    JobRegistry, ListSchemaChildrenRequest, ListSchemaChildrenResult, RefreshSchemaScopeRequest,
+    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
+    TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -70,15 +73,17 @@ pub struct AppState {
     diagnostics: DiagnosticsStore,
     jobs: JobRegistry,
     connections: ConnectionService,
+    schema: SchemaService,
 }
 
 impl AppState {
-    pub fn new(
+    pub(crate) fn new(
         paths: AppPaths,
         repository: Arc<Repository>,
         diagnostics: DiagnosticsStore,
         jobs: JobRegistry,
         connections: ConnectionService,
+        schema: SchemaService,
     ) -> Self {
         Self {
             paths,
@@ -86,6 +91,7 @@ impl AppState {
             diagnostics,
             jobs,
             connections,
+            schema,
         }
     }
 
@@ -110,6 +116,7 @@ impl AppState {
             platform: platform_label(),
             feature_flags: vec![
                 "phase2-connections".to_string(),
+                "phase3-schema-browser".to_string(),
                 "diagnostics-surface".to_string(),
                 "mock-background-job".to_string(),
             ],
@@ -184,6 +191,41 @@ impl AppState {
         id: &str,
     ) -> Result<DeleteConnectionResult, AppError> {
         let result = self.connections.delete_saved_connection(id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn list_schema_children(
+        &self,
+        app: AppHandle,
+        request: ListSchemaChildrenRequest,
+    ) -> Result<ListSchemaChildrenResult, AppError> {
+        let result = self.schema.list_children(Some(app), request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn refresh_schema_scope(
+        &self,
+        app: AppHandle,
+        request: RefreshSchemaScopeRequest,
+    ) -> Result<SchemaRefreshAccepted, AppError> {
+        let result = self.schema.refresh_scope(Some(app), request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn search_schema_cache(
+        &self,
+        request: SchemaSearchRequest,
+    ) -> Result<SchemaSearchResult, AppError> {
+        let result = self.schema.search_cache(request).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

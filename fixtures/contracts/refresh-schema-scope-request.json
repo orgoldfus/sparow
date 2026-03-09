@@ -1,0 +1,5 @@
+{
+  "connectionId": "conn-local-postgres",
+  "scopeKind": "schema",
+  "scopePath": "schema/public"
+}

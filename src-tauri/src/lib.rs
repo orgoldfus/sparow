@@ -2,17 +2,20 @@ mod commands;
 mod connections;
 mod foundation;
 mod persistence;
+mod schema;
 
 use std::sync::Arc;
 
 use commands::{
     bootstrap_app, cancel_mock_job, connect_saved_connection, delete_saved_connection,
-    disconnect_active_connection, get_saved_connection, list_saved_connections, save_connection,
+    disconnect_active_connection, get_saved_connection, list_saved_connections,
+    list_schema_children, refresh_schema_scope, save_connection, search_schema_cache,
     start_mock_job, test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
 use foundation::{initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry};
 use persistence::Repository;
+use schema::{RuntimeSchemaIntrospectionDriver, SchemaService};
 use tauri::Manager;
 use tracing::info;
 
@@ -32,12 +35,19 @@ pub fn run() {
                 default_secret_store(),
                 Arc::new(RuntimePostgresDriver),
             );
+            let schema = SchemaService::new(
+                repository.clone(),
+                connections.clone(),
+                diagnostics.clone(),
+                Arc::new(RuntimeSchemaIntrospectionDriver),
+            );
             let state = AppState::new(
                 paths,
                 repository,
                 diagnostics,
                 JobRegistry::default(),
                 connections,
+                schema,
             );
 
             info!("application state initialized");
@@ -54,6 +64,9 @@ pub fn run() {
             connect_saved_connection,
             disconnect_active_connection,
             delete_saved_connection,
+            list_schema_children,
+            refresh_schema_scope,
+            search_schema_cache,
             start_mock_job,
             cancel_mock_job
         ])

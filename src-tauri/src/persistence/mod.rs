@@ -1,3 +1,6 @@
 mod repository;
 
-pub use repository::{PersistedSecretRef, Repository, SaveConnectionRecord, SavedConnectionRecord};
+pub use repository::{
+    CachedSchemaScopeRecord, PersistedSecretRef, ReplaceSchemaScopeRecord, Repository,
+    SaveConnectionRecord, SavedConnectionRecord,
+};

@@ -7,6 +7,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use super::AppError;
 
 pub const BACKGROUND_JOB_EVENT: &str = "foundation://job-progress";
+pub const SCHEMA_REFRESH_EVENT: &str = "schema://refresh-progress";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -23,6 +24,42 @@ pub enum BackgroundJobStatus {
     Running,
     Completed,
     Cancelled,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaNodeKind {
+    Schema,
+    Table,
+    View,
+    Column,
+    Index,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaScopeKind {
+    Root,
+    Schema,
+    Table,
+    View,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaCacheStatus {
+    Empty,
+    Fresh,
+    Stale,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaRefreshStatus {
+    Queued,
+    Running,
+    Completed,
     Failed,
 }
 
@@ -209,6 +246,151 @@ pub struct SchemaCacheEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SchemaNodeBase {
+    pub id: String,
+    pub connection_id: String,
+    pub name: String,
+    pub path: String,
+    pub parent_path: Option<String>,
+    pub schema_name: String,
+    pub relation_name: Option<String>,
+    pub has_children: bool,
+    pub refreshed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum SchemaNode {
+    #[serde(rename = "schema")]
+    Schema {
+        #[serde(flatten)]
+        base: SchemaNodeBase,
+    },
+    #[serde(rename = "table")]
+    Table {
+        #[serde(flatten)]
+        base: SchemaNodeBase,
+    },
+    #[serde(rename = "view")]
+    View {
+        #[serde(flatten)]
+        base: SchemaNodeBase,
+    },
+    #[serde(rename = "column")]
+    Column {
+        #[serde(flatten)]
+        base: SchemaNodeBase,
+        data_type: String,
+        is_nullable: bool,
+        ordinal_position: u32,
+    },
+    #[serde(rename = "index")]
+    Index {
+        #[serde(flatten)]
+        base: SchemaNodeBase,
+        column_names: Vec<String>,
+        is_unique: bool,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSchemaChildrenRequest {
+    pub connection_id: String,
+    pub parent_kind: SchemaScopeKind,
+    pub parent_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSchemaChildrenResult {
+    pub connection_id: String,
+    pub parent_kind: SchemaScopeKind,
+    pub parent_path: Option<String>,
+    pub cache_status: SchemaCacheStatus,
+    pub refresh_in_flight: bool,
+    pub refreshed_at: Option<String>,
+    pub nodes: Vec<SchemaNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshSchemaScopeRequest {
+    pub connection_id: String,
+    pub scope_kind: SchemaScopeKind,
+    pub scope_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaRefreshAccepted {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub connection_id: String,
+    pub scope_kind: SchemaScopeKind,
+    pub scope_path: Option<String>,
+    pub started_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaRefreshProgressEvent {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub connection_id: String,
+    pub scope_kind: SchemaScopeKind,
+    pub scope_path: Option<String>,
+    pub status: SchemaRefreshStatus,
+    pub nodes_written: usize,
+    pub message: String,
+    pub timestamp: String,
+    pub last_error: Option<AppError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaSearchRequest {
+    pub connection_id: String,
+    pub query: String,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaSearchResult {
+    pub connection_id: String,
+    pub query: String,
+    pub nodes: Vec<SchemaNode>,
+}
+
+impl SchemaNode {
+    pub fn kind(&self) -> SchemaNodeKind {
+        match self {
+            Self::Schema { .. } => SchemaNodeKind::Schema,
+            Self::Table { .. } => SchemaNodeKind::Table,
+            Self::View { .. } => SchemaNodeKind::View,
+            Self::Column { .. } => SchemaNodeKind::Column,
+            Self::Index { .. } => SchemaNodeKind::Index,
+        }
+    }
+
+    pub fn base(&self) -> &SchemaNodeBase {
+        match self {
+            Self::Schema { base } => base,
+            Self::Table { base } => base,
+            Self::View { base } => base,
+            Self::Column { base, .. } => base,
+            Self::Index { base, .. } => base,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoragePaths {
     pub database_path: String,
     pub log_file_path: String,
@@ -365,7 +547,9 @@ mod tests {
     use super::{
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
         ConnectionDetails, ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
-        DeleteConnectionResult, DisconnectSessionResult, SaveConnectionRequest,
+        DeleteConnectionResult, DisconnectSessionResult, ListSchemaChildrenRequest,
+        ListSchemaChildrenResult, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
+        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
         TestConnectionRequest,
     };
 
@@ -392,6 +576,21 @@ mod tests {
         include_str!("../../../fixtures/contracts/delete-connection-result.json");
     const DISCONNECT_SESSION_RESULT_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/disconnect-session-result.json");
+    const SCHEMA_NODE_FIXTURE: &str = include_str!("../../../fixtures/contracts/schema-node.json");
+    const LIST_SCHEMA_CHILDREN_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-schema-children-request.json");
+    const LIST_SCHEMA_CHILDREN_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-schema-children-result.json");
+    const REFRESH_SCHEMA_SCOPE_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/refresh-schema-scope-request.json");
+    const SCHEMA_REFRESH_ACCEPTED_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/schema-refresh-accepted.json");
+    const SCHEMA_REFRESH_PROGRESS_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/schema-refresh-progress.json");
+    const SCHEMA_SEARCH_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/schema-search-request.json");
+    const SCHEMA_SEARCH_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/schema-search-result.json");
 
     #[test]
     fn deserializes_app_bootstrap_fixture() {
@@ -483,5 +682,70 @@ mod tests {
             fixture.connection_id.as_deref(),
             Some("conn-local-postgres")
         );
+    }
+
+    #[test]
+    fn deserializes_schema_node_fixture() {
+        let fixture: SchemaNode = serde_json::from_str(SCHEMA_NODE_FIXTURE)
+            .expect("schema node fixture should deserialize");
+        match fixture {
+            SchemaNode::Index { column_names, .. } => {
+                assert_eq!(column_names, vec!["email".to_string()])
+            }
+            other => panic!("expected index node, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserializes_list_schema_children_request_fixture() {
+        let fixture: ListSchemaChildrenRequest =
+            serde_json::from_str(LIST_SCHEMA_CHILDREN_REQUEST_FIXTURE)
+                .expect("list schema children request fixture should deserialize");
+        assert_eq!(fixture.parent_path.as_deref(), Some("schema/public"));
+    }
+
+    #[test]
+    fn deserializes_list_schema_children_result_fixture() {
+        let fixture: ListSchemaChildrenResult =
+            serde_json::from_str(LIST_SCHEMA_CHILDREN_RESULT_FIXTURE)
+                .expect("list schema children result fixture should deserialize");
+        assert_eq!(fixture.nodes.len(), 2);
+    }
+
+    #[test]
+    fn deserializes_refresh_schema_scope_request_fixture() {
+        let fixture: RefreshSchemaScopeRequest =
+            serde_json::from_str(REFRESH_SCHEMA_SCOPE_REQUEST_FIXTURE)
+                .expect("refresh schema scope request fixture should deserialize");
+        assert_eq!(fixture.scope_path.as_deref(), Some("schema/public"));
+    }
+
+    #[test]
+    fn deserializes_schema_refresh_accepted_fixture() {
+        let fixture: SchemaRefreshAccepted = serde_json::from_str(SCHEMA_REFRESH_ACCEPTED_FIXTURE)
+            .expect("schema refresh accepted fixture should deserialize");
+        assert_eq!(fixture.job_id, "schema-job-2026");
+    }
+
+    #[test]
+    fn deserializes_schema_refresh_progress_fixture() {
+        let fixture: SchemaRefreshProgressEvent =
+            serde_json::from_str(SCHEMA_REFRESH_PROGRESS_FIXTURE)
+                .expect("schema refresh progress fixture should deserialize");
+        assert_eq!(fixture.nodes_written, 2);
+    }
+
+    #[test]
+    fn deserializes_schema_search_request_fixture() {
+        let fixture: SchemaSearchRequest = serde_json::from_str(SCHEMA_SEARCH_REQUEST_FIXTURE)
+            .expect("schema search request fixture should deserialize");
+        assert_eq!(fixture.limit, 8);
+    }
+
+    #[test]
+    fn deserializes_schema_search_result_fixture() {
+        let fixture: SchemaSearchResult = serde_json::from_str(SCHEMA_SEARCH_RESULT_FIXTURE)
+            .expect("schema search result fixture should deserialize");
+        assert_eq!(fixture.nodes.len(), 2);
     }
 }

@@ -1,0 +1,12 @@
+{
+  "jobId": "schema-job-2026",
+  "correlationId": "schema-corr-2026",
+  "connectionId": "conn-local-postgres",
+  "scopeKind": "schema",
+  "scopePath": "schema/public",
+  "status": "completed",
+  "nodesWritten": 2,
+  "message": "Refreshed schema scope public.",
+  "timestamp": "2026-03-09T18:15:01.000Z",
+  "lastError": null
+}

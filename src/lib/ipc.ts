@@ -11,7 +11,14 @@ import {
   type DatabaseSessionSnapshot,
   type DeleteConnectionResult,
   type DisconnectSessionResult,
+  type ListSchemaChildrenRequest,
+  type ListSchemaChildrenResult,
+  type RefreshSchemaScopeRequest,
   type SaveConnectionRequest,
+  type SchemaRefreshAccepted,
+  type SchemaRefreshProgressEvent,
+  type SchemaSearchRequest,
+  type SchemaSearchResult,
   type TestConnectionRequest,
   isAppBootstrap,
   isBackgroundJobAccepted,
@@ -22,6 +29,10 @@ import {
   isDatabaseSessionSnapshot,
   isDeleteConnectionResult,
   isDisconnectSessionResult,
+  isListSchemaChildrenResult,
+  isSchemaRefreshAccepted,
+  isSchemaRefreshProgressEvent,
+  isSchemaSearchResult,
 } from './contracts';
 
 type CancelJobResult = {
@@ -92,6 +103,25 @@ export async function deleteSavedConnection(id: string): Promise<DeleteConnectio
   return assertContract(isDeleteConnectionResult, payload, 'delete_saved_connection');
 }
 
+export async function listSchemaChildren(
+  request: ListSchemaChildrenRequest,
+): Promise<ListSchemaChildrenResult> {
+  const payload = await invoke<unknown>('list_schema_children', { request });
+  return assertContract(isListSchemaChildrenResult, payload, 'list_schema_children');
+}
+
+export async function refreshSchemaScope(
+  request: RefreshSchemaScopeRequest,
+): Promise<SchemaRefreshAccepted> {
+  const payload = await invoke<unknown>('refresh_schema_scope', { request });
+  return assertContract(isSchemaRefreshAccepted, payload, 'refresh_schema_scope');
+}
+
+export async function searchSchemaCache(request: SchemaSearchRequest): Promise<SchemaSearchResult> {
+  const payload = await invoke<unknown>('search_schema_cache', { request });
+  return assertContract(isSchemaSearchResult, payload, 'search_schema_cache');
+}
+
 export async function startMockJob(request: BackgroundJobRequest): Promise<BackgroundJobAccepted> {
   const payload = await invoke<unknown>('start_mock_job', { request });
   return assertContract(isBackgroundJobAccepted, payload, 'start_mock_job');
@@ -107,6 +137,19 @@ export async function subscribeToEvent(
 ): Promise<() => void> {
   return listen<unknown>(eventName, (event) => {
     if (!isBackgroundJobProgressEvent(event.payload)) {
+      throw new Error(`Invalid event payload for ${eventName}.`);
+    }
+
+    handler(event.payload);
+  });
+}
+
+export async function subscribeToSchemaRefreshEvent(
+  eventName: string,
+  handler: (payload: SchemaRefreshProgressEvent) => void,
+): Promise<() => void> {
+  return listen<unknown>(eventName, (event) => {
+    if (!isSchemaRefreshProgressEvent(event.payload)) {
       throw new Error(`Invalid event payload for ${eventName}.`);
     }
 

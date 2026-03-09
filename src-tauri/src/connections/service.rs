@@ -25,7 +25,13 @@ const APPLICATION_NAME: &str = "sparow";
 
 struct ActiveSession {
     snapshot: DatabaseSessionSnapshot,
-    _pool: Option<Pool>,
+    pool: Option<Pool>,
+}
+
+#[derive(Clone)]
+pub struct ActiveSessionRuntime {
+    pub snapshot: DatabaseSessionSnapshot,
+    pub pool: Option<Pool>,
 }
 
 #[derive(Clone)]
@@ -284,7 +290,7 @@ impl ConnectionService {
         let mut guard = self.active_session.lock().await;
         *guard = Some(ActiveSession {
             snapshot: snapshot.clone(),
-            _pool: established.pool,
+            pool: established.pool,
         });
 
         info!(connection_id = %snapshot.connection_id, "connected PostgreSQL session");
@@ -373,6 +379,42 @@ impl ConnectionService {
             .await
             .as_ref()
             .map(|session| session.snapshot.clone())
+    }
+
+    pub async fn active_session_runtime(
+        &self,
+        connection_id: &str,
+    ) -> Result<ActiveSessionRuntime, AppError> {
+        let guard = self.active_session.lock().await;
+        let session = guard.as_ref().ok_or_else(|| {
+            AppError::retryable(
+                "schema_no_active_session",
+                "Schema browsing requires an active PostgreSQL session.",
+                None,
+            )
+        })?;
+
+        if session.snapshot.connection_id != connection_id {
+            return Err(AppError::retryable(
+                "schema_wrong_connection_selected",
+                "Schema browsing only supports the currently active saved connection.",
+                Some(connection_id.to_string()),
+            ));
+        }
+
+        Ok(ActiveSessionRuntime {
+            snapshot: session.snapshot.clone(),
+            pool: session.pool.clone(),
+        })
+    }
+
+    #[cfg(test)]
+    pub async fn set_test_active_session(&self, runtime: ActiveSessionRuntime) {
+        let mut guard = self.active_session.lock().await;
+        *guard = Some(ActiveSession {
+            snapshot: runtime.snapshot,
+            pool: runtime.pool,
+        });
     }
 
     fn to_summary(&self, record: SavedConnectionRecord) -> Result<ConnectionSummary, AppError> {

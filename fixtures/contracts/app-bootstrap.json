@@ -5,6 +5,7 @@
   "platform": "darwin-aarch64",
   "featureFlags": [
     "phase2-connections",
+    "phase3-schema-browser",
     "diagnostics-surface",
     "mock-background-job"
   ],
@@ -30,7 +31,7 @@
   "sampleData": {
     "historyEntries": 1,
     "savedQueries": 0,
-    "schemaCacheEntries": 0
+    "schemaCacheEntries": 3
   },
   "savedConnections": [
     {
