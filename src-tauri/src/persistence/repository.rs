@@ -164,7 +164,7 @@ impl Repository {
             })?;
 
         let rows = statement
-            .query_map([], |row| Self::read_saved_connection(row))
+            .query_map([], Self::read_saved_connection)
             .map_err(|error| {
                 AppError::internal(
                     "saved_connections_query_failed",

@@ -13,7 +13,9 @@ use commands::{
     start_mock_job, test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
-use foundation::{initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry, MockJobRunner};
+use foundation::{
+    initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry, MockJobRunner,
+};
 use persistence::Repository;
 use schema::{RuntimeSchemaIntrospectionDriver, SchemaService};
 use tauri::Manager;
@@ -22,7 +24,7 @@ use tracing::info;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
-            let paths = AppPaths::resolve(&app.handle())?;
+            let paths = AppPaths::resolve(app.handle())?;
 
             initialize_logging(&paths.log_file_path)?;
 

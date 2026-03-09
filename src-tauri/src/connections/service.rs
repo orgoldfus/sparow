@@ -517,7 +517,6 @@ fn parse_database_engine(value: &str) -> Result<DatabaseEngine, AppError> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

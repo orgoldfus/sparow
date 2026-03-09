@@ -11,9 +11,8 @@ use crate::{
     foundation::{
         iso_timestamp, AppError, DiagnosticsStore, ListSchemaChildrenRequest,
         ListSchemaChildrenResult, RefreshSchemaScopeRequest, SchemaCacheStatus,
-        SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-        SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult,
-        SCHEMA_REFRESH_EVENT,
+        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaRefreshStatus, SchemaScopeKind,
+        SchemaSearchRequest, SchemaSearchResult, SCHEMA_REFRESH_EVENT,
     },
     persistence::{ReplaceSchemaScopeRecord, Repository},
 };
@@ -240,12 +239,12 @@ impl SchemaService {
             .await;
 
             if let Err(error) = join_result {
-                    service
-                        .persist_refresh_failure(
-                            accepted_for_cleanup.connection_id.clone(),
-                            scope_kind,
-                            scope_path.clone(),
-                        )
+                service
+                    .persist_refresh_failure(
+                        accepted_for_cleanup.connection_id.clone(),
+                        scope_kind,
+                        scope_path.clone(),
+                    )
                     .await
                     .unwrap_or_else(|persist_error| {
                         service.report_refresh_failure_persistence_error(
@@ -509,7 +508,6 @@ impl SchemaService {
             .contains(&refresh_key(connection_id, scope_kind, scope_path))
     }
 }
-
 
 fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope, AppError> {
     match kind {

@@ -6,18 +6,15 @@ use std::{
 use tauri::AppHandle;
 use tokio::task;
 
-use crate::{
-    connections::ConnectionService, persistence::Repository, schema::SchemaService,
-};
+use crate::{connections::ConnectionService, persistence::Repository, schema::SchemaService};
 
 use super::{
-    environment_label, platform_label, AppBootstrap, AppError, AppPaths,
-    BackgroundJobAccepted, BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult,
-    ConnectionDetails, ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
-    DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
-    ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner,
-    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest,
-    SchemaSearchResult, TestConnectionRequest,
+    environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
+    BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, ConnectionDetails,
+    ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
+    DiagnosticsSnapshot, DisconnectSessionResult, ListSchemaChildrenRequest,
+    ListSchemaChildrenResult, MockJobRunner, RefreshSchemaScopeRequest, SaveConnectionRequest,
+    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]

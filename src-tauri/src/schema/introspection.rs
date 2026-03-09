@@ -3,9 +3,7 @@ use tokio_postgres::Row;
 
 use crate::{
     connections::ActiveSessionRuntime,
-    foundation::{
-        AppError, SchemaNode, SchemaNodeBase, SchemaNodeKind, SchemaScopeKind,
-    },
+    foundation::{AppError, SchemaNode, SchemaNodeBase, SchemaNodeKind, SchemaScopeKind},
 };
 
 use super::service::ParsedScope;
@@ -222,15 +220,31 @@ pub(crate) fn schema_node_id(connection_id: &str, path: &str) -> String {
 }
 
 fn relation_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str) -> String {
-    format!("{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name)
+    format!(
+        "{}/{}/{}",
+        schema_kind_prefix(kind),
+        schema_name,
+        relation_name
+    )
 }
 
 fn relation_parent_path(schema_name: &str) -> String {
     schema_path(schema_name)
 }
 
-fn relation_child_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str, name: &str) -> String {
-    format!("{}/{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name, name)
+fn relation_child_path(
+    kind: SchemaNodeKind,
+    schema_name: &str,
+    relation_name: &str,
+    name: &str,
+) -> String {
+    format!(
+        "{}/{}/{}/{}",
+        schema_kind_prefix(kind),
+        schema_name,
+        relation_name,
+        name
+    )
 }
 
 fn schema_kind_prefix(kind: SchemaNodeKind) -> &'static str {
