@@ -22,7 +22,7 @@ use tracing::info;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
-            let paths = AppPaths::resolve(&app.handle())?;
+            let paths = AppPaths::resolve(app.handle())?;
 
             initialize_logging(&paths.log_file_path)?;
 
