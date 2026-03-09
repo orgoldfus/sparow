@@ -7,10 +7,30 @@ import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-se
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import schemaRefreshProgressFixture from '../../fixtures/contracts/schema-refresh-progress.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
+import {
+  isAppBootstrap,
+  isDatabaseSessionSnapshot,
+  type AppBootstrap,
+  type DatabaseSessionSnapshot,
+  type ListSchemaChildrenResult,
+} from '../lib/contracts';
 import { bootstrapApp } from '../lib/ipc';
 
+function expectAppBootstrap(value: unknown): AppBootstrap {
+  expect(isAppBootstrap(value)).toBe(true);
+  return value as AppBootstrap;
+}
+
+function expectDatabaseSessionSnapshot(value: unknown): DatabaseSessionSnapshot {
+  expect(isDatabaseSessionSnapshot(value)).toBe(true);
+  return value as DatabaseSessionSnapshot;
+}
+
+const appBootstrap = expectAppBootstrap(appBootstrapFixture);
+const databaseSession = expectDatabaseSessionSnapshot(databaseSessionSnapshotFixture);
+
 const rootSchemaChildrenFixture = {
-  connectionId: databaseSessionSnapshotFixture.connectionId,
+  connectionId: databaseSession.connectionId,
   parentKind: 'root' as const,
   parentPath: null,
   cacheStatus: 'fresh' as const,
@@ -20,7 +40,7 @@ const rootSchemaChildrenFixture = {
     {
       kind: 'schema' as const,
       id: 'conn-local-postgres:schema/public',
-      connectionId: databaseSessionSnapshotFixture.connectionId,
+      connectionId: databaseSession.connectionId,
       name: 'public',
       path: 'schema/public',
       parentPath: null,
@@ -30,18 +50,18 @@ const rootSchemaChildrenFixture = {
       refreshedAt: '2026-03-09T18:15:00.000Z',
     },
   ],
-};
+} satisfies ListSchemaChildrenResult;
 
 let schemaEventHandler: ((payload: typeof schemaRefreshProgressFixture) => void) | null = null;
 
 vi.mock('../lib/ipc', () => ({
   bootstrapApp: vi.fn(() => Promise.resolve(appBootstrapFixture)),
-  listSavedConnections: vi.fn(() => Promise.resolve(appBootstrapFixture.savedConnections)),
+  listSavedConnections: vi.fn(() => Promise.resolve(appBootstrap.savedConnections)),
   getSavedConnection: vi.fn(() => Promise.resolve(connectionDetailsFixture)),
   saveConnection: vi.fn(() => Promise.resolve(connectionDetailsFixture)),
   testConnection: vi.fn(() => Promise.resolve(connectionTestResultFixture)),
-  connectSavedConnection: vi.fn(() => Promise.resolve(databaseSessionSnapshotFixture)),
-  disconnectActiveConnection: vi.fn(() => Promise.resolve({ connectionId: databaseSessionSnapshotFixture.connectionId })),
+  connectSavedConnection: vi.fn(() => Promise.resolve(databaseSession)),
+  disconnectActiveConnection: vi.fn(() => Promise.resolve({ connectionId: databaseSession.connectionId })),
   deleteSavedConnection: vi.fn(() => Promise.resolve({ id: connectionDetailsFixture.id, disconnected: true })),
   listSchemaChildren: vi.fn((request: { parentKind: string }) =>
     Promise.resolve(request.parentKind === 'root' ? rootSchemaChildrenFixture : listSchemaChildrenResultFixture),
@@ -62,12 +82,12 @@ vi.mock('../lib/ipc', () => ({
 describe('schema browser', () => {
   beforeEach(() => {
     schemaEventHandler = null;
-    vi.mocked(bootstrapApp).mockResolvedValue(appBootstrapFixture);
+    vi.mocked(bootstrapApp).mockResolvedValue(appBootstrap);
   });
 
   it('shows a disconnected empty state when no active session exists', async () => {
     vi.mocked(bootstrapApp).mockResolvedValue({
-      ...appBootstrapFixture,
+      ...appBootstrap,
       activeSession: null,
     });
 
@@ -112,27 +132,27 @@ describe('schema browser', () => {
     });
   });
 
-  it('renders schema refresh events in diagnostics', () => {
+  it('renders schema refresh events in diagnostics', async () => {
     render(<App />);
 
-    return screen.findByTestId('schema-node-schema/public').then(async () => {
-      await act(async () => {
-        await Promise.resolve();
-        schemaEventHandler?.(schemaRefreshProgressFixture);
-      });
+    await screen.findByTestId('schema-node-schema/public');
 
-      await waitFor(() => {
-        expect(screen.getAllByText(/Refreshed schema scope public/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(new RegExp(schemaRefreshProgressFixture.correlationId)).length).toBeGreaterThan(0);
-      });
+    await act(async () => {
+      await Promise.resolve();
+      schemaEventHandler?.(schemaRefreshProgressFixture);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Refreshed schema scope public/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(new RegExp(schemaRefreshProgressFixture.correlationId)).length).toBeGreaterThan(0);
     });
   });
 
   it('renders unknown SSL state explicitly', async () => {
     vi.mocked(bootstrapApp).mockResolvedValue({
-      ...appBootstrapFixture,
+      ...appBootstrap,
       activeSession: {
-        ...databaseSessionSnapshotFixture,
+        ...databaseSession,
         sslInUse: null,
       },
     });

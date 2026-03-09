@@ -615,6 +615,33 @@ impl SchemaIntrospectionDriver for RuntimeSchemaIntrospectionDriver {
                         scope.path.clone(),
                     )
                 })?;
+                let relation_kind = client
+                    .query_opt(
+                        "select c.relkind::text
+                         from pg_class c
+                         join pg_namespace n on n.oid = c.relnamespace
+                         where n.nspname = $1
+                           and c.relname = $2",
+                        &[&schema_name, &relation_name],
+                    )
+                    .await
+                    .map_err(schema_query_error)?
+                    .map(|row| row.get::<_, String>(0))
+                    .ok_or_else(|| {
+                        AppError::internal(
+                            "schema_relation_not_found",
+                            "The requested schema relation does not exist.",
+                            scope.path.clone(),
+                        )
+                    })?;
+
+                if !relation_kind_matches_scope(scope.kind, &relation_kind) {
+                    return Err(AppError::internal(
+                        "schema_scope_kind_mismatch",
+                        "The requested schema scope kind does not match the PostgreSQL relation type.",
+                        scope.path.clone(),
+                    ));
+                }
 
                 let column_rows = client
                     .query(
@@ -876,6 +903,14 @@ fn refresh_task_error(error: JoinError) -> AppError {
         "Schema refresh task ended unexpectedly.",
         Some(error.to_string()),
     )
+}
+
+fn relation_kind_matches_scope(scope_kind: SchemaScopeKind, relkind: &str) -> bool {
+    match scope_kind {
+        SchemaScopeKind::Table => matches!(relkind, "r" | "p"),
+        SchemaScopeKind::View => relkind == "v",
+        SchemaScopeKind::Root | SchemaScopeKind::Schema => false,
+    }
 }
 
 fn schema_row_to_node(connection_id: &str, row: Row, refreshed_at: &str) -> SchemaNode {
@@ -1291,6 +1326,15 @@ mod tests {
                 .expect_err("relation scope should reject malformed paths");
             assert_eq!(error.code, "schema_scope_parse_failed");
         }
+    }
+
+    #[test]
+    fn relation_scope_kind_matches_postgres_relkind() {
+        assert!(relation_kind_matches_scope(SchemaScopeKind::Table, "r"));
+        assert!(relation_kind_matches_scope(SchemaScopeKind::Table, "p"));
+        assert!(relation_kind_matches_scope(SchemaScopeKind::View, "v"));
+        assert!(!relation_kind_matches_scope(SchemaScopeKind::Table, "v"));
+        assert!(!relation_kind_matches_scope(SchemaScopeKind::View, "r"));
     }
 
     #[tokio::test]

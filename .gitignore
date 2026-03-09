@@ -6,3 +6,4 @@ src-tauri/gen/
 *.sqlite3
 *.db
 *.log
+*.tsbuildinfo

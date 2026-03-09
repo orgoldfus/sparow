@@ -199,4 +199,44 @@ describe('contract fixtures', () => {
       }),
     ).toBe(false);
   });
+
+  it('rejects list schema children results with cross-connection or wrong-parent nodes', () => {
+    expect(
+      isListSchemaChildrenResult({
+        ...listSchemaChildrenResultFixture,
+        nodes: [
+          {
+            ...listSchemaChildrenResultFixture.nodes[0],
+            connectionId: 'conn-other',
+          },
+        ],
+      }),
+    ).toBe(false);
+
+    expect(
+      isListSchemaChildrenResult({
+        ...listSchemaChildrenResultFixture,
+        nodes: [
+          {
+            ...listSchemaChildrenResultFixture.nodes[0],
+            parentPath: 'schema/private',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects schema search results with nodes from another connection', () => {
+    expect(
+      isSchemaSearchResult({
+        ...schemaSearchResultFixture,
+        nodes: [
+          {
+            ...schemaSearchResultFixture.nodes[0],
+            connectionId: 'conn-other',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
 });

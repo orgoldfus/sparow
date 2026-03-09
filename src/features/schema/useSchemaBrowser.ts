@@ -234,6 +234,9 @@ export function useSchemaBrowser({
     const currentIndex = visibleRows.findIndex((row) => row.node.path === selectedPath);
     const fallbackIndex = currentIndex === -1 ? 0 : currentIndex;
     const currentRow = visibleRows[fallbackIndex];
+    if (!currentRow) {
+      return;
+    }
 
     switch (direction) {
       case 'up':

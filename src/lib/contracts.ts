@@ -316,7 +316,10 @@ function isScopePathForKind(kind: SchemaScopeKind, path: unknown): path is strin
   return kind === 'root' ? path === null : typeof path === 'string';
 }
 
-function isConnectionShape(value: unknown): value is Omit<ConnectionSummary, 'updatedAt'> & { updatedAt?: string } {
+function isConnectionShape(value: unknown): value is Omit<ConnectionDetails, 'createdAt' | 'updatedAt'> & {
+  createdAt?: string;
+  updatedAt?: string;
+} {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
@@ -373,7 +376,7 @@ export function isConnectionSummary(value: unknown): value is ConnectionSummary 
 }
 
 export function isConnectionDetails(value: unknown): value is ConnectionDetails {
-  return isConnectionSummary(value) && typeof value.createdAt === 'string';
+  return isConnectionShape(value) && typeof value.updatedAt === 'string' && typeof value.createdAt === 'string';
 }
 
 export function isConnectionDraft(value: unknown): value is ConnectionDraft {
@@ -493,10 +496,28 @@ function isRelationChildPath(
   );
 }
 
+function isSchemaNodeChildOfScope(
+  node: SchemaNode,
+  parentKind: SchemaScopeKind,
+  parentPath: string | null,
+): boolean {
+  switch (parentKind) {
+    case 'root':
+      return node.kind === 'schema' && node.parentPath === null && parentPath === null;
+    case 'schema':
+      return (node.kind === 'table' || node.kind === 'view') && node.parentPath === parentPath;
+    case 'table':
+    case 'view':
+      return (node.kind === 'column' || node.kind === 'index') && node.parentPath === parentPath;
+  }
+}
+
 export function isSchemaNode(value: unknown): value is SchemaNode {
   if (!isSchemaNodeBase(value)) {
     return false;
   }
+
+  const node = value as SchemaNodeBase & Record<string, unknown>;
 
   switch (value.kind) {
     case 'schema':
@@ -528,9 +549,9 @@ export function isSchemaNode(value: unknown): value is SchemaNode {
           value.path,
           value.parentPath,
         ) &&
-        typeof value.dataType === 'string' &&
-        typeof value.isNullable === 'boolean' &&
-        typeof value.ordinalPosition === 'number'
+        typeof node.dataType === 'string' &&
+        typeof node.isNullable === 'boolean' &&
+        typeof node.ordinalPosition === 'number'
       );
     case 'index':
       return (
@@ -544,8 +565,8 @@ export function isSchemaNode(value: unknown): value is SchemaNode {
           value.path,
           value.parentPath,
         ) &&
-        isStringArray(value.columnNames) &&
-        typeof value.isUnique === 'boolean'
+        isStringArray(node.columnNames) &&
+        typeof node.isUnique === 'boolean'
       );
     default:
       return false;
@@ -562,16 +583,22 @@ export function isListSchemaChildrenRequest(value: unknown): value is ListSchema
 }
 
 export function isListSchemaChildrenResult(value: unknown): value is ListSchemaChildrenResult {
-  return (
-    isRecord(value) &&
-    typeof value.connectionId === 'string' &&
-    isSchemaScopeKind(value.parentKind) &&
-    isScopePathForKind(value.parentKind, value.parentPath) &&
-    isSchemaCacheStatus(value.cacheStatus) &&
-    typeof value.refreshInFlight === 'boolean' &&
-    isNullableString(value.refreshedAt) &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(isSchemaNode)
+  if (
+    !isRecord(value) ||
+    typeof value.connectionId !== 'string' ||
+    !isSchemaScopeKind(value.parentKind) ||
+    !isScopePathForKind(value.parentKind, value.parentPath) ||
+    !isSchemaCacheStatus(value.cacheStatus) ||
+    typeof value.refreshInFlight !== 'boolean' ||
+    !isNullableString(value.refreshedAt) ||
+    !Array.isArray(value.nodes)
+  ) {
+    return false;
+  }
+
+  const { connectionId, parentKind, parentPath, nodes } = value;
+  return nodes.every(
+    (node) => isSchemaNode(node) && node.connectionId === connectionId && isSchemaNodeChildOfScope(node, parentKind, parentPath),
   );
 }
 
@@ -627,7 +654,7 @@ export function isSchemaSearchResult(value: unknown): value is SchemaSearchResul
     typeof value.connectionId === 'string' &&
     typeof value.query === 'string' &&
     Array.isArray(value.nodes) &&
-    value.nodes.every(isSchemaNode)
+    value.nodes.every((node) => isSchemaNode(node) && node.connectionId === value.connectionId)
   );
 }
 

@@ -4,6 +4,8 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Run `npm run typecheck`, fix all TypeScript issues, and keep typecheck green on every change
+- [completed] Autofix unresolved CodeRabbit comments that still apply on the current branch
 - [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
 - [completed] Verify and fix swallowed `persist_refresh_failure` task/repository errors in the schema service
 - [completed] Fix cross-connection schema cache ID collisions that block remote PostgreSQL schema refreshes
@@ -32,6 +34,12 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `npm run typecheck` ✅
+  - Fixed TypeScript narrowing issues in schema guards/hooks, tightened test fixture typing around JSON imports, and switched Vite config typing to the Vitest-aware config entrypoint.
+- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::relation_scope_kind_matches_postgres_relkind -- --exact` ✅
+  - Added a regression for PostgreSQL relkind matching so table/view scope requests cannot silently introspect the wrong relation type.
+- `npm run test -- src/test/contract-fixtures.test.ts` ✅
+  - Contract guards now reject cross-connection schema nodes and list-children payloads whose nodes do not belong to the declared parent scope.
 - `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::persist_refresh_failure_returns_repository_errors -- --exact` ✅
   - The schema service now returns repository/join failures from `persist_refresh_failure` instead of swallowing the `spawn_blocking` outcome.
 - `npm run verify` ✅
