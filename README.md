@@ -84,7 +84,7 @@ SPAROW_PG_SSL_MODE=prefer
 
 ## Project Structure
 
-```
+```text
 src/                  React frontend (shell, features, IPC client, tests)
 src-tauri/src/        Rust backend (commands, services, persistence, schema)
 fixtures/contracts/   Shared JSON fixtures for IPC boundary payloads
