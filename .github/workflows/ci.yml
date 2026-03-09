@@ -37,15 +37,10 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Cache Cargo registry & build
-        uses: actions/cache@v4
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          workspaces: src-tauri
 
       - name: Rust format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
