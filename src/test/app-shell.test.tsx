@@ -1,32 +1,39 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 import appBootstrapFixture from '../../fixtures/contracts/app-bootstrap.json';
-import backgroundJobAcceptedFixture from '../../fixtures/contracts/background-job-accepted.json';
-import backgroundJobProgressFixture from '../../fixtures/contracts/background-job-progress.json';
-
-const subscribeHandlers = new Set<(payload: typeof backgroundJobProgressFixture) => void>();
+import connectionDetailsFixture from '../../fixtures/contracts/connection-details.json';
+import connectionTestResultFixture from '../../fixtures/contracts/connection-test-result.json';
+import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-session-snapshot.json';
+import type { SaveConnectionRequest } from '../lib/contracts';
+import { getSavedConnection, saveConnection } from '../lib/ipc';
 
 vi.mock('../lib/ipc', () => ({
   bootstrapApp: vi.fn(() => Promise.resolve(appBootstrapFixture)),
-  startMockJob: vi.fn(() => Promise.resolve(backgroundJobAcceptedFixture)),
-  cancelMockJob: vi.fn(() => Promise.resolve({ jobId: backgroundJobAcceptedFixture.jobId })),
-  subscribeToEvent: vi.fn((_eventName: string, handler: (payload: typeof backgroundJobProgressFixture) => void) => {
-    subscribeHandlers.add(handler);
-    return Promise.resolve(() => {
-      subscribeHandlers.delete(handler);
-    });
-  }),
+  listSavedConnections: vi.fn(() => Promise.resolve(appBootstrapFixture.savedConnections)),
+  getSavedConnection: vi.fn(() => Promise.resolve(connectionDetailsFixture)),
+  saveConnection: vi.fn(() => Promise.resolve(connectionDetailsFixture)),
+  testConnection: vi.fn(() => Promise.resolve(connectionTestResultFixture)),
+  connectSavedConnection: vi.fn(() => Promise.resolve(databaseSessionSnapshotFixture)),
+  disconnectActiveConnection: vi.fn(() => Promise.resolve({ connectionId: databaseSessionSnapshotFixture.connectionId })),
+  deleteSavedConnection: vi.fn(() => Promise.resolve({ id: connectionDetailsFixture.id, disconnected: true })),
+  subscribeToEvent: vi.fn(() => Promise.resolve(() => {})),
 }));
 
+const saveConnectionMock = vi.mocked(saveConnection);
+const getSavedConnectionMock = vi.mocked(getSavedConnection);
+
 describe('App shell', () => {
-  afterEach(() => {
-    subscribeHandlers.clear();
+  beforeEach(() => {
+    saveConnectionMock.mockClear();
+    getSavedConnectionMock.mockReset();
+    getSavedConnectionMock.mockResolvedValue(connectionDetailsFixture);
+    saveConnectionMock.mockResolvedValue(connectionDetailsFixture);
   });
 
   it('renders the five shell regions after bootstrap', async () => {
     render(<App />);
 
-    await screen.findByText(/A desktop shell built to stay inspectable under pressure/i);
+    await screen.findByText(/Secure PostgreSQL targets with native-feeling control surfaces/i);
 
     expect(screen.getByTestId('connections-region')).toBeInTheDocument();
     expect(screen.getByTestId('editor-tabs-region')).toBeInTheDocument();
@@ -35,20 +42,80 @@ describe('App shell', () => {
     expect(screen.getByTestId('status-region')).toBeInTheDocument();
   });
 
-  it('shows event updates after the job starts', async () => {
+  it('renders selected connection details and active session information', async () => {
     render(<App />);
 
-    const runButton = await screen.findByTestId('run-mock-job');
-    fireEvent.click(runButton);
+    expect(await screen.findByDisplayValue(connectionDetailsFixture.name)).toBeInTheDocument();
+    expect(screen.getByText(`SSL: ${databaseSessionSnapshotFixture.sslInUse ? 'enabled' : 'disabled'}`)).toBeInTheDocument();
+    expect(screen.getByText(/Credentials are already stored securely/i)).toBeInTheDocument();
+  });
 
-    act(() => {
-      for (const handler of subscribeHandlers) {
-        handler(backgroundJobProgressFixture);
-      }
+  it('disables connect when the selected profile has unsaved changes', async () => {
+    render(<App />);
+
+    const hostInput = await screen.findByDisplayValue(connectionDetailsFixture.host);
+    const connectButton = screen.getByTestId('connect-connection-button');
+
+    expect(connectButton).toBeEnabled();
+
+    fireEvent.change(hostInput, {
+      target: {
+        value: '127.0.0.2',
+      },
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText(backgroundJobProgressFixture.message).length).toBeGreaterThan(0);
+      expect(connectButton).toBeDisabled();
     });
+  });
+
+  it('switches into replacement-password mode for stored secrets', async () => {
+    render(<App />);
+
+    const replaceButton = await screen.findByText(/Replace password/i);
+    fireEvent.click(replaceButton);
+
+    expect(await screen.findByPlaceholderText(/Set a new secret/i)).toBeInTheDocument();
+  });
+
+  it('sends a password when saving a selected profile without a stored secret', async () => {
+    const connectionWithoutSecret = {
+      ...connectionDetailsFixture,
+      hasStoredSecret: false,
+      secretProvider: null,
+    };
+
+    getSavedConnectionMock.mockResolvedValue(connectionWithoutSecret);
+    saveConnectionMock.mockResolvedValue({
+      ...connectionWithoutSecret,
+      hasStoredSecret: true,
+      secretProvider: 'os-keychain',
+    });
+
+    render(<App />);
+
+    await screen.findByDisplayValue(connectionWithoutSecret.name);
+    fireEvent.change(screen.getByTestId('connection-password-input'), {
+      target: { value: 'sup3r-secret' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('save-connection-button')).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByTestId('save-connection-button'));
+
+    await waitFor(() => {
+      expect(saveConnectionMock).toHaveBeenCalledTimes(1);
+    });
+
+    const request: SaveConnectionRequest | undefined = saveConnectionMock.mock.calls[0]?.[0];
+    expect(request).toBeDefined();
+    if (!request) {
+      throw new Error('Expected saveConnection to receive a request payload.');
+    }
+
+    expect(request.id).toBe(connectionWithoutSecret.id);
+    expect(request.draft.password).toBe('sup3r-secret');
   });
 });

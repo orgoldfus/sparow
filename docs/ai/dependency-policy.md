@@ -5,7 +5,7 @@ Use the latest stable version of every dependency unless the newest stable relea
 
 ## Current Baseline
 - The repo now targets Node `24` and includes a root `.node-version` file for `fnm`.
-- Current latest stable frontend selections under that baseline are `vite 7.3.1`, `@vitejs/plugin-react 5.1.4`, `tailwindcss 4.2.1`, `@tailwindcss/vite 4.2.1`, `jsdom 28.1.0`, and `vitest 4.0.18`.
+- Current latest stable frontend selections under that baseline are `vite 7.3.1`, `@vitejs/plugin-react 5.1.4`, `tailwindcss 4.2.1`, `@tailwindcss/vite 4.2.1`, `happy-dom 20.8.3`, and `vitest 4.0.18`.
 
 ## Selection Habit
 1. Query the registry for the latest stable release.

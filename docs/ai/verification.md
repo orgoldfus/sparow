@@ -15,6 +15,7 @@ This runs, in order:
 - `fnm use`
 - `npm run test`
 - `npm run smoke:foundation`
+- `npm run smoke:postgres`
 - `cargo test --manifest-path src-tauri/Cargo.toml`
 - `npm run tauri dev`
 
@@ -23,4 +24,5 @@ This runs, in order:
 - Shell region tests pass.
 - Smoke boot test passes.
 - SQLite migrations and repository tests pass.
+- PostgreSQL smoke can be run explicitly with `SPAROW_PG_HOST`, `SPAROW_PG_DATABASE`, `SPAROW_PG_USERNAME`, `SPAROW_PG_PASSWORD`, and optional `SPAROW_PG_PORT` / `SPAROW_PG_SSL_MODE`.
 - `todo.md` is updated with the final results.

@@ -4,7 +4,7 @@
   "environment": "development",
   "platform": "darwin-aarch64",
   "featureFlags": [
-    "phase1-foundation",
+    "phase2-connections",
     "diagnostics-surface",
     "mock-background-job"
   ],
@@ -31,5 +31,36 @@
     "historyEntries": 1,
     "savedQueries": 0,
     "schemaCacheEntries": 0
+  },
+  "savedConnections": [
+    {
+      "id": "conn-local-postgres",
+      "engine": "postgresql",
+      "name": "Local Postgres",
+      "host": "127.0.0.1",
+      "port": 5432,
+      "database": "app_dev",
+      "username": "sparow",
+      "sslMode": "prefer",
+      "hasStoredSecret": true,
+      "secretProvider": "os-keychain",
+      "lastTestedAt": "2026-03-08T17:05:00.000Z",
+      "lastConnectedAt": "2026-03-08T17:10:00.000Z",
+      "updatedAt": "2026-03-08T17:10:00.000Z"
+    }
+  ],
+  "selectedConnectionId": "conn-local-postgres",
+  "activeSession": {
+    "connectionId": "conn-local-postgres",
+    "name": "Local Postgres",
+    "engine": "postgresql",
+    "database": "app_dev",
+    "username": "sparow",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "connectedAt": "2026-03-08T17:10:00.000Z",
+    "serverVersion": "PostgreSQL 17.2",
+    "sslInUse": true,
+    "status": "connected"
   }
 }

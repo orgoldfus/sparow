@@ -2,11 +2,27 @@ import appBootstrapFixture from '../../fixtures/contracts/app-bootstrap.json';
 import appErrorFixture from '../../fixtures/contracts/app-error.json';
 import backgroundJobAcceptedFixture from '../../fixtures/contracts/background-job-accepted.json';
 import backgroundJobProgressFixture from '../../fixtures/contracts/background-job-progress.json';
+import connectionDetailsFixture from '../../fixtures/contracts/connection-details.json';
+import connectionSummaryFixture from '../../fixtures/contracts/connection-summary.json';
+import connectionTestResultFixture from '../../fixtures/contracts/connection-test-result.json';
+import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-session-snapshot.json';
+import deleteConnectionResultFixture from '../../fixtures/contracts/delete-connection-result.json';
+import disconnectSessionResultFixture from '../../fixtures/contracts/disconnect-session-result.json';
+import saveConnectionRequestFixture from '../../fixtures/contracts/save-connection-request.json';
+import testConnectionRequestFixture from '../../fixtures/contracts/test-connection-request.json';
 import {
   isAppBootstrap,
   isAppError,
   isBackgroundJobAccepted,
   isBackgroundJobProgressEvent,
+  isConnectionDetails,
+  isConnectionSummary,
+  isConnectionTestResult,
+  isDatabaseSessionSnapshot,
+  isDeleteConnectionResult,
+  isDisconnectSessionResult,
+  isSaveConnectionRequest,
+  isTestConnectionRequest,
 } from '../lib/contracts';
 
 describe('contract fixtures', () => {
@@ -24,5 +40,37 @@ describe('contract fixtures', () => {
 
   it('validate the background job progress fixture', () => {
     expect(isBackgroundJobProgressEvent(backgroundJobProgressFixture)).toBe(true);
+  });
+
+  it('validate the connection summary fixture', () => {
+    expect(isConnectionSummary(connectionSummaryFixture)).toBe(true);
+  });
+
+  it('validate the connection details fixture', () => {
+    expect(isConnectionDetails(connectionDetailsFixture)).toBe(true);
+  });
+
+  it('validate the save connection request fixture', () => {
+    expect(isSaveConnectionRequest(saveConnectionRequestFixture)).toBe(true);
+  });
+
+  it('validate the test connection request fixture', () => {
+    expect(isTestConnectionRequest(testConnectionRequestFixture)).toBe(true);
+  });
+
+  it('validate the connection test result fixture', () => {
+    expect(isConnectionTestResult(connectionTestResultFixture)).toBe(true);
+  });
+
+  it('validate the session snapshot fixture', () => {
+    expect(isDatabaseSessionSnapshot(databaseSessionSnapshotFixture)).toBe(true);
+  });
+
+  it('validate the delete connection result fixture', () => {
+    expect(isDeleteConnectionResult(deleteConnectionResultFixture)).toBe(true);
+  });
+
+  it('validate the disconnect session result fixture', () => {
+    expect(isDisconnectSessionResult(disconnectSessionResultFixture)).toBe(true);
   });
 });

@@ -4,20 +4,24 @@ use std::{
 };
 
 use tauri::AppHandle;
-use tokio::{task, time::{sleep, Duration}};
+use tokio::{
+    task,
+    time::{sleep, Duration},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
-    commands::emit_background_job_event,
-    persistence::Repository,
+    commands::emit_background_job_event, connections::ConnectionService, persistence::Repository,
 };
 
 use super::{
     environment_label, iso_timestamp, platform_label, AppBootstrap, AppError, AppPaths,
     BackgroundJobAccepted, BackgroundJobProgressEvent, BackgroundJobRequest, BackgroundJobStatus,
-    CancelJobResult, DiagnosticsSnapshot, JobRegistry,
+    CancelJobResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
+    JobRegistry, SaveConnectionRequest, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -59,12 +63,13 @@ impl DiagnosticsStore {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppState {
     paths: AppPaths,
     repository: Arc<Repository>,
     diagnostics: DiagnosticsStore,
     jobs: JobRegistry,
+    connections: ConnectionService,
 }
 
 impl AppState {
@@ -73,20 +78,30 @@ impl AppState {
         repository: Arc<Repository>,
         diagnostics: DiagnosticsStore,
         jobs: JobRegistry,
+        connections: ConnectionService,
     ) -> Self {
         Self {
             paths,
             repository,
             diagnostics,
             jobs,
+            connections,
         }
     }
 
     pub async fn bootstrap(&self) -> Result<AppBootstrap, AppError> {
         let repository = self.repository.clone();
-        let counts = task::spawn_blocking(move || repository.sample_counts())
+        let sample_counts = task::spawn_blocking(move || repository.sample_counts())
             .await
-            .map_err(|error| AppError::internal("join_failed", "Failed to join bootstrap task.", Some(error.to_string())))??;
+            .map_err(|error| {
+                AppError::internal(
+                    "join_failed",
+                    "Failed to join bootstrap task.",
+                    Some(error.to_string()),
+                )
+            })??;
+        let saved_connections = self.connections.list_saved_connections().await?;
+        let selected_connection_id = self.connections.selected_connection_id().await?;
 
         Ok(AppBootstrap {
             app_name: "Sparow".to_string(),
@@ -94,18 +109,85 @@ impl AppState {
             environment: environment_label(),
             platform: platform_label(),
             feature_flags: vec![
-                "phase1-foundation".to_string(),
+                "phase2-connections".to_string(),
                 "diagnostics-surface".to_string(),
                 "mock-background-job".to_string(),
             ],
             storage: self.paths.as_storage_paths(),
             diagnostics: self.diagnostics.snapshot(),
             sample_data: super::contracts::SampleData {
-                history_entries: counts.history_entries,
-                saved_queries: counts.saved_queries,
-                schema_cache_entries: counts.schema_cache_entries,
+                history_entries: sample_counts.history_entries,
+                saved_queries: sample_counts.saved_queries,
+                schema_cache_entries: sample_counts.schema_cache_entries,
             },
+            saved_connections,
+            selected_connection_id,
+            active_session: self.connections.active_session_snapshot().await,
         })
+    }
+
+    pub async fn list_saved_connections(&self) -> Result<Vec<ConnectionSummary>, AppError> {
+        let result = self.connections.list_saved_connections().await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn get_saved_connection(&self, id: &str) -> Result<ConnectionDetails, AppError> {
+        let result = self.connections.get_saved_connection(id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn save_connection(
+        &self,
+        request: SaveConnectionRequest,
+    ) -> Result<ConnectionDetails, AppError> {
+        let result = self.connections.save_connection(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn test_connection(
+        &self,
+        request: TestConnectionRequest,
+    ) -> Result<ConnectionTestResult, AppError> {
+        let result = self.connections.test_connection(request).await;
+        if let Some(error) = result.error.clone() {
+            self.diagnostics.record_error(error);
+        }
+        Ok(result)
+    }
+
+    pub async fn connect_saved_connection(
+        &self,
+        id: &str,
+    ) -> Result<DatabaseSessionSnapshot, AppError> {
+        let result = self.connections.connect_saved_connection(id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn disconnect_active_connection(&self) -> Result<DisconnectSessionResult, AppError> {
+        self.connections.disconnect_active_connection().await
+    }
+
+    pub async fn delete_saved_connection(
+        &self,
+        id: &str,
+    ) -> Result<DeleteConnectionResult, AppError> {
+        let result = self.connections.delete_saved_connection(id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
     }
 
     pub async fn start_mock_job(
@@ -151,11 +233,8 @@ impl AppState {
         task::spawn(async move {
             for step in 1..=request.steps {
                 if cancellation.is_cancelled() {
-                    let cancelled_error = AppError::retryable(
-                        "mock_job_cancelled",
-                        "Mock job was cancelled.",
-                        None,
-                    );
+                    let cancelled_error =
+                        AppError::retryable("mock_job_cancelled", "Mock job was cancelled.", None);
                     diagnostics.record_error(cancelled_error.clone());
                     let cancelled_event = BackgroundJobProgressEvent {
                         job_id: task_job_id.clone(),
@@ -212,7 +291,13 @@ impl AppState {
                 ))
             })
             .await
-            .map_err(|error| AppError::internal("join_failed", "Failed to persist mock history.", Some(error.to_string())))
+            .map_err(|error| {
+                AppError::internal(
+                    "join_failed",
+                    "Failed to persist mock history.",
+                    Some(error.to_string()),
+                )
+            })
             .and_then(|result| result)
             {
                 diagnostics.record_error(error.clone());

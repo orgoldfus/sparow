@@ -1,0 +1,13 @@
+{
+  "connectionId": "conn-local-postgres",
+  "name": "Local Postgres",
+  "engine": "postgresql",
+  "database": "app_dev",
+  "username": "sparow",
+  "host": "127.0.0.1",
+  "port": 5432,
+  "connectedAt": "2026-03-08T17:10:00.000Z",
+  "serverVersion": "PostgreSQL 17.2",
+  "sslInUse": true,
+  "status": "connected"
+}

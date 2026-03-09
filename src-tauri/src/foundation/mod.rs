@@ -5,9 +5,13 @@ mod logging;
 mod state;
 
 pub use contracts::{
-    AppBootstrap, AppPaths, BackgroundJobAccepted, BackgroundJobProgressEvent, BackgroundJobRequest,
-    BackgroundJobStatus, CancelJobResult, DiagnosticsSnapshot, BACKGROUND_JOB_EVENT,
-    ensure_parent_directory, environment_label, iso_timestamp, platform_label,
+    ensure_parent_directory, environment_label, iso_timestamp, platform_label, AppBootstrap,
+    AppPaths, BackgroundJobAccepted, BackgroundJobProgressEvent, BackgroundJobRequest,
+    BackgroundJobStatus, CancelJobResult, ConnectionDetails, ConnectionDraft,
+    ConnectionSessionStatus, ConnectionSummary, ConnectionTestResult, ConnectionTestStatus,
+    DatabaseEngine, DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot,
+    DisconnectSessionResult, SaveConnectionRequest, SecretProvider, SslMode, TestConnectionRequest,
+    BACKGROUND_JOB_EVENT,
 };
 pub use error::AppError;
 pub use jobs::JobRegistry;
