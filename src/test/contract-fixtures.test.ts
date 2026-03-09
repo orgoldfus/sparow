@@ -171,4 +171,32 @@ describe('contract fixtures', () => {
       }),
     ).toBe(false);
   });
+
+  it('rejects schema nodes with impossible path invariants', () => {
+    expect(
+      isSchemaNode({
+        ...schemaNodeFixture,
+        kind: 'schema',
+        path: 'schema/public',
+        parentPath: 'schema/public',
+        relationName: null,
+        hasChildren: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      isSchemaNode({
+        ...listSchemaChildrenResultFixture.nodes[0],
+        parentPath: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      isSchemaNode({
+        ...schemaNodeFixture,
+        kind: 'index',
+        parentPath: 'schema/public',
+      }),
+    ).toBe(false);
+  });
 });

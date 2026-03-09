@@ -461,6 +461,38 @@ function isSchemaNodeBase(value: unknown): value is SchemaNodeBase {
   );
 }
 
+function isSchemaPath(schemaName: string, path: string): boolean {
+  return path === `schema/${schemaName}`;
+}
+
+function isRelationPath(
+  kind: 'table' | 'view',
+  schemaName: string,
+  relationName: string,
+  path: string,
+  parentPath: string | null,
+): boolean {
+  return path === `${kind}/${schemaName}/${relationName}` && parentPath === `schema/${schemaName}`;
+}
+
+function isRelationChildPath(
+  kind: 'column' | 'index',
+  schemaName: string,
+  relationName: string,
+  name: string,
+  path: string,
+  parentPath: string | null,
+): boolean {
+  if (path !== `${kind}/${schemaName}/${relationName}/${name}`) {
+    return false;
+  }
+
+  return (
+    parentPath === `table/${schemaName}/${relationName}` ||
+    parentPath === `view/${schemaName}/${relationName}`
+  );
+}
+
 export function isSchemaNode(value: unknown): value is SchemaNode {
   if (!isSchemaNodeBase(value)) {
     return false;
@@ -468,14 +500,34 @@ export function isSchemaNode(value: unknown): value is SchemaNode {
 
   switch (value.kind) {
     case 'schema':
-      return value.relationName === null && value.hasChildren === true;
+      return (
+        value.relationName === null &&
+        value.hasChildren === true &&
+        value.parentPath === null &&
+        isSchemaPath(value.schemaName, value.path)
+      );
     case 'table':
+      return (
+        typeof value.relationName === 'string' &&
+        isRelationPath('table', value.schemaName, value.relationName, value.path, value.parentPath)
+      );
     case 'view':
-      return typeof value.relationName === 'string';
+      return (
+        typeof value.relationName === 'string' &&
+        isRelationPath('view', value.schemaName, value.relationName, value.path, value.parentPath)
+      );
     case 'column':
       return (
         typeof value.relationName === 'string' &&
         value.hasChildren === false &&
+        isRelationChildPath(
+          'column',
+          value.schemaName,
+          value.relationName,
+          value.name,
+          value.path,
+          value.parentPath,
+        ) &&
         typeof value.dataType === 'string' &&
         typeof value.isNullable === 'boolean' &&
         typeof value.ordinalPosition === 'number'
@@ -484,6 +536,14 @@ export function isSchemaNode(value: unknown): value is SchemaNode {
       return (
         typeof value.relationName === 'string' &&
         value.hasChildren === false &&
+        isRelationChildPath(
+          'index',
+          value.schemaName,
+          value.relationName,
+          value.name,
+          value.path,
+          value.parentPath,
+        ) &&
         isStringArray(value.columnNames) &&
         typeof value.isUnique === 'boolean'
       );

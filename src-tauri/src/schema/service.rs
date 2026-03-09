@@ -13,8 +13,9 @@ use crate::{
     foundation::{
         iso_timestamp, AppError, DiagnosticsStore, ListSchemaChildrenRequest,
         ListSchemaChildrenResult, RefreshSchemaScopeRequest, SchemaCacheStatus, SchemaNode,
-        SchemaNodeBase, SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaRefreshStatus,
-        SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult, SCHEMA_REFRESH_EVENT,
+        SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
+        SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult,
+        SCHEMA_REFRESH_EVENT,
     },
     persistence::{ReplaceSchemaScopeRecord, Repository},
 };
@@ -631,14 +632,50 @@ impl SchemaIntrospectionDriver for RuntimeSchemaIntrospectionDriver {
     }
 }
 
+fn schema_path(schema_name: &str) -> String {
+    format!("schema/{schema_name}")
+}
+
+fn relation_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str) -> String {
+    format!("{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name)
+}
+
+fn relation_parent_path(schema_name: &str) -> String {
+    schema_path(schema_name)
+}
+
+fn relation_child_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str, name: &str) -> String {
+    format!("{}/{}/{}/{}", schema_kind_prefix(kind), schema_name, relation_name, name)
+}
+
+fn schema_kind_prefix(kind: SchemaNodeKind) -> &'static str {
+    match kind {
+        SchemaNodeKind::Schema => "schema",
+        SchemaNodeKind::Table => "table",
+        SchemaNodeKind::View => "view",
+        SchemaNodeKind::Column => "column",
+        SchemaNodeKind::Index => "index",
+    }
+}
+
 fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope, AppError> {
     match kind {
-        SchemaScopeKind::Root => Ok(ParsedScope {
-            kind,
-            path: None,
-            schema_name: None,
-            relation_name: None,
-        }),
+        SchemaScopeKind::Root => {
+            if path.is_some() {
+                return Err(AppError::internal(
+                    "schema_scope_parse_failed",
+                    "Root scope requests must not include a scope path.",
+                    path.map(str::to_owned),
+                ));
+            }
+
+            Ok(ParsedScope {
+                kind,
+                path: None,
+                schema_name: None,
+                relation_name: None,
+            })
+        }
         SchemaScopeKind::Schema => {
             let path = path.ok_or_else(|| {
                 AppError::internal(
@@ -649,12 +686,14 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
             })?;
             let mut parts = path.split('/');
             match (parts.next(), parts.next(), parts.next(), parts.next()) {
-                (Some("schema"), Some(schema_name), None, None) => Ok(ParsedScope {
-                    kind,
-                    path: Some(path.to_string()),
-                    schema_name: Some(schema_name.to_string()),
-                    relation_name: None,
-                }),
+                (Some("schema"), Some(schema_name), None, None) if !schema_name.is_empty() => {
+                    Ok(ParsedScope {
+                        kind,
+                        path: Some(path.to_string()),
+                        schema_name: Some(schema_name.to_string()),
+                        relation_name: None,
+                    })
+                }
                 _ => Err(AppError::internal(
                     "schema_scope_parse_failed",
                     "Schema scope path was invalid.",
@@ -678,7 +717,9 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
             let mut parts = path.split('/');
             match (parts.next(), parts.next(), parts.next(), parts.next()) {
                 (Some(prefix), Some(schema_name), Some(relation_name), None)
-                    if prefix == expected_prefix =>
+                    if prefix == expected_prefix
+                        && !schema_name.is_empty()
+                        && !relation_name.is_empty() =>
                 {
                     Ok(ParsedScope {
                         kind,
@@ -787,7 +828,7 @@ fn refresh_task_error(error: JoinError) -> AppError {
 
 fn schema_row_to_node(connection_id: &str, row: Row, refreshed_at: &str) -> SchemaNode {
     let schema_name: String = row.get(0);
-    let path = format!("schema/{schema_name}");
+    let path = schema_path(&schema_name);
     SchemaNode::Schema {
         base: SchemaNodeBase {
             id: schema_node_id(connection_id, &path),
@@ -811,18 +852,21 @@ fn relation_row_to_node(
 ) -> SchemaNode {
     let relation_name: String = row.get(0);
     let relkind: String = row.get(1);
-    let path = format!(
-        "{}/{}/{}",
-        if relkind == "v" { "view" } else { "table" },
+    let path = relation_path(
+        if relkind == "v" {
+            SchemaNodeKind::View
+        } else {
+            SchemaNodeKind::Table
+        },
         schema_name,
-        relation_name
+        &relation_name,
     );
     let base = SchemaNodeBase {
         id: schema_node_id(connection_id, &path),
         connection_id: connection_id.to_string(),
         name: relation_name.clone(),
         path,
-        parent_path: Some(format!("schema/{schema_name}")),
+        parent_path: Some(relation_parent_path(schema_name)),
         schema_name: schema_name.to_string(),
         relation_name: Some(relation_name.clone()),
         has_children: true,
@@ -848,7 +892,7 @@ fn column_row_to_node(
     let data_type: String = row.get(1);
     let is_nullable: bool = row.get(2);
     let ordinal_position: i16 = row.get(3);
-    let path = format!("column/{schema_name}/{relation_name}/{name}");
+    let path = relation_child_path(SchemaNodeKind::Column, schema_name, relation_name, &name);
     SchemaNode::Column {
         base: SchemaNodeBase {
             id: schema_node_id(connection_id, &path),
@@ -878,7 +922,7 @@ fn index_row_to_node(
     let name: String = row.get(0);
     let is_unique: bool = row.get(1);
     let column_names: Vec<String> = row.get(2);
-    let path = format!("index/{schema_name}/{relation_name}/{name}");
+    let path = relation_child_path(SchemaNodeKind::Index, schema_name, relation_name, &name);
     SchemaNode::Index {
         base: SchemaNodeBase {
             id: schema_node_id(connection_id, &path),
@@ -1169,6 +1213,32 @@ mod tests {
             schema_node_id("conn-a", "schema/public"),
             "conn-a:schema/public"
         );
+    }
+
+    #[test]
+    fn rejects_malformed_root_scope_paths() {
+        let error = parse_scope(SchemaScopeKind::Root, Some("schema/public"))
+            .expect_err("root scope should reject a path");
+
+        assert_eq!(error.code, "schema_scope_parse_failed");
+    }
+
+    #[test]
+    fn rejects_malformed_schema_scope_paths() {
+        for path in ["schema/", "schema/public/extra"] {
+            let error = parse_scope(SchemaScopeKind::Schema, Some(path))
+                .expect_err("schema scope should reject malformed paths");
+            assert_eq!(error.code, "schema_scope_parse_failed");
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_relation_scope_paths() {
+        for path in ["table/public/", "view//users", "table/public/users/extra"] {
+            let error = parse_scope(SchemaScopeKind::Table, Some(path))
+                .expect_err("relation scope should reject malformed paths");
+            assert_eq!(error.code, "schema_scope_parse_failed");
+        }
     }
 
     #[tokio::test]

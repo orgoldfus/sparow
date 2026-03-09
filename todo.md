@@ -4,6 +4,7 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
 - [completed] Fix cross-connection schema cache ID collisions that block remote PostgreSQL schema refreshes
 - [completed] Review unresolved CodeRabbit feedback, verify each finding against current code, and apply only still-valid fixes
 - [completed] Preserve failed schema scope refresh status through cache loads and retry classification
@@ -31,6 +32,10 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 
 ## Verification
 - `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after closing the remaining CodeRabbit findings in the schema parser, contract guards, and cache inspection script.
+- `npm run verify` ❌
+  - Frontend checks passed, but Rust failed because the new schema path helpers in `src-tauri/src/schema/service.rs` referenced `SchemaNodeKind` without importing it.
+- `npm run verify` ❌
   - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after namespacing schema cache IDs by connection for cross-database safety.
 - `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::schema_node_ids_are_namespaced_by_connection -- --exact` ✅
   - The new schema ID regression test passed after namespacing generated cache IDs by connection.

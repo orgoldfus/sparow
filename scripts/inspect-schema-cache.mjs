@@ -106,6 +106,6 @@ function parseArgs(argv) {
 
 function printUsage() {
   process.stderr.write(
-    'Usage: node ./scripts/inspect-schema-cache.mjs --db <sqlite-path> --connection <connection-id> [--scope <scope-path>]\\n',
+    'Usage: node ./scripts/inspect-schema-cache.mjs --db <sqlite-path> --connection <connection-id> [--scope <scope-path>]\n',
   );
 }
