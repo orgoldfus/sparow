@@ -74,6 +74,25 @@ describe('contract fixtures', () => {
     expect(isTestConnectionRequest(testConnectionRequestFixture)).toBe(true);
   });
 
+  it('accepts the explicit insecure SSL mode on connection payloads', () => {
+    expect(
+      isConnectionSummary({
+        ...connectionSummaryFixture,
+        sslMode: 'insecure',
+      }),
+    ).toBe(true);
+
+    expect(
+      isSaveConnectionRequest({
+        ...saveConnectionRequestFixture,
+        draft: {
+          ...saveConnectionRequestFixture.draft,
+          sslMode: 'insecure',
+        },
+      }),
+    ).toBe(true);
+  });
+
   it('validate the connection test result fixture', () => {
     expect(isConnectionTestResult(connectionTestResultFixture)).toBe(true);
   });

@@ -4,6 +4,8 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Fix the remote PostgreSQL TLS regression by restoring an explicit opt-in insecure TLS mode for managed hosts that fail strict verification
+- [completed] Re-run CodeRabbit autofix on PR #5, verify unresolved feedback against the latest code, and apply any still-valid fixes
 - [completed] Run `npm run typecheck`, fix all TypeScript issues, and keep typecheck green on every change
 - [completed] Autofix unresolved CodeRabbit comments that still apply on the current branch
 - [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
@@ -83,6 +85,16 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
   - Frontend contract, shell, foundation smoke, and schema browser tests all passed after fixing the schema hook dependency regression.
 - `npm run verify` ✅
   - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after the schema hook and repository cleanup fixes.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
+- `npm run verify` ❌
+  - Frontend checks passed, but Rust failed because the new mock-job cancellation helper in `src-tauri/src/foundation/jobs.rs` temporarily used `u32` step counters while the contract expects `u16`.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after securing the TLS connector defaults and fixing the mock-job registry/cancellation regressions from the remaining CodeRabbit threads on PR #5.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after adding the explicit `insecure` SSL mode across the Rust/TypeScript contracts, fixtures, and connection editor so remote PostgreSQL profiles can opt into relaxed TLS verification when strict verification fails.
 
 ## Dependency Notes
 - Keep the current Node 24 baseline and `happy-dom` frontend test environment unless a concrete Phase 3 compatibility issue forces a change.

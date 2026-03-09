@@ -63,7 +63,7 @@ function isSecretProvider(value: unknown): value is SecretProvider {
 }
 
 function isSslMode(value: unknown): value is SslMode {
-  return value === 'disable' || value === 'prefer' || value === 'require';
+  return value === 'disable' || value === 'prefer' || value === 'require' || value === 'insecure';
 }
 
 function isNullableString(value: unknown): value is string | null {

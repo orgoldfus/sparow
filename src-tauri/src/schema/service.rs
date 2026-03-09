@@ -1336,6 +1336,7 @@ mod tests {
             "disable" => Ok(SslMode::Disable),
             "prefer" => Ok(SslMode::Prefer),
             "require" => Ok(SslMode::Require),
+            "insecure" => Ok(SslMode::Insecure),
             other => Err(format!("unsupported smoke SSL mode: {other}")),
         }
     }

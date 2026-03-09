@@ -62,6 +62,7 @@ const SSL_OPTIONS: { value: SslMode; label: string; caption: string }[] = [
   { value: 'disable', label: 'Disable', caption: 'Plain TCP only' },
   { value: 'prefer', label: 'Prefer', caption: 'Use TLS when available' },
   { value: 'require', label: 'Require', caption: 'Fail if TLS is unavailable' },
+  { value: 'insecure', label: 'Insecure', caption: 'Use TLS but skip certificate and hostname checks' },
 ];
 
 export function ConnectionsRail({
@@ -262,7 +263,7 @@ export function ConnectionEditor({
                 <h4 className="text-lg font-medium text-[var(--ink-1)]">SSL mode</h4>
               </div>
             </div>
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-4">
               {SSL_OPTIONS.map((option) => (
                 <button
                   className={`grid gap-1 border px-3 py-3 text-left transition ${
@@ -281,6 +282,12 @@ export function ConnectionEditor({
                 </button>
               ))}
             </div>
+            {draft.sslMode === 'insecure' ? (
+              <p className="border border-[var(--danger-line)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger-ink)]">
+                Insecure mode accepts invalid certificates and hostnames. Use it only when the server cannot pass
+                normal TLS verification.
+              </p>
+            ) : null}
           </section>
         </section>
 

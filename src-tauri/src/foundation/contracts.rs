@@ -82,6 +82,7 @@ pub enum SslMode {
     Disable,
     Prefer,
     Require,
+    Insecure,
 }
 
 impl SslMode {
@@ -90,6 +91,7 @@ impl SslMode {
             Self::Disable => "disable",
             Self::Prefer => "prefer",
             Self::Require => "require",
+            Self::Insecure => "insecure",
         }
     }
 
@@ -98,6 +100,7 @@ impl SslMode {
             "disable" => Ok(Self::Disable),
             "prefer" => Ok(Self::Prefer),
             "require" => Ok(Self::Require),
+            "insecure" => Ok(Self::Insecure),
             other => Err(format!("Unsupported SSL mode '{other}'.")),
         }
     }
@@ -550,7 +553,7 @@ mod tests {
         DeleteConnectionResult, DisconnectSessionResult, ListSchemaChildrenRequest,
         ListSchemaChildrenResult, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
         SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
-        TestConnectionRequest,
+        SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -648,6 +651,12 @@ mod tests {
         let fixture: TestConnectionRequest = serde_json::from_str(TEST_CONNECTION_REQUEST_FIXTURE)
             .expect("test request fixture should deserialize");
         assert!(fixture.connection_id.is_none());
+    }
+
+    #[test]
+    fn parses_explicit_insecure_ssl_mode() {
+        assert_eq!(SslMode::from_str("insecure"), Ok(SslMode::Insecure));
+        assert_eq!(SslMode::Insecure.as_str(), "insecure");
     }
 
     #[test]

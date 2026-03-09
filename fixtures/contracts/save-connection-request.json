@@ -6,7 +6,7 @@
     "port": 5432,
     "database": "app_dev",
     "username": "sparow",
-    "sslMode": "prefer",
+    "sslMode": "insecure",
     "password": null
   }
 }

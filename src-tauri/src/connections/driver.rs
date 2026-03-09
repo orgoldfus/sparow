@@ -70,6 +70,7 @@ impl DriverConnectionInput {
             SslMode::Disable => PgSslMode::Disable,
             SslMode::Prefer => PgSslMode::Prefer,
             SslMode::Require => PgSslMode::Require,
+            SslMode::Insecure => PgSslMode::Require,
         });
         config
     }
@@ -121,7 +122,7 @@ impl PostgresDriver for RuntimePostgresDriver {
 
                 query_connection_metadata(&client, start.elapsed().as_millis() as u64).await
             }
-            SslMode::Prefer | SslMode::Require => {
+            SslMode::Prefer | SslMode::Require | SslMode::Insecure => {
                 let connector = MakeTlsConnector::new(build_tls_connector(input.ssl_mode)?);
                 let (client, connection) = config
                     .connect(connector)
@@ -255,7 +256,7 @@ fn create_pool(config: &Config, ssl_mode: SslMode) -> Result<Pool, AppError> {
                     )
                 })?
         }
-        SslMode::Prefer | SslMode::Require => {
+        SslMode::Prefer | SslMode::Require | SslMode::Insecure => {
             let connector = MakeTlsConnector::new(build_tls_connector(ssl_mode)?);
             let manager = Manager::from_config(config.clone(), connector, manager_config);
             Pool::builder(manager)
@@ -278,10 +279,7 @@ fn create_pool(config: &Config, ssl_mode: SslMode) -> Result<Pool, AppError> {
 pub(crate) fn build_tls_connector(ssl_mode: SslMode) -> Result<TlsConnector, AppError> {
     let mut builder = TlsConnector::builder();
 
-    if matches!(ssl_mode, SslMode::Prefer | SslMode::Require) {
-        // Phase 2 only exposes basic SSL modes and does not yet allow user-supplied CA bundles.
-        // Accepting provider-managed certificate and hostname mismatches keeps managed services
-        // reachable until explicit certificate controls land in a later phase.
+    if matches!(ssl_mode, SslMode::Insecure) {
         builder.danger_accept_invalid_certs(true);
         builder.danger_accept_invalid_hostnames(true);
     }

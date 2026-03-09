@@ -550,7 +550,10 @@ mod tests {
                 server_version: Some("PostgreSQL mock".to_string()),
                 current_database: Some(input.database),
                 current_user: Some(input.username),
-                ssl_in_use: Some(matches!(input.ssl_mode, SslMode::Prefer | SslMode::Require)),
+                ssl_in_use: Some(matches!(
+                    input.ssl_mode,
+                    SslMode::Prefer | SslMode::Require | SslMode::Insecure
+                )),
                 round_trip_ms: 5,
             })
         }
@@ -785,6 +788,7 @@ mod tests {
     fn tls_connector_initializes_for_basic_ssl_modes() {
         build_tls_connector(SslMode::Prefer).expect("prefer TLS connector should build");
         build_tls_connector(SslMode::Require).expect("require TLS connector should build");
+        build_tls_connector(SslMode::Insecure).expect("insecure TLS connector should build");
     }
 
     #[tokio::test]
@@ -813,6 +817,7 @@ mod tests {
         {
             "disable" => SslMode::Disable,
             "require" => SslMode::Require,
+            "insecure" => SslMode::Insecure,
             _ => SslMode::Prefer,
         };
 

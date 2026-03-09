@@ -95,7 +95,11 @@ impl MockJobRunner {
             last_error: None,
         };
         self.diagnostics.record_event(queued_event.clone());
-        emit_background_job_event(&app, &queued_event)?;
+        if let Err(error) = emit_background_job_event(&app, &queued_event) {
+            self.diagnostics.record_error(error.clone());
+            self.jobs.remove(&job_id).await;
+            return Err(error);
+        }
 
         let diagnostics = self.diagnostics.clone();
         let repository = self.repository.clone();
@@ -105,29 +109,34 @@ impl MockJobRunner {
         task::spawn(async move {
             for step in 1..=request.steps {
                 if cancellation.is_cancelled() {
-                    let cancelled_error =
-                        AppError::retryable("mock_job_cancelled", "Mock job was cancelled.", None);
-                    diagnostics.record_error(cancelled_error.clone());
-                    let cancelled_event = BackgroundJobProgressEvent {
-                        job_id: task_job_id.clone(),
-                        correlation_id: task_correlation_id.clone(),
-                        status: BackgroundJobStatus::Cancelled,
-                        step: step.saturating_sub(1),
-                        total_steps: request.steps,
-                        message: "Mock job cancelled by user.".to_string(),
-                        timestamp: iso_timestamp(),
-                        last_error: Some(cancelled_error),
-                    };
-                    diagnostics.record_event(cancelled_event.clone());
-                    if let Err(error) = emit_background_job_event(&app, &cancelled_event) {
-                        diagnostics.record_error(error.clone());
-                        error!(?error, "failed to emit cancelled event");
-                    }
-                    jobs.remove(&task_job_id).await;
+                    handle_cancellation(
+                        &app,
+                        &diagnostics,
+                        &jobs,
+                        &task_job_id,
+                        &task_correlation_id,
+                        step.saturating_sub(1),
+                        request.steps,
+                    )
+                    .await;
                     return;
                 }
 
                 sleep(Duration::from_millis(request.delay_ms)).await;
+
+                if cancellation.is_cancelled() {
+                    handle_cancellation(
+                        &app,
+                        &diagnostics,
+                        &jobs,
+                        &task_job_id,
+                        &task_correlation_id,
+                        step.saturating_sub(1),
+                        request.steps,
+                    )
+                    .await;
+                    return;
+                }
 
                 let event = BackgroundJobProgressEvent {
                     job_id: task_job_id.clone(),
@@ -202,4 +211,34 @@ impl MockJobRunner {
 
         Ok(CancelJobResult { job_id })
     }
+}
+
+async fn handle_cancellation(
+    app: &AppHandle,
+    diagnostics: &DiagnosticsStore,
+    jobs: &JobRegistry,
+    job_id: &str,
+    correlation_id: &str,
+    step: u16,
+    total_steps: u16,
+) {
+    let cancelled_error =
+        AppError::retryable("mock_job_cancelled", "Mock job was cancelled.", None);
+    diagnostics.record_error(cancelled_error.clone());
+    let cancelled_event = BackgroundJobProgressEvent {
+        job_id: job_id.to_string(),
+        correlation_id: correlation_id.to_string(),
+        status: BackgroundJobStatus::Cancelled,
+        step,
+        total_steps,
+        message: "Mock job cancelled by user.".to_string(),
+        timestamp: iso_timestamp(),
+        last_error: Some(cancelled_error),
+    };
+    diagnostics.record_event(cancelled_event.clone());
+    if let Err(error) = emit_background_job_event(app, &cancelled_event) {
+        diagnostics.record_error(error.clone());
+        error!(?error, "failed to emit cancelled event");
+    }
+    jobs.remove(job_id).await;
 }
