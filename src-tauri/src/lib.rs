@@ -13,7 +13,7 @@ use commands::{
     start_mock_job, test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
-use foundation::{initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry};
+use foundation::{initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry, MockJobRunner};
 use persistence::Repository;
 use schema::{RuntimeSchemaIntrospectionDriver, SchemaService};
 use tauri::Manager;
@@ -41,11 +41,16 @@ pub fn run() {
                 diagnostics.clone(),
                 Arc::new(RuntimeSchemaIntrospectionDriver),
             );
+            let mock_jobs = MockJobRunner::new(
+                diagnostics.clone(),
+                repository.clone(),
+                JobRegistry::default(),
+            );
             let state = AppState::new(
                 paths,
                 repository,
                 diagnostics,
-                JobRegistry::default(),
+                mock_jobs,
                 connections,
                 schema,
             );

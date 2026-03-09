@@ -22,6 +22,8 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - [completed] Extend smoke coverage, debugging docs, and schema cache inspection tooling
 - [completed] Run final Phase 3 verification and record results
 
+- [completed] Architecture refactoring: extract schema/introspection.rs, connections/driver.rs, jobs MockJobRunner, split contracts.ts into types+guards, extract shared Metric component and format utils
+
 ## Blockers And Decisions
 - Current blocker: none.
 - Database engine: PostgreSQL only.

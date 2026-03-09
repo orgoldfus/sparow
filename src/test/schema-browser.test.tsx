@@ -7,13 +7,12 @@ import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-se
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import schemaRefreshProgressFixture from '../../fixtures/contracts/schema-refresh-progress.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
-import {
-  isAppBootstrap,
-  isDatabaseSessionSnapshot,
-  type AppBootstrap,
-  type DatabaseSessionSnapshot,
-  type ListSchemaChildrenResult,
+import type {
+  AppBootstrap,
+  DatabaseSessionSnapshot,
+  ListSchemaChildrenResult,
 } from '../lib/contracts';
+import { isAppBootstrap, isDatabaseSessionSnapshot } from '../lib/guards';
 import { bootstrapApp } from '../lib/ipc';
 
 function expectAppBootstrap(value: unknown): AppBootstrap {

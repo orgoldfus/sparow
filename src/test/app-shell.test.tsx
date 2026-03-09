@@ -6,14 +6,13 @@ import connectionTestResultFixture from '../../fixtures/contracts/connection-tes
 import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-session-snapshot.json';
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
-import {
-  isConnectionDetails,
-  isDatabaseSessionSnapshot,
-  type ConnectionDetails,
-  type DatabaseSessionSnapshot,
-  type ListSchemaChildrenResult,
-  type SaveConnectionRequest,
+import type {
+  ConnectionDetails,
+  DatabaseSessionSnapshot,
+  ListSchemaChildrenResult,
+  SaveConnectionRequest,
 } from '../lib/contracts';
+import { isConnectionDetails, isDatabaseSessionSnapshot } from '../lib/guards';
 import { getSavedConnection, saveConnection, subscribeToSchemaRefreshEvent } from '../lib/ipc';
 
 function expectConnectionDetails(value: unknown): ConnectionDetails {

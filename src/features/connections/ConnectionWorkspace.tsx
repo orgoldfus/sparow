@@ -1,5 +1,7 @@
 import { CheckCircle2, CircleSlash2, Database, KeyRound, Plus, RefreshCcw, Shield, Trash2, Unplug, Wifi } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Metric } from '../../components/Metric';
+import { formatLongTime, formatShortTime } from '../../lib/format';
 import type {
   AppError,
   ConnectionDraft,
@@ -489,33 +491,8 @@ function ActionButton({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">{label}</dt>
-      <dd className="mt-1 text-[var(--ink-1)]">{value}</dd>
-    </div>
-  );
-}
-
 function inputClassName(hasError: boolean) {
   return `w-full border bg-[var(--surface-1)] px-3 py-2.5 text-sm text-[var(--ink-1)] outline-none transition focus:border-[var(--line-strong)] ${
     hasError ? 'border-[var(--danger-ink)]' : 'border-[var(--line-soft)]'
   }`;
-}
-
-function formatShortTime(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatLongTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }

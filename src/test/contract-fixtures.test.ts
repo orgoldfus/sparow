@@ -39,7 +39,7 @@ import {
   isSchemaSearchRequest,
   isSchemaSearchResult,
   isTestConnectionRequest,
-} from '../lib/contracts';
+} from '../lib/guards';
 
 describe('contract fixtures', () => {
   it('validate the app bootstrap fixture', () => {
