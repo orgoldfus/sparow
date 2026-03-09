@@ -787,12 +787,13 @@ fn refresh_task_error(error: JoinError) -> AppError {
 
 fn schema_row_to_node(connection_id: &str, row: Row, refreshed_at: &str) -> SchemaNode {
     let schema_name: String = row.get(0);
+    let path = format!("schema/{schema_name}");
     SchemaNode::Schema {
         base: SchemaNodeBase {
-            id: format!("schema/{schema_name}"),
+            id: schema_node_id(connection_id, &path),
             connection_id: connection_id.to_string(),
             name: schema_name.clone(),
-            path: format!("schema/{schema_name}"),
+            path,
             parent_path: None,
             schema_name,
             relation_name: None,
@@ -810,21 +811,17 @@ fn relation_row_to_node(
 ) -> SchemaNode {
     let relation_name: String = row.get(0);
     let relkind: String = row.get(1);
+    let path = format!(
+        "{}/{}/{}",
+        if relkind == "v" { "view" } else { "table" },
+        schema_name,
+        relation_name
+    );
     let base = SchemaNodeBase {
-        id: format!(
-            "{}/{}/{}",
-            if relkind == "v" { "view" } else { "table" },
-            schema_name,
-            relation_name
-        ),
+        id: schema_node_id(connection_id, &path),
         connection_id: connection_id.to_string(),
         name: relation_name.clone(),
-        path: format!(
-            "{}/{}/{}",
-            if relkind == "v" { "view" } else { "table" },
-            schema_name,
-            relation_name
-        ),
+        path,
         parent_path: Some(format!("schema/{schema_name}")),
         schema_name: schema_name.to_string(),
         relation_name: Some(relation_name.clone()),
@@ -851,12 +848,13 @@ fn column_row_to_node(
     let data_type: String = row.get(1);
     let is_nullable: bool = row.get(2);
     let ordinal_position: i16 = row.get(3);
+    let path = format!("column/{schema_name}/{relation_name}/{name}");
     SchemaNode::Column {
         base: SchemaNodeBase {
-            id: format!("column/{schema_name}/{relation_name}/{name}"),
+            id: schema_node_id(connection_id, &path),
             connection_id: connection_id.to_string(),
             name: name.clone(),
-            path: format!("column/{schema_name}/{relation_name}/{name}"),
+            path,
             parent_path: Some(relation_scope_path(scope_kind, schema_name, relation_name)),
             schema_name: schema_name.to_string(),
             relation_name: Some(relation_name.to_string()),
@@ -880,12 +878,13 @@ fn index_row_to_node(
     let name: String = row.get(0);
     let is_unique: bool = row.get(1);
     let column_names: Vec<String> = row.get(2);
+    let path = format!("index/{schema_name}/{relation_name}/{name}");
     SchemaNode::Index {
         base: SchemaNodeBase {
-            id: format!("index/{schema_name}/{relation_name}/{name}"),
+            id: schema_node_id(connection_id, &path),
             connection_id: connection_id.to_string(),
             name: name.clone(),
-            path: format!("index/{schema_name}/{relation_name}/{name}"),
+            path,
             parent_path: Some(relation_scope_path(scope_kind, schema_name, relation_name)),
             schema_name: schema_name.to_string(),
             relation_name: Some(relation_name.to_string()),
@@ -908,6 +907,10 @@ fn relation_scope_path(
         "table"
     };
     format!("{prefix}/{schema_name}/{relation_name}")
+}
+
+fn schema_node_id(connection_id: &str, path: &str) -> String {
+    format!("{connection_id}:{path}")
 }
 
 #[cfg(test)]
@@ -955,7 +958,7 @@ mod tests {
             Ok(match scope.kind {
                 SchemaScopeKind::Root => vec![SchemaNode::Schema {
                     base: SchemaNodeBase {
-                        id: "schema/public".to_string(),
+                        id: schema_node_id(&session.snapshot.connection_id, "schema/public"),
                         connection_id: session.snapshot.connection_id.clone(),
                         name: "public".to_string(),
                         path: "schema/public".to_string(),
@@ -968,7 +971,7 @@ mod tests {
                 }],
                 SchemaScopeKind::Schema => vec![SchemaNode::Table {
                     base: SchemaNodeBase {
-                        id: "table/public/users".to_string(),
+                        id: schema_node_id(&session.snapshot.connection_id, "table/public/users"),
                         connection_id: session.snapshot.connection_id.clone(),
                         name: "users".to_string(),
                         path: "table/public/users".to_string(),
@@ -982,7 +985,10 @@ mod tests {
                 SchemaScopeKind::Table | SchemaScopeKind::View => vec![
                     SchemaNode::Column {
                         base: SchemaNodeBase {
-                            id: "column/public/users/email".to_string(),
+                            id: schema_node_id(
+                                &session.snapshot.connection_id,
+                                "column/public/users/email",
+                            ),
                             connection_id: session.snapshot.connection_id.clone(),
                             name: "email".to_string(),
                             path: "column/public/users/email".to_string(),
@@ -998,7 +1004,10 @@ mod tests {
                     },
                     SchemaNode::Index {
                         base: SchemaNodeBase {
-                            id: "index/public/users/users_email_idx".to_string(),
+                            id: schema_node_id(
+                                &session.snapshot.connection_id,
+                                "index/public/users/users_email_idx",
+                            ),
                             connection_id: session.snapshot.connection_id.clone(),
                             name: "users_email_idx".to_string(),
                             path: "index/public/users/users_email_idx".to_string(),
@@ -1078,7 +1087,7 @@ mod tests {
                 refresh_status: "fresh".to_string(),
                 nodes: vec![SchemaNode::Column {
                     base: SchemaNodeBase {
-                        id: "column/public/users/email".to_string(),
+                        id: schema_node_id("conn-local-postgres", "column/public/users/email"),
                         connection_id: "conn-local-postgres".to_string(),
                         name: "email".to_string(),
                         path: "column/public/users/email".to_string(),
@@ -1131,7 +1140,7 @@ mod tests {
             refresh_status: Some("failed".to_string()),
             nodes: vec![SchemaNode::Column {
                 base: SchemaNodeBase {
-                    id: "column/public/users/email".to_string(),
+                    id: schema_node_id("conn-local-postgres", "column/public/users/email"),
                     connection_id: "conn-local-postgres".to_string(),
                     name: "email".to_string(),
                     path: "column/public/users/email".to_string(),
@@ -1148,6 +1157,18 @@ mod tests {
         };
 
         assert_eq!(cache_status_for(&cached), SchemaCacheStatus::Stale);
+    }
+
+    #[test]
+    fn schema_node_ids_are_namespaced_by_connection() {
+        assert_ne!(
+            schema_node_id("conn-a", "schema/public"),
+            schema_node_id("conn-b", "schema/public")
+        );
+        assert_eq!(
+            schema_node_id("conn-a", "schema/public"),
+            "conn-a:schema/public"
+        );
     }
 
     #[tokio::test]

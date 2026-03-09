@@ -19,7 +19,7 @@ const rootSchemaChildrenFixture = {
   nodes: [
     {
       kind: 'schema' as const,
-      id: 'schema/public',
+      id: 'conn-local-postgres:schema/public',
       connectionId: databaseSessionSnapshotFixture.connectionId,
       name: 'public',
       path: 'schema/public',

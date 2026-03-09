@@ -4,7 +4,7 @@
   "nodes": [
     {
       "kind": "table",
-      "id": "table/public/users",
+      "id": "conn-local-postgres:table/public/users",
       "connectionId": "conn-local-postgres",
       "name": "users",
       "path": "table/public/users",
@@ -16,7 +16,7 @@
     },
     {
       "kind": "column",
-      "id": "column/public/users/email",
+      "id": "conn-local-postgres:column/public/users/email",
       "connectionId": "conn-local-postgres",
       "name": "email",
       "path": "column/public/users/email",

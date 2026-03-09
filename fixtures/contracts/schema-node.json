@@ -1,6 +1,6 @@
 {
   "kind": "index",
-  "id": "index/public/users/users_email_idx",
+  "id": "conn-local-postgres:index/public/users/users_email_idx",
   "connectionId": "conn-local-postgres",
   "name": "users_email_idx",
   "path": "index/public/users/users_email_idx",

@@ -4,6 +4,7 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Fix cross-connection schema cache ID collisions that block remote PostgreSQL schema refreshes
 - [completed] Review unresolved CodeRabbit feedback, verify each finding against current code, and apply only still-valid fixes
 - [completed] Preserve failed schema scope refresh status through cache loads and retry classification
 - [completed] Investigate and fix schema expansion hanging on column deserialization panic
@@ -25,9 +26,14 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Search scope: cached metadata only; no live global catalog search in Phase 3.
 - Cache freshness: cached schema scopes become stale after 2 minutes and should refresh in the background.
 - Root scope persistence: SQLite stores the root scope path as an empty string; the TypeScript boundary uses `null`.
+- Schema cache identity: `schema_cache.id` is globally unique in SQLite, so generated schema node IDs must be namespaced by connection.
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after namespacing schema cache IDs by connection for cross-database safety.
+- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::schema_node_ids_are_namespaced_by_connection -- --exact` ✅
+  - The new schema ID regression test passed after namespacing generated cache IDs by connection.
 - `npm run verify` ✅
   - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after the CodeRabbit autofixes and regression coverage updates.
 - `cargo test --manifest-path src-tauri/Cargo.toml persistence::repository::tests::replaces_schema_scope_by_clearing_descendant_cache_rows -- --exact` ✅

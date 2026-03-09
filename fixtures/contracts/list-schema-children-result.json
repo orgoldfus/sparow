@@ -8,7 +8,7 @@
   "nodes": [
     {
       "kind": "table",
-      "id": "table/public/users",
+      "id": "conn-local-postgres:table/public/users",
       "connectionId": "conn-local-postgres",
       "name": "users",
       "path": "table/public/users",
@@ -20,7 +20,7 @@
     },
     {
       "kind": "view",
-      "id": "view/public/active_users",
+      "id": "conn-local-postgres:view/public/active_users",
       "connectionId": "conn-local-postgres",
       "name": "active_users",
       "path": "view/public/active_users",
