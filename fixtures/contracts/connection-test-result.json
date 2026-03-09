@@ -1,0 +1,11 @@
+{
+  "testedAt": "2026-03-08T17:05:00.000Z",
+  "status": "success",
+  "summaryMessage": "Connection test succeeded.",
+  "serverVersion": "PostgreSQL 17.2",
+  "currentDatabase": "app_dev",
+  "currentUser": "sparow",
+  "sslInUse": true,
+  "roundTripMs": 42,
+  "error": null
+}

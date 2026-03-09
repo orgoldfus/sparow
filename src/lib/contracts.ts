@@ -1,24 +1,84 @@
 export const BACKGROUND_JOB_EVENT = 'foundation://job-progress';
 
 export type AppEnvironment = 'development' | 'production' | 'test';
-
 export type BackgroundJobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
+export type DatabaseEngine = 'postgresql';
+export type SecretProvider = 'os-keychain' | 'memory';
+export type SslMode = 'disable' | 'prefer' | 'require';
 
-export type SecretRef = {
-  provider: 'os-keychain';
-  service: string;
-  account: string;
-};
-
-export type ConnectionProfile = {
+export type ConnectionSummary = {
   id: string;
+  engine: DatabaseEngine;
   name: string;
   host: string;
   port: number;
   database: string;
   username: string;
-  sslMode: 'disable' | 'prefer' | 'require';
-  secretRef: SecretRef | null;
+  sslMode: SslMode;
+  hasStoredSecret: boolean;
+  secretProvider: SecretProvider | null;
+  lastTestedAt: string | null;
+  lastConnectedAt: string | null;
+  updatedAt: string;
+};
+
+export type ConnectionDetails = ConnectionSummary & {
+  createdAt: string;
+};
+
+export type ConnectionDraft = {
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  sslMode: SslMode;
+  password: string | null;
+};
+
+export type SaveConnectionRequest = {
+  id: string | null;
+  draft: ConnectionDraft;
+};
+
+export type TestConnectionRequest = {
+  connectionId: string | null;
+  draft: ConnectionDraft;
+};
+
+export type ConnectionTestResult = {
+  testedAt: string;
+  status: 'success' | 'failure';
+  summaryMessage: string;
+  serverVersion: string | null;
+  currentDatabase: string | null;
+  currentUser: string | null;
+  sslInUse: boolean | null;
+  roundTripMs: number | null;
+  error: AppError | null;
+};
+
+export type DatabaseSessionSnapshot = {
+  connectionId: string;
+  name: string;
+  engine: DatabaseEngine;
+  database: string;
+  username: string;
+  host: string;
+  port: number;
+  connectedAt: string;
+  serverVersion: string | null;
+  sslInUse: boolean | null;
+  status: 'connected';
+};
+
+export type DeleteConnectionResult = {
+  id: string;
+  disconnected: boolean;
+};
+
+export type DisconnectSessionResult = {
+  connectionId: string | null;
 };
 
 export type HistoryEntry = {
@@ -95,6 +155,9 @@ export type AppBootstrap = {
     savedQueries: number;
     schemaCacheEntries: number;
   };
+  savedConnections: ConnectionSummary[];
+  selectedConnectionId: string | null;
+  activeSession: DatabaseSessionSnapshot | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,12 +168,54 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
+function isDatabaseEngine(value: unknown): value is DatabaseEngine {
+  return value === 'postgresql';
+}
+
+function isSecretProvider(value: unknown): value is SecretProvider {
+  return value === 'os-keychain' || value === 'memory';
+}
+
+function isSslMode(value: unknown): value is SslMode {
+  return value === 'disable' || value === 'prefer' || value === 'require';
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return typeof value === 'string' || value === null;
+}
+
+function isNullableBoolean(value: unknown): value is boolean | null {
+  return typeof value === 'boolean' || value === null;
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return typeof value === 'number' || value === null;
+}
+
+function isConnectionShape(value: unknown): value is Omit<ConnectionSummary, 'updatedAt'> & { updatedAt?: string } {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    isDatabaseEngine(value.engine) &&
+    typeof value.name === 'string' &&
+    typeof value.host === 'string' &&
+    typeof value.port === 'number' &&
+    typeof value.database === 'string' &&
+    typeof value.username === 'string' &&
+    isSslMode(value.sslMode) &&
+    typeof value.hasStoredSecret === 'boolean' &&
+    (value.secretProvider === null || isSecretProvider(value.secretProvider)) &&
+    isNullableString(value.lastTestedAt) &&
+    isNullableString(value.lastConnectedAt)
+  );
+}
+
 export function isAppError(value: unknown): value is AppError {
   return (
     isRecord(value) &&
     typeof value.code === 'string' &&
     typeof value.message === 'string' &&
-    (typeof value.detail === 'string' || value.detail === null) &&
+    isNullableString(value.detail) &&
     typeof value.retryable === 'boolean' &&
     typeof value.correlationId === 'string'
   );
@@ -139,6 +244,83 @@ export function isBackgroundJobProgressEvent(value: unknown): value is Backgroun
   );
 }
 
+export function isConnectionSummary(value: unknown): value is ConnectionSummary {
+  return isConnectionShape(value) && typeof value.updatedAt === 'string';
+}
+
+export function isConnectionDetails(value: unknown): value is ConnectionDetails {
+  return isConnectionSummary(value) && typeof value.createdAt === 'string';
+}
+
+export function isConnectionDraft(value: unknown): value is ConnectionDraft {
+  return (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    typeof value.host === 'string' &&
+    typeof value.port === 'number' &&
+    typeof value.database === 'string' &&
+    typeof value.username === 'string' &&
+    isSslMode(value.sslMode) &&
+    isNullableString(value.password)
+  );
+}
+
+export function isSaveConnectionRequest(value: unknown): value is SaveConnectionRequest {
+  return (
+    isRecord(value) &&
+    (typeof value.id === 'string' || value.id === null) &&
+    isConnectionDraft(value.draft)
+  );
+}
+
+export function isTestConnectionRequest(value: unknown): value is TestConnectionRequest {
+  return (
+    isRecord(value) &&
+    (typeof value.connectionId === 'string' || value.connectionId === null) &&
+    isConnectionDraft(value.draft)
+  );
+}
+
+export function isConnectionTestResult(value: unknown): value is ConnectionTestResult {
+  return (
+    isRecord(value) &&
+    typeof value.testedAt === 'string' &&
+    (value.status === 'success' || value.status === 'failure') &&
+    typeof value.summaryMessage === 'string' &&
+    isNullableString(value.serverVersion) &&
+    isNullableString(value.currentDatabase) &&
+    isNullableString(value.currentUser) &&
+    isNullableBoolean(value.sslInUse) &&
+    isNullableNumber(value.roundTripMs) &&
+    (value.error === null || isAppError(value.error))
+  );
+}
+
+export function isDatabaseSessionSnapshot(value: unknown): value is DatabaseSessionSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value.connectionId === 'string' &&
+    typeof value.name === 'string' &&
+    isDatabaseEngine(value.engine) &&
+    typeof value.database === 'string' &&
+    typeof value.username === 'string' &&
+    typeof value.host === 'string' &&
+    typeof value.port === 'number' &&
+    typeof value.connectedAt === 'string' &&
+    isNullableString(value.serverVersion) &&
+    isNullableBoolean(value.sslInUse) &&
+    value.status === 'connected'
+  );
+}
+
+export function isDeleteConnectionResult(value: unknown): value is DeleteConnectionResult {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.disconnected === 'boolean';
+}
+
+export function isDisconnectSessionResult(value: unknown): value is DisconnectSessionResult {
+  return isRecord(value) && (typeof value.connectionId === 'string' || value.connectionId === null);
+}
+
 export function isAppBootstrap(value: unknown): value is AppBootstrap {
   return (
     isRecord(value) &&
@@ -157,6 +339,10 @@ export function isAppBootstrap(value: unknown): value is AppBootstrap {
     isRecord(value.sampleData) &&
     typeof value.sampleData.historyEntries === 'number' &&
     typeof value.sampleData.savedQueries === 'number' &&
-    typeof value.sampleData.schemaCacheEntries === 'number'
+    typeof value.sampleData.schemaCacheEntries === 'number' &&
+    Array.isArray(value.savedConnections) &&
+    value.savedConnections.every(isConnectionSummary) &&
+    (typeof value.selectedConnectionId === 'string' || value.selectedConnectionId === null) &&
+    (value.activeSession === null || isDatabaseSessionSnapshot(value.activeSession))
   );
 }

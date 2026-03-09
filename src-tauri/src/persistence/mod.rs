@@ -1,3 +1,3 @@
 mod repository;
 
-pub use repository::Repository;
+pub use repository::{PersistedSecretRef, Repository, SaveConnectionRecord, SavedConnectionRecord};

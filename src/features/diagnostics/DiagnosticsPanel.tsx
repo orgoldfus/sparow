@@ -75,10 +75,19 @@ export function DiagnosticsPanel({ bootstrap, lastError, recentEvents }: Diagnos
               ))
             ) : (
               <li className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2">
-                Event history will appear here after the mock job runs.
+                Event history will appear here as background tasks report status.
               </li>
             )}
           </ul>
+        </section>
+
+        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
+          <p className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">Connection snapshot</p>
+          <div className="mt-3 grid gap-2">
+            <p>Saved targets: {bootstrap?.savedConnections.length ?? 0}</p>
+            <p>Selected id: {bootstrap?.selectedConnectionId ?? 'none'}</p>
+            <p>Active session: {bootstrap?.activeSession?.name ?? 'none'}</p>
+          </div>
         </section>
       </div>
     </aside>

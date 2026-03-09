@@ -18,8 +18,16 @@
 
 ## If Persistence Fails
 - Inspect `src-tauri/src/persistence/migrations/0001_init.sql`.
+- Inspect `src-tauri/src/persistence/migrations/0002_connection_management.sql`.
 - Inspect the local SQLite file with `sqlite3 <path> '.tables'`.
 - Check repository tests before changing UI logic.
+
+## If Connection Management Fails
+- Check `src-tauri/src/connections/service.rs` for connection lifecycle, error normalization, and active-session replacement.
+- Check `src-tauri/src/connections/secret_store.rs` for keychain vs. in-memory secret behavior.
+- Confirm `fixtures/contracts/` still matches the Rust and TypeScript connection payloads.
+- Run `cargo test --manifest-path src-tauri/Cargo.toml`.
+- For a real server check, run `npm run smoke:postgres` with the required `SPAROW_PG_*` environment variables.
 
 ## If The Shell Renders Incorrectly
 - Run `npm run smoke:foundation`.
