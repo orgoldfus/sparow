@@ -5,6 +5,7 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 
 ## Checklist
 - [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
+- [completed] Verify and fix swallowed `persist_refresh_failure` task/repository errors in the schema service
 - [completed] Fix cross-connection schema cache ID collisions that block remote PostgreSQL schema refreshes
 - [completed] Review unresolved CodeRabbit feedback, verify each finding against current code, and apply only still-valid fixes
 - [completed] Preserve failed schema scope refresh status through cache loads and retry classification
@@ -31,6 +32,8 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::persist_refresh_failure_returns_repository_errors -- --exact` ✅
+  - The schema service now returns repository/join failures from `persist_refresh_failure` instead of swallowing the `spawn_blocking` outcome.
 - `npm run verify` ✅
   - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after closing the remaining CodeRabbit findings in the schema parser, contract guards, and cache inspection script.
 - `npm run verify` ❌

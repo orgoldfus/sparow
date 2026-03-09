@@ -240,13 +240,20 @@ impl SchemaService {
             .await;
 
             if let Err(error) = join_result {
-                service
-                    .persist_refresh_failure(
-                        accepted_for_cleanup.connection_id.clone(),
-                        scope_kind,
-                        scope_path.clone(),
-                    )
-                    .await;
+                    service
+                        .persist_refresh_failure(
+                            accepted_for_cleanup.connection_id.clone(),
+                            scope_kind,
+                            scope_path.clone(),
+                        )
+                    .await
+                    .unwrap_or_else(|persist_error| {
+                        service.report_refresh_failure_persistence_error(
+                            scope_kind,
+                            scope_path.as_deref(),
+                            &persist_error,
+                        );
+                    });
                 service.record_refresh_failure(
                     app_for_cleanup.as_ref(),
                     &accepted_for_cleanup,
@@ -348,7 +355,14 @@ impl SchemaService {
                             scope.kind,
                             scope.path.clone(),
                         )
-                        .await;
+                        .await
+                        .unwrap_or_else(|persist_error| {
+                            self.report_refresh_failure_persistence_error(
+                                scope.kind,
+                                scope.path.as_deref(),
+                                &persist_error,
+                            );
+                        });
                         self.record_refresh_failure(
                             app.as_ref(),
                             &accepted,
@@ -368,7 +382,14 @@ impl SchemaService {
                             scope.kind,
                             scope.path.clone(),
                         )
-                        .await;
+                        .await
+                        .unwrap_or_else(|persist_error| {
+                            self.report_refresh_failure_persistence_error(
+                                scope.kind,
+                                scope.path.as_deref(),
+                                &persist_error,
+                            );
+                        });
                         self.record_refresh_failure(
                             app.as_ref(),
                             &accepted,
@@ -385,7 +406,14 @@ impl SchemaService {
                     scope.kind,
                     scope.path.clone(),
                 )
-                .await;
+                .await
+                .unwrap_or_else(|persist_error| {
+                    self.report_refresh_failure_persistence_error(
+                        scope.kind,
+                        scope.path.as_deref(),
+                        &persist_error,
+                    );
+                });
                 self.record_refresh_failure(
                     app.as_ref(),
                     &accepted,
@@ -431,10 +459,10 @@ impl SchemaService {
         connection_id: String,
         scope_kind: SchemaScopeKind,
         scope_path: Option<String>,
-    ) {
+    ) -> Result<(), AppError> {
         let repository = self.repository.clone();
         let refreshed_at = iso_timestamp();
-        let _ = tokio::task::spawn_blocking(move || {
+        let write_result = tokio::task::spawn_blocking(move || {
             repository.record_schema_scope_failure(
                 &connection_id,
                 scope_kind,
@@ -443,6 +471,30 @@ impl SchemaService {
             )
         })
         .await;
+
+        match write_result {
+            Ok(inner_result) => inner_result,
+            Err(error) => Err(AppError::internal(
+                "schema_scope_failure_persist_join_failed",
+                "Failed to join schema failure persistence task.",
+                Some(error.to_string()),
+            )),
+        }
+    }
+
+    fn report_refresh_failure_persistence_error(
+        &self,
+        scope_kind: SchemaScopeKind,
+        scope_path: Option<&str>,
+        error: &AppError,
+    ) {
+        self.diagnostics.record_error(error.clone());
+        error!(
+            ?error,
+            scope_kind = ?scope_kind,
+            scope = ?scope_path,
+            "failed to persist schema refresh failure metadata"
+        );
     }
 
     async fn refresh_in_flight(
@@ -967,7 +1019,7 @@ mod tests {
             SchemaNodeKind, SslMode,
         },
     };
-    use std::collections::HashSet;
+    use std::{collections::HashSet, path::PathBuf};
 
     #[derive(Clone)]
     struct FakeSchemaDriver {
@@ -1400,6 +1452,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn persist_refresh_failure_returns_repository_errors() {
+        let (service, database_path) = test_service_with_database_path(FakeSchemaDriver {
+            fail_scopes: Arc::new(HashSet::new()),
+            panic_scopes: Arc::new(HashSet::new()),
+        })
+        .await;
+
+        std::fs::remove_file(&database_path).expect("database file should be removable");
+        std::fs::create_dir(&database_path).expect("database path should become a directory");
+
+        let error = service
+            .persist_refresh_failure(
+                "conn-local-postgres".to_string(),
+                SchemaScopeKind::Schema,
+                Some("schema/public".to_string()),
+            )
+            .await
+            .expect_err("persist failure should surface repository errors");
+
+        assert_eq!(error.code, "sqlite_open_failed");
+    }
+
+    #[tokio::test]
     #[ignore = "requires explicit PostgreSQL environment variables"]
     async fn postgres_schema_smoke() {
         let host = std::env::var("SPAROW_PG_HOST").expect("SPAROW_PG_HOST should be set");
@@ -1527,10 +1602,15 @@ mod tests {
     }
 
     async fn test_service(driver: FakeSchemaDriver) -> SchemaService {
+        test_service_with_database_path(driver).await.0
+    }
+
+    async fn test_service_with_database_path(driver: FakeSchemaDriver) -> (SchemaService, PathBuf) {
         let root = std::env::temp_dir().join(format!("sparow-schema-tests-{}", Uuid::new_v4()));
         std::fs::create_dir_all(root.join("logs")).expect("logs directory should exist");
+        let database_path = root.join("sparow.sqlite3");
         let paths = AppPaths {
-            database_path: root.join("sparow.sqlite3"),
+            database_path: database_path.clone(),
             log_file_path: root.join("logs/sparow.log"),
         };
         let repository = Arc::new(
@@ -1564,7 +1644,7 @@ mod tests {
             Arc::new(driver),
         );
 
-        service
+        (service, database_path)
     }
 
     async fn wait_for_idle(service: &SchemaService) {
