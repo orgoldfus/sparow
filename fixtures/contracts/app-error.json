@@ -1,0 +1,7 @@
+{
+  "code": "mock_job_cancelled",
+  "message": "Mock job was cancelled.",
+  "detail": null,
+  "retryable": true,
+  "correlationId": "corr-2026-phase1"
+}

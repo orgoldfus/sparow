@@ -1,0 +1,10 @@
+{
+  "jobId": "job-2026-phase1",
+  "correlationId": "corr-2026-phase1",
+  "status": "running",
+  "step": 2,
+  "totalSteps": 6,
+  "message": "Mock step 2 completed.",
+  "timestamp": "2026-03-08T17:00:00.000Z",
+  "lastError": null
+}

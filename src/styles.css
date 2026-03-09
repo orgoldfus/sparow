@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --surface-0: oklch(0.97 0.01 85);
+  --surface-1: oklch(0.93 0.015 80);
+  --surface-2: oklch(0.89 0.02 75);
+  --ink-1: oklch(0.26 0.03 42);
+  --ink-2: oklch(0.38 0.026 42);
+  --ink-3: oklch(0.54 0.02 50);
+  --line-soft: oklch(0.83 0.018 68);
+  --line-strong: oklch(0.7 0.04 58);
+  --accent-strong: oklch(0.64 0.16 42);
+  --accent-soft: oklch(0.82 0.08 52);
+  --accent-softer: oklch(0.87 0.06 62);
+  --danger-ink: oklch(0.54 0.18 28);
+  --shadow-shell: 0 24px 80px rgba(57, 33, 20, 0.16);
+  --shadow-soft: 0 20px 48px rgba(67, 45, 31, 0.12);
+  font-family: 'Manrope', sans-serif;
+  background: var(--surface-0);
+  color: var(--ink-1);
+}
+
+@theme {
+  --font-display: 'Fraunces', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--surface-0) 88%, white 12%), var(--surface-1)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(126, 97, 74, 0.04) 0,
+      rgba(126, 97, 74, 0.04) 1px,
+      transparent 1px,
+      transparent 96px
+    );
+}
+
+button {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+pre {
+  margin: 0;
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+}

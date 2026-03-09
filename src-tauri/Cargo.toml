@@ -1,0 +1,26 @@
+[package]
+name = "sparow"
+version = "0.1.0"
+description = "Sparow foundation shell"
+authors = ["OpenAI Codex"]
+edition = "2021"
+
+[lib]
+name = "sparow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+tauri = { version = "2.10.3", features = [] }
+thiserror = "2.0.18"
+tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio-util = "0.7.18"
+tracing = "0.1.44"
+tracing-appender = "0.2.4"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
+uuid = { version = "1.22.0", features = ["serde", "v4"] }
