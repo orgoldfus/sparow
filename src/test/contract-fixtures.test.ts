@@ -18,6 +18,10 @@ import schemaRefreshProgressFixture from '../../fixtures/contracts/schema-refres
 import schemaSearchRequestFixture from '../../fixtures/contracts/schema-search-request.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
 import testConnectionRequestFixture from '../../fixtures/contracts/test-connection-request.json';
+import cancelQueryExecutionResultFixture from '../../fixtures/contracts/cancel-query-execution-result.json';
+import queryExecutionAcceptedFixture from '../../fixtures/contracts/query-execution-accepted.json';
+import queryExecutionProgressFixture from '../../fixtures/contracts/query-execution-progress.json';
+import queryExecutionRequestFixture from '../../fixtures/contracts/query-execution-request.json';
 import {
   isAppBootstrap,
   isAppError,
@@ -31,6 +35,10 @@ import {
   isDisconnectSessionResult,
   isListSchemaChildrenRequest,
   isListSchemaChildrenResult,
+  isQueryExecutionAccepted,
+  isQueryExecutionProgressEvent,
+  isQueryExecutionRequest,
+  isQueryExecutionResult,
   isRefreshSchemaScopeRequest,
   isSaveConnectionRequest,
   isSchemaNode,
@@ -141,6 +149,22 @@ describe('contract fixtures', () => {
     expect(isSchemaSearchResult(schemaSearchResultFixture)).toBe(true);
   });
 
+  it('validate the query execution request fixture', () => {
+    expect(isQueryExecutionRequest(queryExecutionRequestFixture)).toBe(true);
+  });
+
+  it('validate the query execution accepted fixture', () => {
+    expect(isQueryExecutionAccepted(queryExecutionAcceptedFixture)).toBe(true);
+  });
+
+  it('validate the query execution progress fixture', () => {
+    expect(isQueryExecutionProgressEvent(queryExecutionProgressFixture)).toBe(true);
+  });
+
+  it('validate the cancel query execution result fixture', () => {
+    expect(typeof cancelQueryExecutionResultFixture.jobId).toBe('string');
+  });
+
   it('rejects schema nodes without a kind discriminant', () => {
     const nodeWithoutKind = { ...schemaNodeFixture };
     delete (nodeWithoutKind as { kind?: string }).kind;
@@ -237,6 +261,28 @@ describe('contract fixtures', () => {
       isAppBootstrap({
         ...appBootstrapFixture,
         environment: 'staging',
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts both query result variants and rejects malformed preview rows', () => {
+    expect(isQueryExecutionResult(queryExecutionProgressFixture.result)).toBe(true);
+
+    expect(
+      isQueryExecutionResult({
+        kind: 'command',
+        commandTag: 'UPDATE 3',
+        rowsAffected: 3,
+      }),
+    ).toBe(true);
+
+    expect(
+      isQueryExecutionResult({
+        kind: 'rows',
+        columns: [{ name: 'id', postgresType: 'int4' }],
+        previewRows: [['1'], [2]],
+        previewRowCount: 2,
+        truncated: false,
       }),
     ).toBe(false);
   });

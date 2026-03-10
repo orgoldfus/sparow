@@ -1354,6 +1354,7 @@ mod tests {
                 ssl_in_use: Some(true),
                 status: crate::foundation::ConnectionSessionStatus::Connected,
             },
+            ssl_mode: crate::foundation::SslMode::Disable,
             pool: None,
         };
         connections.set_test_active_session(session).await;

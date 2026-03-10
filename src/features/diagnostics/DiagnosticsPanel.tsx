@@ -3,21 +3,30 @@ import type {
   AppBootstrap,
   AppError,
   BackgroundJobProgressEvent,
+  DatabaseSessionSnapshot,
+  QueryExecutionProgressEvent,
+  SchemaNode,
   SchemaRefreshProgressEvent,
 } from '../../lib/contracts';
 
 type DiagnosticsPanelProps = {
+  activeSession: DatabaseSessionSnapshot | null;
   bootstrap: AppBootstrap | null;
   lastError: AppError | null;
   recentEvents: BackgroundJobProgressEvent[];
+  recentQueryEvents: QueryExecutionProgressEvent[];
   recentSchemaEvents: SchemaRefreshProgressEvent[];
+  selectedSchemaNode: SchemaNode | null;
 };
 
 export function DiagnosticsPanel({
+  activeSession,
   bootstrap,
   lastError,
   recentEvents,
+  recentQueryEvents,
   recentSchemaEvents,
+  selectedSchemaNode,
 }: DiagnosticsPanelProps) {
   return (
     <aside className="flex h-full min-h-[320px] flex-col">
@@ -72,8 +81,25 @@ export function DiagnosticsPanel({
             <h3 className="font-medium">Recent events</h3>
           </div>
           <ul className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-            {recentEvents.length > 0 || recentSchemaEvents.length > 0 ? (
+            {recentEvents.length > 0 || recentSchemaEvents.length > 0 || recentQueryEvents.length > 0 ? (
               <>
+                {recentQueryEvents.slice(0, 3).map((event) => (
+                  <li
+                    className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
+                    key={`${event.jobId}-${event.status}-${event.startedAt}`}
+                  >
+                    <p>{event.message}</p>
+                    <div className="mt-1 grid gap-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
+                      <p>
+                        {event.status} / {event.tabId} / {event.correlationId}
+                      </p>
+                      <p>
+                        Job {event.jobId} / {event.connectionId} / {event.elapsedMs} ms
+                      </p>
+                      {event.lastError ? <p>{event.lastError.code}</p> : null}
+                    </div>
+                  </li>
+                ))}
                 {recentSchemaEvents.slice(0, 3).map((event) => (
                   <li
                     className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
@@ -110,7 +136,26 @@ export function DiagnosticsPanel({
           <div className="mt-3 grid gap-2">
             <p>Saved targets: {bootstrap?.savedConnections.length ?? 0}</p>
             <p>Selected id: {bootstrap?.selectedConnectionId ?? 'none'}</p>
-            <p>Active session: {bootstrap?.activeSession?.name ?? 'none'}</p>
+            <p>Active session: {activeSession?.name ?? 'none'}</p>
+            <p>
+              SSL:{' '}
+              {activeSession?.sslInUse === true
+                ? 'enabled'
+                : activeSession?.sslInUse === false
+                  ? 'disabled'
+                  : activeSession
+                    ? 'unknown'
+                    : 'n/a'}
+            </p>
+          </div>
+        </section>
+
+        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
+          <p className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">Selected schema node</p>
+          <div className="mt-3 grid gap-2">
+            <p>Name: {selectedSchemaNode?.name ?? 'none'}</p>
+            <p>Kind: {selectedSchemaNode?.kind ?? 'none'}</p>
+            <p>Path: {selectedSchemaNode?.path ?? 'none'}</p>
           </div>
         </section>
       </div>

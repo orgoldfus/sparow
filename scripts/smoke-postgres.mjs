@@ -35,6 +35,26 @@ await run('cargo', [
   '--nocapture',
 ]);
 
+await run('cargo', [
+  'test',
+  '--manifest-path',
+  'src-tauri/Cargo.toml',
+  'postgres_query_smoke',
+  '--',
+  '--ignored',
+  '--nocapture',
+]);
+
+await run('cargo', [
+  'test',
+  '--manifest-path',
+  'src-tauri/Cargo.toml',
+  'postgres_query_cancel_smoke',
+  '--',
+  '--ignored',
+  '--nocapture',
+]);
+
 async function run(command, args) {
   await new Promise((resolve, reject) => {
     const child = spawn(command, args, {

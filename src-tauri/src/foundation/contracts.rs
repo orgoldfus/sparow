@@ -8,6 +8,7 @@ use super::AppError;
 
 pub const BACKGROUND_JOB_EVENT: &str = "foundation://job-progress";
 pub const SCHEMA_REFRESH_EVENT: &str = "schema://refresh-progress";
+pub const QUERY_EXECUTION_EVENT: &str = "query://execution-progress";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -60,6 +61,23 @@ pub enum SchemaRefreshStatus {
     Queued,
     Running,
     Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum QueryExecutionOrigin {
+    Selection,
+    CurrentStatement,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryExecutionStatus {
+    Queued,
+    Running,
+    Completed,
+    Cancelled,
     Failed,
 }
 
@@ -370,6 +388,76 @@ pub struct SchemaSearchResult {
     pub nodes: Vec<SchemaNode>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultColumn {
+    pub name: String,
+    pub postgres_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum QueryExecutionResult {
+    #[serde(rename = "rows")]
+    Rows {
+        columns: Vec<QueryResultColumn>,
+        preview_rows: Vec<Vec<Option<String>>>,
+        preview_row_count: usize,
+        truncated: bool,
+    },
+    #[serde(rename = "command")]
+    Command {
+        command_tag: String,
+        rows_affected: Option<u64>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryExecutionRequest {
+    pub tab_id: String,
+    pub connection_id: String,
+    pub sql: String,
+    pub origin: QueryExecutionOrigin,
+    pub is_selection_multi_statement: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryExecutionAccepted {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub tab_id: String,
+    pub connection_id: String,
+    pub started_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryExecutionProgressEvent {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub tab_id: String,
+    pub connection_id: String,
+    pub status: QueryExecutionStatus,
+    pub elapsed_ms: u64,
+    pub message: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub last_error: Option<AppError>,
+    pub result: Option<QueryExecutionResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelQueryExecutionResult {
+    pub job_id: String,
+}
+
 impl SchemaNode {
     pub fn kind(&self) -> SchemaNodeKind {
         match self {
@@ -549,11 +637,13 @@ pub fn ensure_parent_directory(path: &Path) -> Result<(), AppError> {
 mod tests {
     use super::{
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
-        ConnectionDetails, ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
-        DeleteConnectionResult, DisconnectSessionResult, ListSchemaChildrenRequest,
-        ListSchemaChildrenResult, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
-        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
-        SslMode, TestConnectionRequest,
+        CancelQueryExecutionResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
+        DatabaseSessionSnapshot, DeleteConnectionResult, DisconnectSessionResult,
+        ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
+        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
+        RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
+        SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
+        TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -594,6 +684,14 @@ mod tests {
         include_str!("../../../fixtures/contracts/schema-search-request.json");
     const SCHEMA_SEARCH_RESULT_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/schema-search-result.json");
+    const QUERY_EXECUTION_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-execution-request.json");
+    const QUERY_EXECUTION_ACCEPTED_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-execution-accepted.json");
+    const QUERY_EXECUTION_PROGRESS_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-execution-progress.json");
+    const CANCEL_QUERY_EXECUTION_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/cancel-query-execution-result.json");
 
     #[test]
     fn deserializes_app_bootstrap_fixture() {
@@ -756,5 +854,42 @@ mod tests {
         let fixture: SchemaSearchResult = serde_json::from_str(SCHEMA_SEARCH_RESULT_FIXTURE)
             .expect("schema search result fixture should deserialize");
         assert_eq!(fixture.nodes.len(), 2);
+    }
+
+    #[test]
+    fn deserializes_query_execution_request_fixture() {
+        let fixture: QueryExecutionRequest = serde_json::from_str(QUERY_EXECUTION_REQUEST_FIXTURE)
+            .expect("query execution request fixture should deserialize");
+        assert_eq!(fixture.tab_id, "tab-1");
+    }
+
+    #[test]
+    fn deserializes_query_execution_accepted_fixture() {
+        let fixture: QueryExecutionAccepted =
+            serde_json::from_str(QUERY_EXECUTION_ACCEPTED_FIXTURE)
+                .expect("query execution accepted fixture should deserialize");
+        assert_eq!(fixture.connection_id, "conn-local-postgres");
+    }
+
+    #[test]
+    fn deserializes_query_execution_progress_fixture() {
+        let fixture: QueryExecutionProgressEvent =
+            serde_json::from_str(QUERY_EXECUTION_PROGRESS_FIXTURE)
+                .expect("query execution progress fixture should deserialize");
+        assert_eq!(fixture.elapsed_ms, 28);
+        match fixture.result.expect("query result should exist") {
+            QueryExecutionResult::Rows {
+                preview_row_count, ..
+            } => assert_eq!(preview_row_count, 2),
+            other => panic!("expected rows result, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserializes_cancel_query_execution_result_fixture() {
+        let fixture: CancelQueryExecutionResult =
+            serde_json::from_str(CANCEL_QUERY_EXECUTION_RESULT_FIXTURE)
+                .expect("cancel query execution result fixture should deserialize");
+        assert_eq!(fixture.job_id, "query-job-2026");
     }
 }

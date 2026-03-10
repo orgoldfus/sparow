@@ -68,6 +68,17 @@ vi.mock('../lib/ipc', () => ({
   refreshSchemaScope: vi.fn(() => Promise.resolve({})),
   searchSchemaCache: vi.fn(() => Promise.resolve(schemaSearchResultFixture)),
   subscribeToEvent: vi.fn(() => Promise.resolve(() => {})),
+  startQueryExecution: vi.fn(() =>
+    Promise.resolve({
+      jobId: 'query-job-1',
+      correlationId: 'query-corr-1',
+      tabId: 'tab-1',
+      connectionId: databaseSession.connectionId,
+      startedAt: '2026-03-10T16:45:00.000Z',
+    }),
+  ),
+  cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  subscribeToQueryExecutionEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToSchemaRefreshEvent: vi.fn(
     (_eventName: string, handler: (payload: typeof schemaRefreshProgressFixture) => void) => {
       schemaEventHandler = handler;
@@ -115,7 +126,7 @@ describe('schema browser', () => {
     expect(await screen.findByText('users')).toBeInTheDocument();
   });
 
-  it('shows cached search matches in the details panel', async () => {
+  it('shows cached search matches in diagnostics after selection', async () => {
     render(<App />);
 
     const searchInput = await screen.findByPlaceholderText(/Search cached schema/i);
@@ -126,8 +137,9 @@ describe('schema browser', () => {
     fireEvent.click(emailResult);
 
     await waitFor(() => {
-      expect(screen.getByText('Data type')).toBeInTheDocument();
-      expect(screen.getByText('text')).toBeInTheDocument();
+      expect(screen.getByText('Selected schema node')).toBeInTheDocument();
+      expect(screen.getByText('Kind: column')).toBeInTheDocument();
+      expect(screen.getByText('Path: column/public/users/email')).toBeInTheDocument();
     });
   });
 

@@ -1,6 +1,11 @@
 import { Database, PanelBottom, PanelLeftClose, ShieldCheck, TerminalSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { AppBootstrap, AppError, BackgroundJobProgressEvent } from '../../lib/contracts';
+import type {
+  AppBootstrap,
+  AppError,
+  BackgroundJobProgressEvent,
+  QueryExecutionProgressEvent,
+} from '../../lib/contracts';
 
 type AppShellProps = {
   bootstrap: AppBootstrap | null;
@@ -11,6 +16,7 @@ type AppShellProps = {
   error: AppError | null;
   isLoading: boolean;
   recentEvents: BackgroundJobProgressEvent[];
+  recentQueryEvents: QueryExecutionProgressEvent[];
   statusHeadline: string;
 };
 
@@ -23,6 +29,7 @@ export function AppShell({
   error,
   isLoading,
   recentEvents,
+  recentQueryEvents,
   statusHeadline,
 }: AppShellProps) {
   const statusTone = error ? 'text-[var(--danger-ink)]' : 'text-[var(--accent-strong)]';
@@ -34,11 +41,11 @@ export function AppShell({
           <div className="space-y-4">
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.28em] text-[var(--ink-3)]">
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[var(--accent-strong)]" />
-              Sparow / Phase 3 Schema Browser
+              Sparow / Phase 4 Query Workspace
             </div>
             <div className="max-w-3xl">
               <h1 className="font-display text-4xl leading-none text-[var(--ink-1)] sm:text-5xl">
-                Native-feeling PostgreSQL browsing with explicit cached metadata.
+                Native-feeling SQL work with explicit PostgreSQL state.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-2)]">{statusHeadline}</p>
             </div>
@@ -46,6 +53,7 @@ export function AppShell({
               <span className="border border-[var(--line-soft)] px-3 py-2">Typed IPC only</span>
               <span className="border border-[var(--line-soft)] px-3 py-2">SQLite-backed schema cache</span>
               <span className="border border-[var(--line-soft)] px-3 py-2">One active session</span>
+              <span className="border border-[var(--line-soft)] px-3 py-2">Monaco query workspace</span>
             </div>
           </div>
 
@@ -69,7 +77,7 @@ export function AppShell({
               </div>
               <div>
                 <dt className="text-[var(--ink-3)]">Recent events</dt>
-                <dd>{recentEvents.length}</dd>
+                <dd>{recentEvents.length + recentQueryEvents.length}</dd>
               </div>
             </dl>
           </section>
@@ -101,13 +109,13 @@ export function AppShell({
               </div>
               <div className="flex flex-wrap gap-2 px-4 py-4">
                 <div className="border border-[var(--line-strong)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--ink-1)]">
-                  Connection editor
+                  Monaco editor
                 </div>
                 <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Schema browser
+                  Per-tab targets
                 </div>
                 <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Cached refresh state
+                  Query cancellation
                 </div>
               </div>
             </div>
@@ -122,10 +130,10 @@ export function AppShell({
                 <div className="flex items-center gap-2">
                   <PanelBottom className="h-4 w-4 text-[var(--accent-strong)]" />
                   <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">
-                    Schema details
+                    Query results
                   </h2>
                 </div>
-                <span className="text-xs text-[var(--ink-3)]">Session, refresh, and selected node state</span>
+                <span className="text-xs text-[var(--ink-3)]">Execution status, result preview, and command summaries</span>
               </div>
               {connectionResults}
             </section>
@@ -143,7 +151,7 @@ export function AppShell({
           <div className="flex flex-wrap gap-3">
             <span>Selection persists</span>
             <span>Secrets externalized</span>
-            <span>Rust owns sessions and schema cache</span>
+            <span>Rust owns sessions, schema cache, and query execution</span>
           </div>
         </footer>
       </div>

@@ -19,12 +19,14 @@ use super::secret_store::{SecretStore, CONNECTION_SECRET_SERVICE};
 
 struct ActiveSession {
     snapshot: DatabaseSessionSnapshot,
+    ssl_mode: crate::foundation::SslMode,
     pool: Option<Pool>,
 }
 
 #[derive(Clone)]
 pub struct ActiveSessionRuntime {
     pub snapshot: DatabaseSessionSnapshot,
+    pub ssl_mode: crate::foundation::SslMode,
     pub pool: Option<Pool>,
 }
 
@@ -284,6 +286,7 @@ impl ConnectionService {
         let mut guard = self.active_session.lock().await;
         *guard = Some(ActiveSession {
             snapshot: snapshot.clone(),
+            ssl_mode: record.ssl_mode,
             pool: established.pool,
         });
 
@@ -398,6 +401,7 @@ impl ConnectionService {
 
         Ok(ActiveSessionRuntime {
             snapshot: session.snapshot.clone(),
+            ssl_mode: session.ssl_mode,
             pool: session.pool.clone(),
         })
     }
@@ -407,6 +411,7 @@ impl ConnectionService {
         let mut guard = self.active_session.lock().await;
         *guard = Some(ActiveSession {
             snapshot: runtime.snapshot,
+            ssl_mode: runtime.ssl_mode,
             pool: runtime.pool,
         });
     }

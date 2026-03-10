@@ -6,6 +6,7 @@
   "featureFlags": [
     "phase2-connections",
     "phase3-schema-browser",
+    "phase4-query-workspace",
     "diagnostics-surface",
     "mock-background-job"
   ],

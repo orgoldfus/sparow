@@ -1,0 +1,7 @@
+{
+  "jobId": "query-job-2026",
+  "correlationId": "query-corr-2026",
+  "tabId": "tab-1",
+  "connectionId": "conn-local-postgres",
+  "startedAt": "2026-03-10T16:45:00.000Z"
+}
