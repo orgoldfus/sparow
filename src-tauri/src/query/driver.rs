@@ -126,7 +126,7 @@ fn count_row_messages(messages: &[SimpleQueryMessage]) -> usize {
 
 fn extract_rows_affected(messages: &[SimpleQueryMessage]) -> Option<u64> {
     messages.iter().rev().find_map(|message| match message {
-        SimpleQueryMessage::CommandComplete(rows) => Some(*rows as u64),
+        SimpleQueryMessage::CommandComplete(rows) => Some(*rows),
         _ => None,
     })
 }

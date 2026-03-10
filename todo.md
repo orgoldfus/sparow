@@ -14,6 +14,8 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - [completed] Run final Phase 4 verification and record results
 
 ## Blockers And Decisions
+- 2026-03-10: Completed the Rust formatter + `cargo clippy` repair pass. Clippy is green again after removing a redundant `u64` cast in the query driver.
+- 2026-03-10: Started a Rust formatter + `cargo clippy` repair pass after the user reported a failing Clippy run. Formatter output and each verification result will be logged here before the pass ends.
 - 2026-03-10: Completed the CodeRabbit autofix pass on `phase-4`; the fixes covered Rust query cancellation/event rollback, batched query event application, Monaco shortcut freshness, accessibility/test hardening, and the formatter findings called out on the PR.
 - 2026-03-10: Started a CodeRabbit autofix pass on `phase-4`; unresolved review threads and follow-up verification results will be logged in this file before the run ends.
 - 2026-03-10: `README.md` was refreshed after Phase 4 completion so the repo landing page now matches the implemented SQL workspace, query execution model, debugging helpers, and verification flow.
@@ -27,6 +29,14 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
 
 ## Verification
+- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting completed cleanly at the start of the Clippy repair pass.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` ❌
+  - Clippy failed on `src-tauri/src/query/driver.rs` because `extract_rows_affected` was casting `u64` to `u64`. The redundant cast has been removed and Clippy must be rerun.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting still passed after the Clippy fix; no additional formatter changes were needed.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` ✅
+  - Clippy passed cleanly after removing the redundant cast in `extract_rows_affected`.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
   - Rust formatting passed after the autofix patch and rewrote the flagged module/export blocks to repository style.
 - `cargo test --manifest-path src-tauri/Cargo.toml query::service` ✅
