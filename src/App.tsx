@@ -1,7 +1,18 @@
-import { useDeferredValue, useEffect, useEffectEvent, useState } from 'react';
+import { useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import { Bug, Dot, PencilLine } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './components/ui/dialog';
+import { TooltipProvider } from './components/ui/tooltip';
 import { DiagnosticsPanel } from './features/diagnostics/DiagnosticsPanel';
-import { ConnectionEditor } from './features/connections/ConnectionWorkspace';
+import { ConnectionEditor, ConnectionsRail } from './features/connections/ConnectionWorkspace';
 import { useConnectionWorkspace } from './features/connections/useConnectionWorkspace';
 import { QueryResultsPanel, QueryWorkspace } from './features/query/QueryWorkspace';
 import { useQueryWorkspace } from './features/query/useQueryWorkspace';
@@ -33,6 +44,10 @@ export default function App() {
   const [recentEvents, setRecentEvents] = useState<BackgroundJobProgressEvent[]>([]);
   const [schemaEvents, setSchemaEvents] = useState<SchemaRefreshProgressEvent[]>([]);
   const [queryEvents, setQueryEvents] = useState<QueryExecutionProgressEvent[]>([]);
+  const [isConnectionDialogOpen, setIsConnectionDialogOpen] = useState(false);
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
+  const [isDiagnosticsDialogOpen, setIsDiagnosticsDialogOpen] = useState(false);
+  const [activeResultsTab, setActiveResultsTab] = useState<'messages' | 'results'>('results');
 
   const deferredRecentEvents = useDeferredValue(recentEvents);
   const deferredSchemaEvents = useDeferredValue(schemaEvents);
@@ -181,84 +196,185 @@ export default function App() {
     };
   }, []);
 
-  const statusHeadline = error
-    ? 'The connection workspace loaded with a degraded service. Review diagnostics before trusting the current state.'
-    : workspace.activeSession
-      ? 'One PostgreSQL session is active in Rust. Phase 4 adds a Monaco-based SQL workspace, per-tab targeting, cancellation, and capped result previews without giving up the explicit schema explorer.'
-      : 'Connect a saved PostgreSQL target to unlock schema browsing, Monaco editing, and query execution inside the same native-feeling shell.';
+  const healthTone = error ? 'danger' : workspace.activeSession ? 'success' : 'warning';
+  const latestStatusText = useMemo(() => {
+    if (error) {
+      return error.message;
+    }
+    if (queryWorkspace.activeTab?.execution.lastError) {
+      return queryWorkspace.activeTab.execution.lastError.message;
+    }
+    if (workspace.activeSession) {
+      return `Connected to ${workspace.activeSession.name}.`;
+    }
+    return 'No active database session.';
+  }, [error, queryWorkspace.activeTab?.execution.lastError, workspace.activeSession]);
+
+  function openNewConnectionDialog() {
+    workspace.createConnection();
+    setEditingConnectionId(null);
+    setIsConnectionDialogOpen(true);
+  }
+
+  function openEditConnectionDialog(connectionId?: string | null) {
+    const nextConnectionId = connectionId ?? workspace.selectedConnectionId;
+    if (!nextConnectionId) {
+      return;
+    }
+
+    workspace.selectConnection(nextConnectionId);
+    setEditingConnectionId(nextConnectionId);
+    setIsConnectionDialogOpen(true);
+  }
 
   return (
     <ErrorBoundary>
-      <AppShell
-        bootstrap={bootstrap}
-        connectionEditor={
-          <QueryWorkspace
-            activeSession={workspace.activeSession}
-            connections={workspace.connections}
-            onError={(caught) => {
-              setError(logger.asAppError(caught, 'query_workspace'));
-            }}
-            workspace={queryWorkspace}
-          />
-        }
-        connectionResults={
-          <QueryResultsPanel
-            activeSession={workspace.activeSession}
-            result={queryWorkspace.activeTab?.execution.lastResult ?? null}
-            tab={queryWorkspace.activeTab}
-          />
-        }
-        connectionsRail={
-          <SchemaSidebar
-            activeSession={workspace.activeSession}
-            connections={workspace.connections}
-            onCreateConnection={workspace.createConnection}
-            onSelectConnection={workspace.selectConnection}
-            schema={schemaBrowser}
-            selectedConnectionId={workspace.selectedConnectionId}
-          />
-        }
-        diagnosticsPanel={
-          <div className="grid h-full min-h-[300px] grid-rows-[minmax(0,1fr)_420px]">
-            <ConnectionEditor
-              canConnect={workspace.canConnect}
-              canDelete={workspace.canDelete}
-              canDisconnect={workspace.canDisconnect}
-              canSave={workspace.canSave}
-              canTest={workspace.canTest}
-              draft={workspace.draft}
-              draftErrors={workspace.draftErrors}
-              hasStoredSecret={workspace.hasStoredSecret}
-              isDirty={workspace.isDirty}
-              latestError={error ?? bootstrap?.diagnostics.lastError ?? null}
-              pending={workspace.pending}
-              replacePassword={workspace.replacePassword}
-              selectedConnectionId={workspace.selectedConnectionId}
-              onConnect={workspace.connectSelectedConnection}
-              onDelete={workspace.deleteSelectedConnection}
-              onDisconnect={workspace.disconnectSelectedConnection}
-              onSave={workspace.saveSelectedConnection}
-              onTest={workspace.testSelectedConnection}
-              onToggleReplacePassword={workspace.setReplacePassword}
-              onUpdateDraft={workspace.updateDraft}
-            />
-            <DiagnosticsPanel
+      <TooltipProvider delayDuration={150}>
+        <AppShell
+          bootstrapEnvironment={bootstrap?.environment ?? null}
+          bootstrapPlatform={bootstrap?.platform ?? null}
+          connectionDialog={
+            <Dialog
+              onOpenChange={(open) => {
+                setIsConnectionDialogOpen(open);
+                if (!open) {
+                  setEditingConnectionId(null);
+                }
+              }}
+              open={isConnectionDialogOpen}
+            >
+              <DialogContent className="p-0" showClose>
+                <DialogHeader className="sr-only">
+                  <DialogTitle>{editingConnectionId ? 'Edit connection' : 'New connection'}</DialogTitle>
+                  <DialogDescription>Connection metadata, security, and transport settings.</DialogDescription>
+                </DialogHeader>
+                <ConnectionEditor
+                  canConnect={workspace.canConnect}
+                  canDelete={workspace.canDelete}
+                  canDisconnect={workspace.canDisconnect}
+                  canSave={workspace.canSave}
+                  canTest={workspace.canTest}
+                  draft={workspace.draft}
+                  draftErrors={workspace.draftErrors}
+                  hasStoredSecret={workspace.hasStoredSecret}
+                  isDirty={workspace.isDirty}
+                  latestError={error ?? bootstrap?.diagnostics.lastError ?? null}
+                  pending={workspace.pending}
+                  replacePassword={workspace.replacePassword}
+                  selectedConnectionId={editingConnectionId}
+                  onConnect={workspace.connectSelectedConnection}
+                  onDelete={workspace.deleteSelectedConnection}
+                  onDisconnect={workspace.disconnectSelectedConnection}
+                  onSave={workspace.saveSelectedConnection}
+                  onTest={workspace.testSelectedConnection}
+                  onToggleReplacePassword={workspace.setReplacePassword}
+                  onUpdateDraft={workspace.updateDraft}
+                />
+              </DialogContent>
+            </Dialog>
+          }
+          diagnosticsDialog={
+            <Dialog onOpenChange={setIsDiagnosticsDialogOpen} open={isDiagnosticsDialogOpen}>
+              <DialogContent className="p-0" showClose>
+                <DialogHeader className="sr-only">
+                  <DialogTitle>Diagnostics</DialogTitle>
+                  <DialogDescription>Background jobs and runtime metadata.</DialogDescription>
+                </DialogHeader>
+                <DiagnosticsPanel
+                  activeSession={workspace.activeSession}
+                  bootstrap={bootstrap}
+                  lastError={error ?? bootstrap?.diagnostics.lastError ?? null}
+                  recentEvents={deferredRecentEvents}
+                  recentQueryEvents={deferredQueryEvents}
+                  recentSchemaEvents={deferredSchemaEvents}
+                  selectedSchemaNode={schemaBrowser.selectedNode}
+                />
+              </DialogContent>
+            </Dialog>
+          }
+          editor={
+            <QueryWorkspace
               activeSession={workspace.activeSession}
-              bootstrap={bootstrap}
-              lastError={error ?? bootstrap?.diagnostics.lastError ?? null}
-              recentEvents={deferredRecentEvents}
-              recentQueryEvents={deferredQueryEvents}
-              recentSchemaEvents={deferredSchemaEvents}
-              selectedSchemaNode={schemaBrowser.selectedNode}
+              connections={workspace.connections}
+              onError={(caught) => {
+                setError(logger.asAppError(caught, 'query_workspace'));
+              }}
+              workspace={queryWorkspace}
             />
-          </div>
-        }
-        error={error}
-        isLoading={loading}
-        recentEvents={deferredRecentEvents}
-        recentQueryEvents={deferredQueryEvents}
-        statusHeadline={statusHeadline}
-      />
+          }
+          editorTabs={null}
+          isLoading={loading}
+          leftSidebar={
+            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+              <ConnectionsRail
+                activeSession={workspace.activeSession}
+                canConnect={workspace.canConnect}
+                canDisconnect={workspace.canDisconnect}
+                connections={workspace.connections}
+                onConnectSelected={workspace.connectSelectedConnection}
+                onCreateConnection={openNewConnectionDialog}
+                onDisconnectSelected={workspace.disconnectSelectedConnection}
+                onEditSelected={() => {
+                  openEditConnectionDialog();
+                }}
+                onSelectConnection={workspace.selectConnection}
+                pending={workspace.pending}
+                selectedConnectionId={workspace.selectedConnectionId}
+              />
+              <SchemaSidebar activeSession={workspace.activeSession} schema={schemaBrowser} />
+            </div>
+          }
+          results={
+            <QueryResultsPanel
+              activeSession={workspace.activeSession}
+              activeView={activeResultsTab}
+              onActiveViewChange={setActiveResultsTab}
+              result={queryWorkspace.activeTab?.execution.lastResult ?? null}
+              tab={queryWorkspace.activeTab}
+            />
+          }
+          statusBar={
+            <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
+                <Badge variant={healthTone}>{error ? 'Degraded' : workspace.activeSession ? 'Ready' : 'Idle'}</Badge>
+                <span>{workspace.activeSession?.name ?? 'No active session'}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Dot className="h-4 w-4" />
+                  {queryWorkspace.activeTab?.execution.status ?? 'idle'}
+                </span>
+                <span>{queryWorkspace.activeTab?.title ?? 'No tab selected'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="hidden max-w-[560px] truncate text-sm text-[var(--text-secondary)] lg:block">
+                  {latestStatusText}
+                </div>
+                <Button
+                  onClick={() => {
+                    setIsDiagnosticsDialogOpen(true);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  <Bug className="h-3.5 w-3.5" />
+                  Diagnostics
+                </Button>
+                <Button
+                  onClick={() => {
+                    openEditConnectionDialog();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <PencilLine className="h-3.5 w-3.5" />
+                  Edit connection
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      </TooltipProvider>
     </ErrorBoundary>
   );
 }

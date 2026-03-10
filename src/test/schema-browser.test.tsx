@@ -103,7 +103,9 @@ describe('schema browser', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/Connect a saved PostgreSQL target to browse schemas/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Connect a saved PostgreSQL target to browse cached schema and relation metadata/i),
+    ).toBeInTheDocument();
   });
 
   it('expands the schema tree with keyboard navigation', async () => {
@@ -129,15 +131,16 @@ describe('schema browser', () => {
   it('shows cached search matches in diagnostics after selection', async () => {
     render(<App />);
 
-    const searchInput = await screen.findByPlaceholderText(/Search cached schema/i);
+    const searchInput = await screen.findByPlaceholderText(/Search tables, views, columns/i);
     expect(searchInput).toHaveAttribute('aria-label', 'Search schema cache');
     fireEvent.change(searchInput, { target: { value: 'user' } });
 
     const emailResult = await screen.findByText('email');
     fireEvent.click(emailResult);
+    fireEvent.click(screen.getByRole('button', { name: /diagnostics/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Selected schema node')).toBeInTheDocument();
+      expect(screen.getByText('Runtime visibility')).toBeInTheDocument();
       expect(screen.getByText('Kind: column')).toBeInTheDocument();
       expect(screen.getByText('Path: column/public/users/email')).toBeInTheDocument();
     });
@@ -152,6 +155,8 @@ describe('schema browser', () => {
       await Promise.resolve();
       schemaEventHandler?.(schemaRefreshProgressFixture);
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /diagnostics/i }));
 
     await waitFor(() => {
       expect(screen.getAllByText(/Refreshed schema scope public/i).length).toBeGreaterThan(0);
@@ -169,6 +174,8 @@ describe('schema browser', () => {
     });
 
     render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /diagnostics/i }));
 
     expect(await screen.findByText('SSL: unknown')).toBeInTheDocument();
   });

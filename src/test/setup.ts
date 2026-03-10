@@ -19,10 +19,15 @@ vi.mock('@monaco-editor/react', () => ({
       addCommand: (_binding: number, command: () => void) => number;
       getModel: () => { getValue: () => string };
       getSelection: () => null;
+      updateOptions: (_options: unknown) => void;
     } | null>(null);
     const monacoRef = useRef<{
       KeyCode: { Enter: number };
       KeyMod: { CtrlCmd: number };
+      editor: {
+        defineTheme: (_name: string, _theme: unknown) => void;
+        setTheme: (_name: string) => void;
+      };
       languages: {
         registerCompletionItemProvider: () => { dispose: () => void };
       };
@@ -38,6 +43,7 @@ vi.mock('@monaco-editor/react', () => ({
         },
         getModel: () => ({ getValue: () => valueRef.current }),
         getSelection: () => null,
+        updateOptions: () => {},
       };
     }
 
@@ -45,6 +51,10 @@ vi.mock('@monaco-editor/react', () => ({
       monacoRef.current = {
         KeyCode: { Enter: 3 },
         KeyMod: { CtrlCmd: 2048 },
+        editor: {
+          defineTheme: () => {},
+          setTheme: () => {},
+        },
         languages: {
           registerCompletionItemProvider: () => ({
             dispose() {},
