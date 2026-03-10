@@ -151,6 +151,11 @@ function Harness({
       <div data-testid="active-tab-dirty">{workspace.activeTab?.dirty ? 'dirty' : 'clean'}</div>
       <div data-testid="active-run-disabled">{workspace.runDisabledReason ?? 'enabled'}</div>
       <div data-testid="active-summary">{workspace.activeTab?.lastExecutionSummary ?? 'none'}</div>
+      {workspace.tabs.map((tab) => (
+        <div data-testid={`tab-status-${tab.id}`} key={tab.id}>
+          {tab.execution.status}
+        </div>
+      ))}
     </div>
   );
 }
@@ -250,7 +255,63 @@ describe('useQueryWorkspace', () => {
       />,
     );
 
+    const completedTabId = screen.getByTestId('active-tab-id').textContent;
+    const errorCallsBeforeClose = onError.mock.calls.length;
+
     fireEvent.click(screen.getByText('close'));
-    expect(screen.getByTestId('tab-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('active-tab-id')).not.toHaveTextContent(completedTabId ?? '');
+    expect(onError).toHaveBeenCalledTimes(errorCallsBeforeClose);
+  });
+
+  it('applies multiple queued query events from a single batched update', async () => {
+    const onError = vi.fn();
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+
+    const firstTabId = screen.getByTestId('active-tab-id').textContent ?? 'none';
+    fireEvent.click(screen.getByText('new-tab'));
+    const secondTabId = screen.getByTestId('active-tab-id').textContent ?? 'none';
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-2',
+            correlationId: 'query-corr-2',
+            tabId: secondTabId,
+            connectionId: 'conn-local-postgres',
+            status: 'running',
+            elapsedMs: 5,
+            message: 'Second tab running.',
+            startedAt: '2026-03-10T16:45:00.005Z',
+            finishedAt: null,
+            lastError: null,
+            result: null,
+          },
+          {
+            jobId: 'query-job-1',
+            correlationId: 'query-corr-1',
+            tabId: firstTabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 12,
+            message: 'First tab completed.',
+            startedAt: '2026-03-10T16:45:00.000Z',
+            finishedAt: '2026-03-10T16:45:00.012Z',
+            lastError: null,
+            result: {
+              kind: 'command',
+              commandTag: 'SELECT',
+              rowsAffected: 1,
+            },
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`tab-status-${firstTabId}`)).toHaveTextContent('completed');
+      expect(screen.getByTestId(`tab-status-${secondTabId}`)).toHaveTextContent('running');
+    });
   });
 });

@@ -396,7 +396,11 @@ pub struct QueryResultColumn {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum QueryExecutionResult {
     #[serde(rename = "rows")]
     Rows {
@@ -854,9 +858,8 @@ mod tests {
 
     #[test]
     fn deserializes_query_execution_request_fixture() {
-        let fixture: QueryExecutionRequest =
-            serde_json::from_str(QUERY_EXECUTION_REQUEST_FIXTURE)
-                .expect("query execution request fixture should deserialize");
+        let fixture: QueryExecutionRequest = serde_json::from_str(QUERY_EXECUTION_REQUEST_FIXTURE)
+            .expect("query execution request fixture should deserialize");
         assert_eq!(fixture.tab_id, "tab-1");
     }
 

@@ -2,13 +2,12 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::foundation::{
     AppBootstrap, AppError, AppState, BackgroundJobAccepted, BackgroundJobProgressEvent,
-    BackgroundJobRequest, CancelJobResult, ConnectionDetails, ConnectionSummary,
-    ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult, DisconnectSessionResult,
-    CancelQueryExecutionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
+    BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult, ConnectionDetails,
+    ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
+    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
     QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted,
-    SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest, BACKGROUND_JOB_EVENT,
-    QUERY_EXECUTION_EVENT,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest,
+    SchemaSearchResult, TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT,
 };
 
 #[tauri::command]

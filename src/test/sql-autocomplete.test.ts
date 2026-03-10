@@ -35,9 +35,14 @@ describe('sql autocomplete helpers', () => {
   it('merges SQL keywords and schema nodes without duplicates', () => {
     const suggestions = mergeSqlAutocompleteSuggestions('se', schemaNodes);
     expect(suggestions.find((entry) => entry.label === 'SELECT')).toBeDefined();
+    expect(suggestions.filter((entry) => entry.label === 'SELECT')).toHaveLength(1);
 
-    const schemaSuggestions = mergeSqlAutocompleteSuggestions('us', schemaNodes);
-    expect(schemaSuggestions.find((entry) => entry.label === 'users')).toBeDefined();
+    const duplicateNode = schemaNodes[0]!;
+    const schemaSuggestions = mergeSqlAutocompleteSuggestions('us', [
+      ...schemaNodes,
+      { ...duplicateNode, id: 'table-public-users-duplicate' },
+    ]);
+    expect(schemaSuggestions.filter((entry) => entry.label === 'users')).toHaveLength(1);
     expect(schemaSuggestions.find((entry) => entry.label === 'SELECT')).toBeUndefined();
   });
 
@@ -59,51 +64,59 @@ describe('sql autocomplete helpers', () => {
 
   it('suppresses stale schema responses and keeps the latest request authoritative', async () => {
     vi.useFakeTimers();
-    const searchSchema = vi
-      .fn()
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            setTimeout(
-              () =>
-                resolve({
-                  connectionId: 'conn-local-postgres',
-                  query: 'us',
-                  nodes: schemaNodes,
-                }),
-              20,
-            );
-          }),
-      )
-      .mockResolvedValueOnce({
-        connectionId: 'conn-local-postgres',
-        query: 'use',
-        nodes: [schemaNodes[0]],
+    let source: ReturnType<typeof createSqlAutocompleteSource> | undefined;
+
+    try {
+      const searchSchema = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(
+                () =>
+                  resolve({
+                    connectionId: 'conn-local-postgres',
+                    query: 'us',
+                    nodes: schemaNodes,
+                  }),
+                20,
+              );
+            }),
+        )
+        .mockResolvedValueOnce({
+          connectionId: 'conn-local-postgres',
+          query: 'use',
+          nodes: [schemaNodes[0]],
+        });
+
+      source = createSqlAutocompleteSource({
+        debounceMs: 10,
+        searchSchema,
       });
 
-    const source = createSqlAutocompleteSource({
-      debounceMs: 10,
-      searchSchema,
-    });
+      const firstRequest = source.resolve({
+        activeConnectionId: 'conn-local-postgres',
+        connectionId: 'conn-local-postgres',
+        query: 'us',
+      });
+      const secondRequest = source.resolve({
+        activeConnectionId: 'conn-local-postgres',
+        connectionId: 'conn-local-postgres',
+        query: 'use',
+      });
 
-    const firstRequest = source.resolve({
-      activeConnectionId: 'conn-local-postgres',
-      connectionId: 'conn-local-postgres',
-      query: 'us',
-    });
-    const secondRequest = source.resolve({
-      activeConnectionId: 'conn-local-postgres',
-      connectionId: 'conn-local-postgres',
-      query: 'use',
-    });
+      await vi.advanceTimersByTimeAsync(40);
 
-    await vi.advanceTimersByTimeAsync(40);
+      const [firstSuggestions, secondSuggestions] = await Promise.all([
+        firstRequest,
+        secondRequest,
+      ]);
 
-    const [firstSuggestions, secondSuggestions] = await Promise.all([firstRequest, secondRequest]);
-
-    expect(secondSuggestions.find((entry) => entry.label === 'users')).toBeDefined();
-    expect(firstSuggestions.find((entry) => entry.label === 'users')).toBeUndefined();
-    source.dispose();
-    vi.useRealTimers();
+      expect(secondSuggestions.find((entry) => entry.label === 'users')).toBeDefined();
+      expect(firstSuggestions.find((entry) => entry.label === 'users')).toBeUndefined();
+    } finally {
+      source?.dispose();
+      vi.useRealTimers();
+    }
   });
 });

@@ -14,6 +14,8 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - [completed] Run final Phase 4 verification and record results
 
 ## Blockers And Decisions
+- 2026-03-10: Completed the CodeRabbit autofix pass on `phase-4`; the fixes covered Rust query cancellation/event rollback, batched query event application, Monaco shortcut freshness, accessibility/test hardening, and the formatter findings called out on the PR.
+- 2026-03-10: Started a CodeRabbit autofix pass on `phase-4`; unresolved review threads and follow-up verification results will be logged in this file before the run ends.
 - 2026-03-10: `README.md` was refreshed after Phase 4 completion so the repo landing page now matches the implemented SQL workspace, query execution model, debugging helpers, and verification flow.
 - 2026-03-10: Phase 4 keeps the current shell grid and replaces the placeholder workspace content instead of starting the broader shell redesign.
 - 2026-03-10: One active backend session remains the rule in Phase 4. Tabs store a target connection id, but Run is enabled only when the tab target matches the active saved connection.
@@ -25,6 +27,16 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
 
 ## Verification
+- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting passed after the autofix patch and rewrote the flagged module/export blocks to repository style.
+- `cargo test --manifest-path src-tauri/Cargo.toml query::service` ✅
+  - The focused query service suite passed with 8 tests green and 2 PostgreSQL smoke tests still ignored as expected.
+- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/sql-autocomplete.test.ts` ✅
+  - The targeted frontend regression suite passed with 9 tests green, including the new Monaco shortcut and batched query-event coverage.
+- `npm run typecheck` ✅
+  - TypeScript compilation passed after preserving structured `AppError` values through the query workspace.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and full Rust tests all passed after the CodeRabbit autofix run with 66 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests.
 - `fnm use` ✅
   - `Using Node v24.13.0`
 - `npm run verify` ✅

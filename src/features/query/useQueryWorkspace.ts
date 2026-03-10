@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AppError,
   ConnectionSummary,
@@ -76,6 +76,7 @@ export function useQueryWorkspace({
 }: UseQueryWorkspaceArgs): QueryWorkspaceState {
   const [tabs, setTabs] = useState<QueryTabState[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const seenQueryEventsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (tabs.length > 0) {
@@ -92,17 +93,41 @@ export function useQueryWorkspace({
   }, [activeSession?.connectionId, connections, selectedConnectionId, tabs.length]);
 
   useEffect(() => {
-    const latestEvent = queryEvents[0];
-    if (!latestEvent) {
+    const unseenEvents = queryEvents
+      .toReversed()
+      .filter((event) => {
+        const eventKey = [
+          event.jobId,
+          event.status,
+          event.startedAt,
+          event.finishedAt ?? '',
+          event.elapsedMs,
+        ].join(':');
+
+        if (seenQueryEventsRef.current.has(eventKey)) {
+          return false;
+        }
+
+        seenQueryEventsRef.current.add(eventKey);
+        return true;
+      });
+
+    if (unseenEvents.length === 0) {
       return;
     }
 
     startTransition(() => {
-      setTabs((currentTabs) =>
-        currentTabs.map((tab) =>
-          tab.id === latestEvent.tabId ? applyQueryEvent(tab, latestEvent) : tab,
-        ),
-      );
+      setTabs((currentTabs) => {
+        let nextTabs = currentTabs;
+
+        for (const event of unseenEvents) {
+          nextTabs = nextTabs.map((tab) =>
+            tab.id === event.tabId ? applyQueryEvent(tab, event) : tab,
+          );
+        }
+
+        return nextTabs;
+      });
     });
   }, [queryEvents]);
 

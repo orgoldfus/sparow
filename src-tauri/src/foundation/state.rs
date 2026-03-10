@@ -13,13 +13,12 @@ use crate::{
 
 use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
-    BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, ConnectionDetails,
-    CancelQueryExecutionResult, ConnectionSummary, ConnectionTestResult,
-    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot,
-    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner,
-    QueryExecutionAccepted, QueryExecutionRequest, RefreshSchemaScopeRequest,
-    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
-    TestConnectionRequest,
+    BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult,
+    ConnectionDetails, ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
+    DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
+    ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
+    QueryExecutionRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted,
+    SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]

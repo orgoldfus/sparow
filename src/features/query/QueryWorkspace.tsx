@@ -3,6 +3,7 @@ import { Play, Plus, Square, X } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
 import { useEffect, useRef } from 'react';
 import type {
+  AppError,
   ConnectionSummary,
   DatabaseSessionSnapshot,
   QueryExecutionResult,
@@ -15,7 +16,7 @@ import type { QueryTabState, QueryWorkspaceState } from './useQueryWorkspace';
 type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
   connections: ConnectionSummary[];
-  onError: (error: Error) => void;
+  onError: (error: AppError | Error) => void;
   workspace: QueryWorkspaceState;
 };
 
@@ -34,7 +35,12 @@ export function QueryWorkspace({
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const completionRef = useRef<ReturnType<typeof registerSqlCompletionProvider> | null>(null);
+  const runActiveEditorRef = useRef<() => void>(() => {});
   const activeTab = workspace.activeTab;
+
+  runActiveEditorRef.current = () => {
+    void runActiveEditor();
+  };
 
   useEffect(() => {
     if (!monacoRef.current) {
@@ -46,9 +52,7 @@ export function QueryWorkspace({
       monaco: monacoRef.current,
       getActiveConnectionId: () => activeSession?.connectionId ?? null,
       getConnectionId: () => workspace.activeTab?.targetConnectionId ?? null,
-      onError: (error) => {
-        onError(new Error(error.message));
-      },
+      onError,
     });
 
     return () => {
@@ -65,7 +69,7 @@ export function QueryWorkspace({
     monacoRef.current = monacoInstance;
 
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, () => {
-      void runActiveEditor();
+      runActiveEditorRef.current();
     });
   };
 
@@ -175,6 +179,7 @@ export function QueryWorkspace({
                   </p>
                 </button>
                 <button
+                  aria-label={`Close ${tab.title || tab.id}`}
                   className="text-[var(--ink-3)] transition hover:text-[var(--ink-1)]"
                   onClick={() => {
                     workspace.closeTab(tab.id);
@@ -305,8 +310,11 @@ function ResultPreview({ result }: { result: QueryExecutionResult }) {
         <table className="min-w-full border-collapse text-left text-sm">
           <thead className="bg-[var(--surface-1)] text-[var(--ink-3)]">
             <tr>
-              {result.columns.map((column) => (
-                <th className="border-b border-[var(--line-soft)] px-3 py-2 font-medium" key={column.name}>
+              {result.columns.map((column, index) => (
+                <th
+                  className="border-b border-[var(--line-soft)] px-3 py-2 font-medium"
+                  key={`${column.name}-${index}`}
+                >
                   {column.name}
                 </th>
               ))}

@@ -106,24 +106,27 @@ impl QueryService {
             connection_id: request.connection_id.clone(),
             started_at: started_at.clone(),
         };
+        let queued_event = QueryExecutionProgressEvent {
+            job_id: accepted.job_id.clone(),
+            correlation_id: accepted.correlation_id.clone(),
+            tab_id: accepted.tab_id.clone(),
+            connection_id: accepted.connection_id.clone(),
+            status: QueryExecutionStatus::Queued,
+            elapsed_ms: 0,
+            message: "Accepted query execution request.".to_string(),
+            started_at: accepted.started_at.clone(),
+            finished_at: None,
+            last_error: None,
+            result: None,
+        };
 
         if let Some(app) = app.as_ref() {
-            emit_query_execution_event(
-                app,
-                &QueryExecutionProgressEvent {
-                    job_id: accepted.job_id.clone(),
-                    correlation_id: accepted.correlation_id.clone(),
-                    tab_id: accepted.tab_id.clone(),
-                    connection_id: accepted.connection_id.clone(),
-                    status: QueryExecutionStatus::Queued,
-                    elapsed_ms: 0,
-                    message: "Accepted query execution request.".to_string(),
-                    started_at: accepted.started_at.clone(),
-                    finished_at: None,
-                    last_error: None,
-                    result: None,
-                },
-            )?;
+            if let Err(error) = emit_query_execution_event(app, &queued_event) {
+                self.jobs.remove(&job_id).await;
+                clear_tab_job(&self.tab_jobs, &request.tab_id, &job_id).await;
+                self.diagnostics.record_error(error.clone());
+                return Err(error);
+            }
         }
 
         self.record_query_history(&request).await;
@@ -249,18 +252,17 @@ impl QueryService {
         let sql = request.sql.clone();
         let connection_id = request.connection_id.clone();
 
-        if let Err(error) = task::spawn_blocking(move || {
-            repository.record_history_entry(sql, Some(connection_id))
-        })
-        .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_history_join_failed",
-                "Failed to join query-history persistence.",
-                Some(error.to_string()),
-            )
-        })
-        .and_then(|result| result)
+        if let Err(error) =
+            task::spawn_blocking(move || repository.record_history_entry(sql, Some(connection_id)))
+                .await
+                .map_err(|error| {
+                    AppError::internal(
+                        "query_history_join_failed",
+                        "Failed to join query-history persistence.",
+                        Some(error.to_string()),
+                    )
+                })
+                .and_then(|result| result)
         {
             self.diagnostics.record_error(error.clone());
             error!(?error, "failed to record query history");
@@ -308,8 +310,8 @@ mod tests {
         connections::{ActiveSessionRuntime, ConnectionService, MemorySecretStore},
         foundation::{
             AppError, ConnectionSessionStatus, DatabaseEngine, DatabaseSessionSnapshot,
-            DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
-            QueryExecutionResult, QueryResultColumn, SslMode,
+            DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest, QueryExecutionResult,
+            QueryResultColumn, SslMode,
         },
         persistence::Repository,
     };
@@ -422,9 +424,13 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_empty_sql() {
-        let (service, _, connections) =
-            test_service("rejects-empty-sql.sqlite3", Arc::new(FakeQueryDriver::default()));
-        connections.set_test_active_session(test_session("conn-1")).await;
+        let (service, _, connections) = test_service(
+            "rejects-empty-sql.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         let error = service
             .start_query(None, test_request("tab-1", "conn-1", "   "))
@@ -440,7 +446,9 @@ mod tests {
             "rejects-multi-selection.sqlite3",
             Arc::new(FakeQueryDriver::default()),
         );
-        connections.set_test_active_session(test_session("conn-1")).await;
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         let error = service
             .start_query(
@@ -458,8 +466,10 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_queries_without_active_session() {
-        let (service, _, _) =
-            test_service("rejects-no-session.sqlite3", Arc::new(FakeQueryDriver::default()));
+        let (service, _, _) = test_service(
+            "rejects-no-session.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
 
         let error = service
             .start_query(None, test_request("tab-1", "conn-1", "select 1"))
@@ -471,9 +481,13 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_target_mismatch() {
-        let (service, _, connections) =
-            test_service("rejects-target-mismatch.sqlite3", Arc::new(FakeQueryDriver::default()));
-        connections.set_test_active_session(test_session("conn-active")).await;
+        let (service, _, connections) = test_service(
+            "rejects-target-mismatch.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+        connections
+            .set_test_active_session(test_session("conn-active"))
+            .await;
 
         let error = service
             .start_query(None, test_request("tab-1", "conn-other", "select 1"))
@@ -485,9 +499,13 @@ mod tests {
 
     #[tokio::test]
     async fn records_query_history_after_accepting_a_query() {
-        let (service, repository, connections) =
-            test_service("records-history.sqlite3", Arc::new(FakeQueryDriver::default()));
-        connections.set_test_active_session(test_session("conn-1")).await;
+        let (service, repository, connections) = test_service(
+            "records-history.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         service
             .start_query(None, test_request("tab-1", "conn-1", "select 1"))
@@ -520,7 +538,9 @@ mod tests {
                 fail_with: None,
             }),
         );
-        connections.set_test_active_session(test_session("conn-1")).await;
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         service
             .start_query(None, test_request("tab-1", "conn-1", "select 1"))
@@ -544,7 +564,9 @@ mod tests {
                 fail_with: None,
             }),
         );
-        connections.set_test_active_session(test_session("conn-1")).await;
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         service
             .start_query(None, test_request("tab-1", "conn-1", "select 1"))
@@ -568,7 +590,9 @@ mod tests {
                 fail_with: None,
             }),
         );
-        connections.set_test_active_session(test_session("conn-1")).await;
+        connections
+            .set_test_active_session(test_session("conn-1"))
+            .await;
 
         let accepted = service
             .start_query(None, test_request("tab-1", "conn-1", "select pg_sleep(5)"))
@@ -678,18 +702,17 @@ mod tests {
         .expect("query should clear after cancellation");
     }
 
-    async fn save_real_connection(connections: &ConnectionService) -> crate::foundation::ConnectionDetails {
+    async fn save_real_connection(
+        connections: &ConnectionService,
+    ) -> crate::foundation::ConnectionDetails {
         let host = std::env::var("SPAROW_PG_HOST").expect("SPAROW_PG_HOST is required");
         let port = std::env::var("SPAROW_PG_PORT")
             .ok()
             .and_then(|value| value.parse::<u16>().ok())
             .unwrap_or(5432);
-        let database =
-            std::env::var("SPAROW_PG_DATABASE").expect("SPAROW_PG_DATABASE is required");
-        let username =
-            std::env::var("SPAROW_PG_USERNAME").expect("SPAROW_PG_USERNAME is required");
-        let password =
-            std::env::var("SPAROW_PG_PASSWORD").expect("SPAROW_PG_PASSWORD is required");
+        let database = std::env::var("SPAROW_PG_DATABASE").expect("SPAROW_PG_DATABASE is required");
+        let username = std::env::var("SPAROW_PG_USERNAME").expect("SPAROW_PG_USERNAME is required");
+        let password = std::env::var("SPAROW_PG_PASSWORD").expect("SPAROW_PG_PASSWORD is required");
         let ssl_mode = match std::env::var("SPAROW_PG_SSL_MODE")
             .unwrap_or_else(|_| "prefer".to_string())
             .as_str()

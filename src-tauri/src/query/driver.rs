@@ -60,7 +60,10 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
                     postgres_type: column.type_().name().to_string(),
                 })
                 .collect::<Vec<_>>();
-            let messages = client.simple_query(&sql).await.map_err(normalize_query_error)?;
+            let messages = client
+                .simple_query(&sql)
+                .await
+                .map_err(normalize_query_error)?;
 
             if result_columns.is_empty() {
                 let rows_affected = extract_rows_affected(&messages);
@@ -84,7 +87,6 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
             result = &mut execute => result,
             _ = cancellation.cancelled() => {
                 cancel_active_query(&cancel_token, session.ssl_mode).await?;
-                let _ = execute.await;
                 Err(cancelled_query_error())
             }
         }?;
@@ -180,9 +182,5 @@ fn normalize_query_error(error: tokio_postgres::Error) -> AppError {
 }
 
 pub(crate) fn cancelled_query_error() -> AppError {
-    AppError::retryable(
-        "query_cancelled",
-        "The running query was cancelled.",
-        None,
-    )
+    AppError::retryable("query_cancelled", "The running query was cancelled.", None)
 }
