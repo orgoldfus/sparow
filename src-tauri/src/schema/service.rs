@@ -1,5 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
+use percent_encoding::percent_decode_str;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::task::JoinError;
@@ -537,11 +538,12 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
             })?;
             let mut parts = path.split('/');
             match (parts.next(), parts.next(), parts.next(), parts.next()) {
-                (Some("schema"), Some(schema_name), None, None) if !schema_name.is_empty() => {
+                (Some("schema"), Some(schema_name), None, None) => {
+                    let schema_name = decode_scope_segment(schema_name, path)?;
                     Ok(ParsedScope {
                         kind,
                         path: Some(path.to_string()),
-                        schema_name: Some(schema_name.to_string()),
+                        schema_name: Some(schema_name),
                         relation_name: None,
                     })
                 }
@@ -568,15 +570,15 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
             let mut parts = path.split('/');
             match (parts.next(), parts.next(), parts.next(), parts.next()) {
                 (Some(prefix), Some(schema_name), Some(relation_name), None)
-                    if prefix == expected_prefix
-                        && !schema_name.is_empty()
-                        && !relation_name.is_empty() =>
+                    if prefix == expected_prefix =>
                 {
+                    let schema_name = decode_scope_segment(schema_name, path)?;
+                    let relation_name = decode_scope_segment(relation_name, path)?;
                     Ok(ParsedScope {
                         kind,
                         path: Some(path.to_string()),
-                        schema_name: Some(schema_name.to_string()),
-                        relation_name: Some(relation_name.to_string()),
+                        schema_name: Some(schema_name),
+                        relation_name: Some(relation_name),
                     })
                 }
                 _ => Err(AppError::internal(
@@ -587,6 +589,29 @@ fn parse_scope(kind: SchemaScopeKind, path: Option<&str>) -> Result<ParsedScope,
             }
         }
     }
+}
+
+fn decode_scope_segment(segment: &str, path: &str) -> Result<String, AppError> {
+    let decoded = percent_decode_str(segment)
+        .decode_utf8()
+        .map_err(|_| {
+            AppError::internal(
+                "schema_scope_parse_failed",
+                "Schema scope path was invalid.",
+                Some(path.to_string()),
+            )
+        })?
+        .into_owned();
+
+    if decoded.is_empty() {
+        return Err(AppError::internal(
+            "schema_scope_parse_failed",
+            "Schema scope path was invalid.",
+            Some(path.to_string()),
+        ));
+    }
+
+    Ok(decoded)
 }
 
 fn cache_status_for(cached: &crate::persistence::CachedSchemaScopeRecord) -> SchemaCacheStatus {
@@ -679,8 +704,8 @@ mod tests {
             SchemaNode, SchemaNodeBase, SchemaNodeKind, SslMode,
         },
         schema::introspection::{
-            relation_kind_matches_scope, schema_node_id, RuntimeSchemaIntrospectionDriver,
-            SchemaIntrospectionDriver,
+            encode_scope_segment, relation_kind_matches_scope, schema_node_id,
+            RuntimeSchemaIntrospectionDriver, SchemaIntrospectionDriver,
         },
     };
     use async_trait::async_trait;
@@ -956,6 +981,27 @@ mod tests {
                 .expect_err("relation scope should reject malformed paths");
             assert_eq!(error.code, "schema_scope_parse_failed");
         }
+    }
+
+    #[test]
+    fn round_trips_percent_encoded_scope_segments() {
+        let schema_path = format!("schema/{}", encode_scope_segment("sales/2024"));
+        let schema_scope = parse_scope(SchemaScopeKind::Schema, Some(&schema_path))
+            .expect("schema scope should parse");
+        assert_eq!(schema_scope.schema_name.as_deref(), Some("sales/2024"));
+
+        let relation_path = format!(
+            "table/{}/{}",
+            encode_scope_segment("sales/2024"),
+            encode_scope_segment("orders/daily"),
+        );
+        let relation_scope = parse_scope(SchemaScopeKind::Table, Some(&relation_path))
+            .expect("relation scope should parse");
+        assert_eq!(relation_scope.schema_name.as_deref(), Some("sales/2024"));
+        assert_eq!(
+            relation_scope.relation_name.as_deref(),
+            Some("orders/daily")
+        );
     }
 
     #[test]

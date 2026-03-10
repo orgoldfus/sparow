@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, PoolError, RecyclingMethod, Runtime};
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use tokio_postgres::{config::SslMode as PgSslMode, Config, Row};
@@ -90,7 +90,7 @@ pub(crate) struct EstablishedSession {
 }
 
 #[async_trait]
-pub trait PostgresDriver: Send + Sync {
+pub(crate) trait PostgresDriver: Send + Sync {
     async fn test_connection(
         &self,
         input: DriverConnectionInput,
@@ -146,7 +146,7 @@ impl PostgresDriver for RuntimePostgresDriver {
         let client = pool
             .get()
             .await
-            .map_err(|error| normalize_driver_error("connect", error.to_string()))?;
+            .map_err(|error| normalize_pool_error("connect", error))?;
         let row = client
             .query_one("select current_database(), current_user, version()", &[])
             .await
@@ -306,6 +306,13 @@ fn normalize_pg_error(operation: &str, error: &tokio_postgres::Error) -> AppErro
     }
 
     normalize_driver_error(operation, error.to_string())
+}
+
+fn normalize_pool_error(operation: &str, error: PoolError) -> AppError {
+    match error {
+        PoolError::Backend(backend_error) => normalize_pg_error(operation, &backend_error),
+        other => normalize_driver_error(operation, other.to_string()),
+    }
 }
 
 pub(crate) fn normalize_driver_error(operation: &str, detail: String) -> AppError {

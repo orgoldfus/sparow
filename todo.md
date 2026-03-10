@@ -27,7 +27,8 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - [completed] Architecture refactoring: extract schema/introspection.rs, connections/driver.rs, jobs MockJobRunner, split contracts.ts into types+guards, extract shared Metric component and format utils
 
 ## Blockers And Decisions
-- Current blocker: none.
+- 2026-03-10: Started another CodeRabbit autofix pass on `refactor/architecture-cleanup`; next step is to fetch unresolved review threads for the current PR and apply only still-valid fixes.
+- 2026-03-10: GitHub access is now available again, so the autofix pass can fetch PR #5 review threads directly with `gh`.
 - Database engine: PostgreSQL only.
 - Schema browser scope: active saved-profile-backed PostgreSQL session only.
 - Metadata scope: schemas, tables, views, columns, and indexes only.
@@ -38,6 +39,12 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after fixing the remaining unresolved CodeRabbit findings in schema scope path encoding, PostgreSQL pool error classification, driver visibility, and frontend runtime guards.
+- `npm run verify` ❌
+  - Typecheck initially failed in `src/lib/guards.ts` because the new scope-path parsing used `split('/')` array indexes without narrowing away `undefined`; tightening the segment guards fixed the issue before the final green verification run.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
 - `npm run typecheck` ✅
   - Fixed TypeScript narrowing issues in schema guards/hooks, tightened test fixture typing around JSON imports, and switched Vite config typing to the Vitest-aware config entrypoint.
 - `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::relation_scope_kind_matches_postgres_relkind -- --exact` ✅

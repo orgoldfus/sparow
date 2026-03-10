@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use tokio_postgres::Row;
 
 use crate::{
@@ -7,6 +8,8 @@ use crate::{
 };
 
 use super::service::ParsedScope;
+
+const SCOPE_PATH_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS.add(b'/');
 
 #[async_trait]
 pub(crate) trait SchemaIntrospectionDriver: Send + Sync {
@@ -212,7 +215,7 @@ impl SchemaIntrospectionDriver for RuntimeSchemaIntrospectionDriver {
 // --- Path helpers ---
 
 pub(crate) fn schema_path(schema_name: &str) -> String {
-    format!("schema/{schema_name}")
+    format!("schema/{}", encode_scope_segment(schema_name))
 }
 
 pub(crate) fn schema_node_id(connection_id: &str, path: &str) -> String {
@@ -223,8 +226,8 @@ fn relation_path(kind: SchemaNodeKind, schema_name: &str, relation_name: &str) -
     format!(
         "{}/{}/{}",
         schema_kind_prefix(kind),
-        schema_name,
-        relation_name
+        encode_scope_segment(schema_name),
+        encode_scope_segment(relation_name)
     )
 }
 
@@ -241,9 +244,9 @@ fn relation_child_path(
     format!(
         "{}/{}/{}/{}",
         schema_kind_prefix(kind),
-        schema_name,
-        relation_name,
-        name
+        encode_scope_segment(schema_name),
+        encode_scope_segment(relation_name),
+        encode_scope_segment(name)
     )
 }
 
@@ -255,6 +258,10 @@ fn schema_kind_prefix(kind: SchemaNodeKind) -> &'static str {
         SchemaNodeKind::Column => "column",
         SchemaNodeKind::Index => "index",
     }
+}
+
+pub(crate) fn encode_scope_segment(segment: &str) -> String {
+    utf8_percent_encode(segment, SCOPE_PATH_SEGMENT_ENCODE_SET).to_string()
 }
 
 fn relation_scope_path(

@@ -58,6 +58,20 @@ function isSchemaRefreshStatus(value: unknown): value is SchemaRefreshStatus {
   return value === 'queued' || value === 'running' || value === 'completed' || value === 'failed';
 }
 
+function isBackgroundJobStatus(value: unknown): value is BackgroundJobProgressEvent['status'] {
+  return (
+    value === 'queued' ||
+    value === 'running' ||
+    value === 'completed' ||
+    value === 'cancelled' ||
+    value === 'failed'
+  );
+}
+
+function isAppEnvironment(value: unknown): value is AppBootstrap['environment'] {
+  return value === 'development' || value === 'production' || value === 'test';
+}
+
 function isSecretProvider(value: unknown): value is SecretProvider {
   return value === 'os-keychain' || value === 'memory';
 }
@@ -78,8 +92,59 @@ function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
 }
 
+function isEncodedPathSegment(segment: string): boolean {
+  if (segment.length === 0) {
+    return false;
+  }
+
+  try {
+    return decodeURIComponent(segment).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function isScopePathForKind(kind: SchemaScopeKind, path: unknown): path is string | null {
-  return kind === 'root' ? path === null : typeof path === 'string';
+  if (kind === 'root') {
+    return path === null;
+  }
+  if (typeof path !== 'string') {
+    return false;
+  }
+
+  const parts = path.split('/');
+  switch (kind) {
+    case 'schema': {
+      const [, schemaName] = parts;
+      return parts.length === 2 && parts[0] === 'schema' && schemaName !== undefined && isEncodedPathSegment(schemaName);
+    }
+    case 'table': {
+      const [, schemaName, relationName] = parts;
+      return (
+        parts.length === 3 &&
+        parts[0] === 'table' &&
+        schemaName !== undefined &&
+        relationName !== undefined &&
+        isEncodedPathSegment(schemaName) &&
+        isEncodedPathSegment(relationName)
+      );
+    }
+    case 'view': {
+      const [, schemaName, relationName] = parts;
+      return (
+        parts.length === 3 &&
+        parts[0] === 'view' &&
+        schemaName !== undefined &&
+        relationName !== undefined &&
+        isEncodedPathSegment(schemaName) &&
+        isEncodedPathSegment(relationName)
+      );
+    }
+  }
+}
+
+function encodePathSegment(segment: string): string {
+  return encodeURIComponent(segment);
 }
 
 function isConnectionShape(value: unknown): value is Omit<ConnectionDetails, 'createdAt' | 'updatedAt'> & {
@@ -128,7 +193,7 @@ export function isBackgroundJobProgressEvent(value: unknown): value is Backgroun
     isRecord(value) &&
     typeof value.jobId === 'string' &&
     typeof value.correlationId === 'string' &&
-    typeof value.status === 'string' &&
+    isBackgroundJobStatus(value.status) &&
     typeof value.step === 'number' &&
     typeof value.totalSteps === 'number' &&
     typeof value.message === 'string' &&
@@ -231,7 +296,7 @@ function isSchemaNodeBase(value: unknown): value is SchemaNodeBase {
 }
 
 function isSchemaPath(schemaName: string, path: string): boolean {
-  return path === `schema/${schemaName}`;
+  return path === `schema/${encodePathSegment(schemaName)}`;
 }
 
 function isRelationPath(
@@ -241,7 +306,10 @@ function isRelationPath(
   path: string,
   parentPath: string | null,
 ): boolean {
-  return path === `${kind}/${schemaName}/${relationName}` && parentPath === `schema/${schemaName}`;
+  return (
+    path === `${kind}/${encodePathSegment(schemaName)}/${encodePathSegment(relationName)}` &&
+    parentPath === `schema/${encodePathSegment(schemaName)}`
+  );
 }
 
 function isRelationChildPath(
@@ -252,13 +320,17 @@ function isRelationChildPath(
   path: string,
   parentPath: string | null,
 ): boolean {
-  if (path !== `${kind}/${schemaName}/${relationName}/${name}`) {
+  const encodedSchemaName = encodePathSegment(schemaName);
+  const encodedRelationName = encodePathSegment(relationName);
+  const encodedName = encodePathSegment(name);
+
+  if (path !== `${kind}/${encodedSchemaName}/${encodedRelationName}/${encodedName}`) {
     return false;
   }
 
   return (
-    parentPath === `table/${schemaName}/${relationName}` ||
-    parentPath === `view/${schemaName}/${relationName}`
+    parentPath === `table/${encodedSchemaName}/${encodedRelationName}` ||
+    parentPath === `view/${encodedSchemaName}/${encodedRelationName}`
   );
 }
 
@@ -429,7 +501,7 @@ export function isAppBootstrap(value: unknown): value is AppBootstrap {
     isRecord(value) &&
     typeof value.appName === 'string' &&
     typeof value.version === 'string' &&
-    typeof value.environment === 'string' &&
+    isAppEnvironment(value.environment) &&
     typeof value.platform === 'string' &&
     isStringArray(value.featureFlags) &&
     isRecord(value.storage) &&
