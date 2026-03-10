@@ -14,6 +14,8 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - [completed] Run final Phase 4 verification and record results
 
 ## Blockers And Decisions
+- 2026-03-10: Completed the second CodeRabbit autofix pass on `phase-4`. The remaining fixes made `closeTab` StrictMode-safe and made the Monaco editor test mock mount once per instance so stale-closure regressions stay visible.
+- 2026-03-10: Started a second CodeRabbit autofix pass on `phase-4` after pushing the latest Clippy fix. Unresolved review threads and validation results from this pass will be logged here before it ends.
 - 2026-03-10: Completed the Rust formatter + `cargo clippy` repair pass. Clippy is green again after removing a redundant `u64` cast in the query driver.
 - 2026-03-10: Started a Rust formatter + `cargo clippy` repair pass after the user reported a failing Clippy run. Formatter output and each verification result will be logged here before the pass ends.
 - 2026-03-10: Completed the CodeRabbit autofix pass on `phase-4`; the fixes covered Rust query cancellation/event rollback, batched query event application, Monaco shortcut freshness, accessibility/test hardening, and the formatter findings called out on the PR.
@@ -29,6 +31,12 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
 
 ## Verification
+- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The targeted query workspace regressions passed with 7 tests green after the hook and Monaco mock fixes.
+- `npm run verify` ✅
+  - The first rerun passed end-to-end but exposed a hook dependency warning in `src/test/setup.ts`; the mock was tightened to preserve one-time mount semantics without the warning.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed cleanly after the final test-mock adjustment with 67 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
   - Rust formatting completed cleanly at the start of the Clippy repair pass.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` ❌

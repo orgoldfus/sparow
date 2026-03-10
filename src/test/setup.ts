@@ -14,11 +14,24 @@ vi.mock('@monaco-editor/react', () => ({
   }) => {
     const commandRef = useRef<(() => void) | null>(null);
     const valueRef = useRef(value ?? '');
+    const onMountRef = useRef(onMount);
+    const editorRef = useRef<{
+      addCommand: (_binding: number, command: () => void) => number;
+      getModel: () => { getValue: () => string };
+      getSelection: () => null;
+    } | null>(null);
+    const monacoRef = useRef<{
+      KeyCode: { Enter: number };
+      KeyMod: { CtrlCmd: number };
+      languages: {
+        registerCompletionItemProvider: () => { dispose: () => void };
+      };
+    } | null>(null);
 
     valueRef.current = value ?? '';
 
-    useEffect(() => {
-      const editor = {
+    if (!editorRef.current) {
+      editorRef.current = {
         addCommand: (_binding: number, command: () => void) => {
           commandRef.current = command;
           return 1;
@@ -26,7 +39,10 @@ vi.mock('@monaco-editor/react', () => ({
         getModel: () => ({ getValue: () => valueRef.current }),
         getSelection: () => null,
       };
-      const monaco = {
+    }
+
+    if (!monacoRef.current) {
+      monacoRef.current = {
         KeyCode: { Enter: 3 },
         KeyMod: { CtrlCmd: 2048 },
         languages: {
@@ -35,9 +51,11 @@ vi.mock('@monaco-editor/react', () => ({
           }),
         },
       };
+    }
 
-      onMount?.(editor, monaco);
-    }, [onMount]);
+    useEffect(() => {
+      onMountRef.current?.(editorRef.current, monacoRef.current);
+    }, []);
 
     return createElement('textarea', {
       'data-testid': 'monaco-editor',

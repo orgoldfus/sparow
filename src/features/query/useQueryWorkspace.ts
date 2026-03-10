@@ -148,32 +148,43 @@ export function useQueryWorkspace({
   }
 
   function closeTab(tabId: string) {
-    setTabs((currentTabs) => {
-      const tab = currentTabs.find((entry) => entry.id === tabId);
-      if (tab?.execution.jobId) {
-        onError(
-          logger.asAppError(
-            new Error('Cancel the running query before closing this tab.'),
-            'close_query_tab',
-          ),
-        );
-        return currentTabs;
-      }
+    const tab = tabs.find((entry) => entry.id === tabId);
+    if (!tab) {
+      return;
+    }
 
-      const nextTabs = currentTabs.filter((entry) => entry.id !== tabId);
-      if (nextTabs.length === 0) {
-        const fallbackTab = createTabState(
-          activeSession?.connectionId ?? selectedConnectionId ?? connections[0]?.id ?? null,
-        );
-        setActiveTabId(fallbackTab.id);
-        return [fallbackTab];
-      }
+    if (tab.execution.jobId) {
+      onError(
+        logger.asAppError(
+          new Error('Cancel the running query before closing this tab.'),
+          'close_query_tab',
+        ),
+      );
+      return;
+    }
 
-      if (activeTabId === tabId) {
-        setActiveTabId(nextTabs[nextTabs.length - 1]?.id ?? null);
-      }
+    const remainingTabs = tabs.filter((entry) => entry.id !== tabId);
+    const isClosingActiveTab = activeTabId === tabId;
+    const fallbackTargetConnectionId =
+      activeSession?.connectionId ?? selectedConnectionId ?? connections[0]?.id ?? null;
 
-      return nextTabs;
+    let nextTabs = remainingTabs;
+    let nextActiveTabId = activeTabId;
+
+    if (remainingTabs.length === 0) {
+      const fallbackTab = createTabState(fallbackTargetConnectionId);
+      nextTabs = [fallbackTab];
+      nextActiveTabId = fallbackTab.id;
+    } else if (isClosingActiveTab) {
+      nextActiveTabId = remainingTabs[remainingTabs.length - 1]?.id ?? null;
+    }
+
+    startTransition(() => {
+      setTabs(nextTabs);
+
+      if (nextActiveTabId !== activeTabId) {
+        setActiveTabId(nextActiveTabId);
+      }
     });
   }
 

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import type {
   AppError,
   ConnectionSummary,
@@ -261,6 +262,25 @@ describe('useQueryWorkspace', () => {
     fireEvent.click(screen.getByText('close'));
     expect(screen.getByTestId('active-tab-id')).not.toHaveTextContent(completedTabId ?? '');
     expect(onError).toHaveBeenCalledTimes(errorCallsBeforeClose);
+  });
+
+  it('replaces the last tab cleanly under StrictMode when closing the active tab', async () => {
+    const onError = vi.fn();
+    render(
+      <StrictMode>
+        <Harness onError={onError} queryEvents={[]} />
+      </StrictMode>,
+    );
+
+    const initialTabId = screen.getByTestId('active-tab-id').textContent ?? 'none';
+
+    fireEvent.click(screen.getByText('close'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('active-tab-id')).not.toHaveTextContent(initialTabId);
+    });
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('applies multiple queued query events from a single batched update', async () => {
