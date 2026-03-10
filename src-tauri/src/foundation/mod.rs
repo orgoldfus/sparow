@@ -18,5 +18,6 @@ pub use contracts::{
 };
 pub use error::AppError;
 pub use jobs::JobRegistry;
+pub(crate) use jobs::MockJobRunner;
 pub use logging::initialize_logging;
 pub use state::{AppState, DiagnosticsStore};

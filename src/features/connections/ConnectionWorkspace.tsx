@@ -1,5 +1,7 @@
 import { CheckCircle2, CircleSlash2, Database, KeyRound, Plus, RefreshCcw, Shield, Trash2, Unplug, Wifi } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Metric } from '../../components/Metric';
+import { formatLongTime, formatShortTime } from '../../lib/format';
 import type {
   AppError,
   ConnectionDraft,
@@ -60,6 +62,7 @@ const SSL_OPTIONS: { value: SslMode; label: string; caption: string }[] = [
   { value: 'disable', label: 'Disable', caption: 'Plain TCP only' },
   { value: 'prefer', label: 'Prefer', caption: 'Use TLS when available' },
   { value: 'require', label: 'Require', caption: 'Fail if TLS is unavailable' },
+  { value: 'insecure', label: 'Insecure', caption: 'Use TLS but skip certificate and hostname checks' },
 ];
 
 export function ConnectionsRail({
@@ -260,7 +263,7 @@ export function ConnectionEditor({
                 <h4 className="text-lg font-medium text-[var(--ink-1)]">SSL mode</h4>
               </div>
             </div>
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-4">
               {SSL_OPTIONS.map((option) => (
                 <button
                   className={`grid gap-1 border px-3 py-3 text-left transition ${
@@ -279,6 +282,12 @@ export function ConnectionEditor({
                 </button>
               ))}
             </div>
+            {draft.sslMode === 'insecure' ? (
+              <p className="border border-[var(--danger-line)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger-ink)]">
+                Insecure mode accepts invalid certificates and hostnames. Use it only when the server cannot pass
+                normal TLS verification.
+              </p>
+            ) : null}
           </section>
         </section>
 
@@ -489,33 +498,8 @@ function ActionButton({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">{label}</dt>
-      <dd className="mt-1 text-[var(--ink-1)]">{value}</dd>
-    </div>
-  );
-}
-
 function inputClassName(hasError: boolean) {
   return `w-full border bg-[var(--surface-1)] px-3 py-2.5 text-sm text-[var(--ink-1)] outline-none transition focus:border-[var(--line-strong)] ${
     hasError ? 'border-[var(--danger-ink)]' : 'border-[var(--line-soft)]'
   }`;
-}
-
-function formatShortTime(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatLongTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }

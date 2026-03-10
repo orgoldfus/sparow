@@ -39,7 +39,7 @@ import {
   isSchemaSearchRequest,
   isSchemaSearchResult,
   isTestConnectionRequest,
-} from '../lib/contracts';
+} from '../lib/guards';
 
 describe('contract fixtures', () => {
   it('validate the app bootstrap fixture', () => {
@@ -72,6 +72,25 @@ describe('contract fixtures', () => {
 
   it('validate the test connection request fixture', () => {
     expect(isTestConnectionRequest(testConnectionRequestFixture)).toBe(true);
+  });
+
+  it('accepts the explicit insecure SSL mode on connection payloads', () => {
+    expect(
+      isConnectionSummary({
+        ...connectionSummaryFixture,
+        sslMode: 'insecure',
+      }),
+    ).toBe(true);
+
+    expect(
+      isSaveConnectionRequest({
+        ...saveConnectionRequestFixture,
+        draft: {
+          ...saveConnectionRequestFixture.draft,
+          sslMode: 'insecure',
+        },
+      }),
+    ).toBe(true);
   });
 
   it('validate the connection test result fixture', () => {
@@ -172,6 +191,56 @@ describe('contract fixtures', () => {
     ).toBe(false);
   });
 
+  it('accepts percent-encoded schema scope paths and rejects mismatched shapes', () => {
+    expect(
+      isListSchemaChildrenRequest({
+        connectionId: 'conn-local-postgres',
+        parentKind: 'schema',
+        parentPath: 'schema/sales%2F2024',
+      }),
+    ).toBe(true);
+
+    expect(
+      isRefreshSchemaScopeRequest({
+        connectionId: 'conn-local-postgres',
+        scopeKind: 'table',
+        scopePath: 'table/sales%2F2024/orders%2Fdaily',
+      }),
+    ).toBe(true);
+
+    expect(
+      isListSchemaChildrenRequest({
+        connectionId: 'conn-local-postgres',
+        parentKind: 'schema',
+        parentPath: 'table/public/users',
+      }),
+    ).toBe(false);
+
+    expect(
+      isRefreshSchemaScopeRequest({
+        connectionId: 'conn-local-postgres',
+        scopeKind: 'view',
+        scopePath: 'view/public',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects unknown background job statuses and app environments', () => {
+    expect(
+      isBackgroundJobProgressEvent({
+        ...backgroundJobProgressFixture,
+        status: 'paused',
+      }),
+    ).toBe(false);
+
+    expect(
+      isAppBootstrap({
+        ...appBootstrapFixture,
+        environment: 'staging',
+      }),
+    ).toBe(false);
+  });
+
   it('rejects schema nodes with impossible path invariants', () => {
     expect(
       isSchemaNode({
@@ -238,5 +307,21 @@ describe('contract fixtures', () => {
         ],
       }),
     ).toBe(false);
+  });
+
+  it('accepts schema nodes whose identifiers require encoded path segments', () => {
+    expect(
+      isSchemaNode({
+        ...schemaNodeFixture,
+        kind: 'table',
+        id: 'conn-local-postgres:table/sales%2F2024/orders%2Fdaily',
+        name: 'orders/daily',
+        path: 'table/sales%2F2024/orders%2Fdaily',
+        parentPath: 'schema/sales%2F2024',
+        schemaName: 'sales/2024',
+        relationName: 'orders/daily',
+        hasChildren: true,
+      }),
+    ).toBe(true);
   });
 });

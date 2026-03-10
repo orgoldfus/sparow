@@ -42,7 +42,7 @@
       "port": 5432,
       "database": "app_dev",
       "username": "sparow",
-      "sslMode": "prefer",
+      "sslMode": "insecure",
       "hasStoredSecret": true,
       "secretProvider": "os-keychain",
       "lastTestedAt": "2026-03-08T17:05:00.000Z",

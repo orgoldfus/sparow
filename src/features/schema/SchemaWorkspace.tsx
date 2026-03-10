@@ -12,6 +12,8 @@ import {
   WifiOff,
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
+import { Metric } from '../../components/Metric';
+import { formatLongTime } from '../../lib/format';
 import type {
   ConnectionSummary,
   ConnectionTestResult,
@@ -364,22 +366,4 @@ function iconForNode(node: SchemaNode) {
     case 'index':
       return <KeyRound className="h-4 w-4 text-[var(--ink-3)]" />;
   }
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">{label}</dt>
-      <dd className="mt-1 break-all text-[var(--ink-1)]">{value}</dd>
-    </div>
-  );
-}
-
-function formatLongTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }

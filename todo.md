@@ -4,6 +4,8 @@
 Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
 
 ## Checklist
+- [completed] Fix the remote PostgreSQL TLS regression by restoring an explicit opt-in insecure TLS mode for managed hosts that fail strict verification
+- [completed] Re-run CodeRabbit autofix on PR #5, verify unresolved feedback against the latest code, and apply any still-valid fixes
 - [completed] Run `npm run typecheck`, fix all TypeScript issues, and keep typecheck green on every change
 - [completed] Autofix unresolved CodeRabbit comments that still apply on the current branch
 - [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
@@ -22,8 +24,11 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - [completed] Extend smoke coverage, debugging docs, and schema cache inspection tooling
 - [completed] Run final Phase 3 verification and record results
 
+- [completed] Architecture refactoring: extract schema/introspection.rs, connections/driver.rs, jobs MockJobRunner, split contracts.ts into types+guards, extract shared Metric component and format utils
+
 ## Blockers And Decisions
-- Current blocker: none.
+- 2026-03-10: Started another CodeRabbit autofix pass on `refactor/architecture-cleanup`; next step is to fetch unresolved review threads for the current PR and apply only still-valid fixes.
+- 2026-03-10: GitHub access is now available again, so the autofix pass can fetch PR #5 review threads directly with `gh`.
 - Database engine: PostgreSQL only.
 - Schema browser scope: active saved-profile-backed PostgreSQL session only.
 - Metadata scope: schemas, tables, views, columns, and indexes only.
@@ -34,6 +39,12 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
 - Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
 
 ## Verification
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after fixing the remaining unresolved CodeRabbit findings in schema scope path encoding, PostgreSQL pool error classification, driver visibility, and frontend runtime guards.
+- `npm run verify` ❌
+  - Typecheck initially failed in `src/lib/guards.ts` because the new scope-path parsing used `split('/')` array indexes without narrowing away `undefined`; tightening the segment guards fixed the issue before the final green verification run.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
 - `npm run typecheck` ✅
   - Fixed TypeScript narrowing issues in schema guards/hooks, tightened test fixture typing around JSON imports, and switched Vite config typing to the Vitest-aware config entrypoint.
 - `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::relation_scope_kind_matches_postgres_relkind -- --exact` ✅
@@ -81,6 +92,16 @@ Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: activ
   - Frontend contract, shell, foundation smoke, and schema browser tests all passed after fixing the schema hook dependency regression.
 - `npm run verify` ✅
   - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after the schema hook and repository cleanup fixes.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
+- `npm run verify` ❌
+  - Frontend checks passed, but Rust failed because the new mock-job cancellation helper in `src-tauri/src/foundation/jobs.rs` temporarily used `u32` step counters while the contract expects `u16`.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after securing the TLS connector defaults and fixing the mock-job registry/cancellation regressions from the remaining CodeRabbit threads on PR #5.
+- `fnm use` ✅
+  - `Using Node v24.13.0`
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after adding the explicit `insecure` SSL mode across the Rust/TypeScript contracts, fixtures, and connection editor so remote PostgreSQL profiles can opt into relaxed TLS verification when strict verification fails.
 
 ## Dependency Notes
 - Keep the current Node 24 baseline and `happy-dom` frontend test environment unless a concrete Phase 3 compatibility issue forces a change.

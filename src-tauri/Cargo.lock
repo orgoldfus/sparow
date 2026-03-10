@@ -3374,6 +3374,7 @@ dependencies = [
  "deadpool-postgres",
  "keyring",
  "native-tls",
+ "percent-encoding",
  "postgres-native-tls",
  "rusqlite",
  "serde",

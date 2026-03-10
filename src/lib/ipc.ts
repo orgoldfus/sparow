@@ -1,25 +1,27 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import type {
+  AppBootstrap,
+  BackgroundJobAccepted,
+  BackgroundJobProgressEvent,
+  BackgroundJobRequest,
+  ConnectionDetails,
+  ConnectionSummary,
+  ConnectionTestResult,
+  DatabaseSessionSnapshot,
+  DeleteConnectionResult,
+  DisconnectSessionResult,
+  ListSchemaChildrenRequest,
+  ListSchemaChildrenResult,
+  RefreshSchemaScopeRequest,
+  SaveConnectionRequest,
+  SchemaRefreshAccepted,
+  SchemaRefreshProgressEvent,
+  SchemaSearchRequest,
+  SchemaSearchResult,
+  TestConnectionRequest,
+} from './contracts';
 import {
-  type AppBootstrap,
-  type BackgroundJobAccepted,
-  type BackgroundJobProgressEvent,
-  type BackgroundJobRequest,
-  type ConnectionDetails,
-  type ConnectionSummary,
-  type ConnectionTestResult,
-  type DatabaseSessionSnapshot,
-  type DeleteConnectionResult,
-  type DisconnectSessionResult,
-  type ListSchemaChildrenRequest,
-  type ListSchemaChildrenResult,
-  type RefreshSchemaScopeRequest,
-  type SaveConnectionRequest,
-  type SchemaRefreshAccepted,
-  type SchemaRefreshProgressEvent,
-  type SchemaSearchRequest,
-  type SchemaSearchResult,
-  type TestConnectionRequest,
   isAppBootstrap,
   isBackgroundJobAccepted,
   isBackgroundJobProgressEvent,
@@ -33,7 +35,7 @@ import {
   isSchemaRefreshAccepted,
   isSchemaRefreshProgressEvent,
   isSchemaSearchResult,
-} from './contracts';
+} from './guards';
 
 type CancelJobResult = {
   jobId: string;
