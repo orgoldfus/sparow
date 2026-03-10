@@ -13,6 +13,10 @@ import type {
   DisconnectSessionResult,
   ListSchemaChildrenRequest,
   ListSchemaChildrenResult,
+  CancelQueryExecutionResult,
+  QueryExecutionAccepted,
+  QueryExecutionProgressEvent,
+  QueryExecutionRequest,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
   SchemaRefreshAccepted,
@@ -32,6 +36,8 @@ import {
   isDeleteConnectionResult,
   isDisconnectSessionResult,
   isListSchemaChildrenResult,
+  isQueryExecutionAccepted,
+  isQueryExecutionProgressEvent,
   isSchemaRefreshAccepted,
   isSchemaRefreshProgressEvent,
   isSchemaSearchResult,
@@ -124,6 +130,25 @@ export async function searchSchemaCache(request: SchemaSearchRequest): Promise<S
   return assertContract(isSchemaSearchResult, payload, 'search_schema_cache');
 }
 
+export async function startQueryExecution(
+  request: QueryExecutionRequest,
+): Promise<QueryExecutionAccepted> {
+  const payload = await invoke<unknown>('start_query_execution', { request });
+  return assertContract(isQueryExecutionAccepted, payload, 'start_query_execution');
+}
+
+export async function cancelQueryExecution(jobId: string): Promise<CancelQueryExecutionResult> {
+  const payload = await invoke<unknown>('cancel_query_execution', { jobId });
+  return assertContract(
+    (value): value is CancelQueryExecutionResult =>
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { jobId?: unknown }).jobId === 'string',
+    payload,
+    'cancel_query_execution',
+  );
+}
+
 export async function startMockJob(request: BackgroundJobRequest): Promise<BackgroundJobAccepted> {
   const payload = await invoke<unknown>('start_mock_job', { request });
   return assertContract(isBackgroundJobAccepted, payload, 'start_mock_job');
@@ -152,6 +177,19 @@ export async function subscribeToSchemaRefreshEvent(
 ): Promise<() => void> {
   return listen<unknown>(eventName, (event) => {
     if (!isSchemaRefreshProgressEvent(event.payload)) {
+      throw new Error(`Invalid event payload for ${eventName}.`);
+    }
+
+    handler(event.payload);
+  });
+}
+
+export async function subscribeToQueryExecutionEvent(
+  eventName: string,
+  handler: (payload: QueryExecutionProgressEvent) => void,
+): Promise<() => void> {
+  return listen<unknown>(eventName, (event) => {
+    if (!isQueryExecutionProgressEvent(event.payload)) {
       throw new Error(`Invalid event payload for ${eventName}.`);
     }
 

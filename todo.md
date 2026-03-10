@@ -1,108 +1,51 @@
-# Phase 3 Todo
+# Phase 4 Todo
 
 ## Objective
-Build the Phase 3 PostgreSQL schema browser and metadata cache for Sparow: active-session-driven schema exploration, a queryable SQLite metadata cache, dedicated schema refresh events, and AI-friendly debugging and verification that stay green without a live database by default.
+Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-based multi-tab editing, single-statement execution and cancellation against the active PostgreSQL session, schema-cache-backed autocomplete, capped result previews, and AI-friendly diagnostics that stay green without a live database by default.
 
 ## Checklist
-- [completed] Fix the remote PostgreSQL TLS regression by restoring an explicit opt-in insecure TLS mode for managed hosts that fail strict verification
-- [completed] Re-run CodeRabbit autofix on PR #5, verify unresolved feedback against the latest code, and apply any still-valid fixes
-- [completed] Run `npm run typecheck`, fix all TypeScript issues, and keep typecheck green on every change
-- [completed] Autofix unresolved CodeRabbit comments that still apply on the current branch
-- [completed] Review the current unresolved CodeRabbit feedback, verify each finding against the latest code, and apply only still-valid fixes
-- [completed] Verify and fix swallowed `persist_refresh_failure` task/repository errors in the schema service
-- [completed] Fix cross-connection schema cache ID collisions that block remote PostgreSQL schema refreshes
-- [completed] Review unresolved CodeRabbit feedback, verify each finding against current code, and apply only still-valid fixes
-- [completed] Preserve failed schema scope refresh status through cache loads and retry classification
-- [completed] Investigate and fix schema expansion hanging on column deserialization panic
-- [completed] Stabilize the Phase 3 baseline and record verification results
-- [completed] Lock schema contracts, JSON fixtures, and runtime guards in Rust and TypeScript
-- [completed] Extend SQLite with Phase 3 schema cache tables, indexes, and repository methods
-- [completed] Implement the Rust schema subsystem with runtime and fake drivers
-- [completed] Add schema commands, refresh events, diagnostics integration, and app-state wiring
-- [completed] Build the frontend schema workspace while preserving Phase 2 connection flows
-- [completed] Add frontend and backend coverage for schema browsing, refresh, and cache fallback flows
-- [completed] Extend smoke coverage, debugging docs, and schema cache inspection tooling
-- [completed] Run final Phase 3 verification and record results
-
-- [completed] Architecture refactoring: extract schema/introspection.rs, connections/driver.rs, jobs MockJobRunner, split contracts.ts into types+guards, extract shared Metric component and format utils
+- [completed] Lock the Phase 4 baseline and record initial verification results
+- [completed] Lock query execution contracts, fixtures, and runtime guards in Rust and TypeScript
+- [completed] Implement the Rust query subsystem with execution jobs, cancellation, result mapping, and query-history recording
+- [completed] Build the frontend SQL workspace with in-memory tabs, tab targeting, run/cancel controls, and result/status presentation
+- [completed] Integrate Monaco, execution-slice helpers, and schema-cache-backed autocomplete
+- [completed] Wire query events, diagnostics updates, and shell integration while preserving the existing layout regions
+- [completed] Extend smoke coverage, AI docs, and query-history inspection tooling
+- [completed] Run final Phase 4 verification and record results
 
 ## Blockers And Decisions
-- 2026-03-10: Started another CodeRabbit autofix pass on `refactor/architecture-cleanup`; next step is to fetch unresolved review threads for the current PR and apply only still-valid fixes.
-- 2026-03-10: GitHub access is now available again, so the autofix pass can fetch PR #5 review threads directly with `gh`.
-- Database engine: PostgreSQL only.
-- Schema browser scope: active saved-profile-backed PostgreSQL session only.
-- Metadata scope: schemas, tables, views, columns, and indexes only.
-- Search scope: cached metadata only; no live global catalog search in Phase 3.
-- Cache freshness: cached schema scopes become stale after 2 minutes and should refresh in the background.
-- Root scope persistence: SQLite stores the root scope path as an empty string; the TypeScript boundary uses `null`.
-- Schema cache identity: `schema_cache.id` is globally unique in SQLite, so generated schema node IDs must be namespaced by connection.
-- Testing strategy: default verification uses a deterministic fake schema driver; real PostgreSQL schema smoke remains opt-in.
+- 2026-03-10: `README.md` was refreshed after Phase 4 completion so the repo landing page now matches the implemented SQL workspace, query execution model, debugging helpers, and verification flow.
+- 2026-03-10: Phase 4 keeps the current shell grid and replaces the placeholder workspace content instead of starting the broader shell redesign.
+- 2026-03-10: One active backend session remains the rule in Phase 4. Tabs store a target connection id, but Run is enabled only when the tab target matches the active saved connection.
+- 2026-03-10: Execution scope is single statement only. A non-empty selection wins; otherwise the app runs the current statement around the cursor. Multi-statement selections must fail with a stable error.
+- 2026-03-10: Result handling is limited to command summaries and capped row previews. Streaming, virtualization, CSV export, and large-result tuning stay in Phase 5.
+- 2026-03-10: Prefer docs and scripts over creating a new repo skill for query debugging in this phase.
+- 2026-03-10: `npm run verify` failed once at lint because Monaco's `onMount` callback was inferred as an unsafe error-typed value in `src/features/query/QueryWorkspace.tsx`; the callback is being retyped explicitly before the final rerun.
+- 2026-03-10: The second `npm run verify` rerun exposed a Rust test-only import break after removing a `foundation` re-export. `src-tauri/src/query/service.rs` now imports `QueryExecutionOrigin` from `foundation::contracts` directly before the next rerun.
+- 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
 
 ## Verification
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after fixing the remaining unresolved CodeRabbit findings in schema scope path encoding, PostgreSQL pool error classification, driver visibility, and frontend runtime guards.
-- `npm run verify` ❌
-  - Typecheck initially failed in `src/lib/guards.ts` because the new scope-path parsing used `split('/')` array indexes without narrowing away `undefined`; tightening the segment guards fixed the issue before the final green verification run.
 - `fnm use` ✅
   - `Using Node v24.13.0`
-- `npm run typecheck` ✅
-  - Fixed TypeScript narrowing issues in schema guards/hooks, tightened test fixture typing around JSON imports, and switched Vite config typing to the Vitest-aware config entrypoint.
-- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::relation_scope_kind_matches_postgres_relkind -- --exact` ✅
-  - Added a regression for PostgreSQL relkind matching so table/view scope requests cannot silently introspect the wrong relation type.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed before Phase 4 feature work started.
 - `npm run test -- src/test/contract-fixtures.test.ts` ✅
-  - Contract guards now reject cross-connection schema nodes and list-children payloads whose nodes do not belong to the declared parent scope.
-- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::persist_refresh_failure_returns_repository_errors -- --exact` ✅
-  - The schema service now returns repository/join failures from `persist_refresh_failure` instead of swallowing the `spawn_blocking` outcome.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after closing the remaining CodeRabbit findings in the schema parser, contract guards, and cache inspection script.
-- `npm run verify` ❌
-  - Frontend checks passed, but Rust failed because the new schema path helpers in `src-tauri/src/schema/service.rs` referenced `SchemaNodeKind` without importing it.
-- `npm run verify` ❌
-  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after namespacing schema cache IDs by connection for cross-database safety.
-- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::schema_node_ids_are_namespaced_by_connection -- --exact` ✅
-  - The new schema ID regression test passed after namespacing generated cache IDs by connection.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after the CodeRabbit autofixes and regression coverage updates.
-- `cargo test --manifest-path src-tauri/Cargo.toml persistence::repository::tests::replaces_schema_scope_by_clearing_descendant_cache_rows -- --exact` ✅
-  - The recursive subtree cleanup regression test passed after switching scope deletion from string-prefix matching to graph-based descendant traversal.
-- `npm run verify` ❌
-  - Frontend checks passed, but Rust failed in `persistence::repository::tests::replaces_schema_scope_by_clearing_descendant_cache_rows`; the first subtree cleanup patch used string-prefix scope matching, which does not cover kind-prefixed descendant scope paths like `table/public/users`.
-- `npm run verify` ❌
-  - Failed in lint on `src/test/contract-fixtures.test.ts` because the new invalid-schema-node test kept an unused `_kind` binding.
+  - The new query request, accepted, progress, and cancel fixtures validated successfully on the TypeScript side.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Full Rust suite passed after preserving schema scope `refresh_status` on cache loads and retry classification.
+  - The full Rust suite passed after adding the query execution contracts, runtime driver, cancellation flow, and query-service coverage.
+- `npm run test -- src/test/sql-statement.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx` ✅
+  - The narrowed frontend rerun passed after fixing the SQL statement helper, restoring explicit SSL state in diagnostics, and aligning shell expectations with the Phase 4 UI copy.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Full Rust suite passed, including the new schema refresh panic regression test.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, foundation smoke, and Rust tests all passed after the schema refresh panic guard and PostgreSQL `relkind::text` fix.
-- `cargo test --manifest-path src-tauri/Cargo.toml schema::service::tests::releases_in_flight_refresh_when_driver_panics -- --exact` ✅
-  - Added panic-regression coverage for schema refresh cleanup; the new backend test passed.
-- `fnm use` ✅
-  - `Using Node v24.13.0`
-- `npm run verify` ✅
-  - Frontend typecheck, lint, tests, foundation smoke, and Rust tests all passed.
+  - 63 tests passed, 4 PostgreSQL smoke tests were ignored as expected, and the warning-free rerun is now ready for the final `npm run verify` pass.
+- `npm run verify` ❌
+  - Typecheck passed, but lint failed on `src/features/query/QueryWorkspace.tsx` because Monaco's `onMount` callback parameters were inferred unsafely. The callback has been retyped explicitly and `npm run verify` must be rerun.
+- `npm run verify` ❌
+  - Typecheck, lint, Vitest, and `smoke:foundation` passed, but the Rust test leg failed because `src-tauri/src/query/service.rs` was still importing `QueryExecutionOrigin` from a removed `foundation` re-export. The test module now imports it directly from `foundation::contracts` and verification must be rerun.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ❌
+  - The direct `foundation::contracts::QueryExecutionOrigin` import failed because `contracts` is a private module. The fix is to restore the `foundation` re-export and rerun.
+- `npm run verify` ❌
+  - Typecheck, lint, Vitest, and `smoke:foundation` passed again, but the Rust test leg still failed for the same private-module import issue. The `foundation` re-export has now been restored and verification must be rerun.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Phase 3 backend contracts, repository tests, and schema service tests passed.
-- `npm run verify` ❌
-  - Failed in lint on `src/features/schema/useSchemaBrowser.ts` (`useEffectEvent` called outside effects/effect events) and `src/test/schema-browser.test.tsx` (`async` test callback without `await`).
-- `npm run verify` ❌
-  - Failed in test run after lint fixes because `useSchemaBrowser` referenced `loadScope` before initialization, breaking the app shell and schema browser tests.
-- `npm run test` ✅
-  - Frontend contract, shell, foundation smoke, and schema browser tests all passed after fixing the schema hook dependency regression.
+  - The final rerun passed cleanly after restoring the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` for the internal test surface.
 - `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after the schema hook and repository cleanup fixes.
-- `fnm use` ✅
-  - `Using Node v24.13.0`
-- `npm run verify` ❌
-  - Frontend checks passed, but Rust failed because the new mock-job cancellation helper in `src-tauri/src/foundation/jobs.rs` temporarily used `u32` step counters while the contract expects `u16`.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after securing the TLS connector defaults and fixing the mock-job registry/cancellation regressions from the remaining CodeRabbit threads on PR #5.
-- `fnm use` ✅
-  - `Using Node v24.13.0`
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed after adding the explicit `insecure` SSL mode across the Rust/TypeScript contracts, fixtures, and connection editor so remote PostgreSQL profiles can opt into relaxed TLS verification when strict verification fails.
-
-## Dependency Notes
-- Keep the current Node 24 baseline and `happy-dom` frontend test environment unless a concrete Phase 3 compatibility issue forces a change.
-- Reuse the existing PostgreSQL runtime stack for schema introspection unless implementation uncovers a real blocker.
+  - Typecheck passed, lint passed, Vitest passed with 8 files / 64 tests, `smoke:foundation` passed, and `cargo test --manifest-path src-tauri/Cargo.toml` passed with 63 tests and 4 expected ignored PostgreSQL smoke tests.

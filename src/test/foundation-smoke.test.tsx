@@ -45,6 +45,17 @@ vi.mock('../lib/ipc', () => ({
   ),
   refreshSchemaScope: vi.fn(() => Promise.resolve({})),
   searchSchemaCache: vi.fn(() => Promise.resolve(schemaSearchResultFixture)),
+  startQueryExecution: vi.fn(() =>
+    Promise.resolve({
+      jobId: 'query-job-1',
+      correlationId: 'query-corr-1',
+      tabId: 'tab-1',
+      connectionId: databaseSessionSnapshotFixture.connectionId,
+      startedAt: '2026-03-10T16:45:00.000Z',
+    }),
+  ),
+  cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  subscribeToQueryExecutionEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToSchemaRefreshEvent: vi.fn(() => Promise.resolve(() => {})),
 }));
 
@@ -54,6 +65,6 @@ describe('foundation smoke', () => {
 
     expect(await screen.findByTestId('environment-value')).toHaveTextContent('development');
     expect(screen.getByText(/Diagnostics Surface/i)).toBeInTheDocument();
-    expect(screen.getByText(/Schema details/i)).toBeInTheDocument();
+    expect(screen.getByText(/Query results/i)).toBeInTheDocument();
   });
 });

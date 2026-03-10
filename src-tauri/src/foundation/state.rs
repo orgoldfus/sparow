@@ -6,15 +6,20 @@ use std::{
 use tauri::AppHandle;
 use tokio::task;
 
-use crate::{connections::ConnectionService, persistence::Repository, schema::SchemaService};
+use crate::{
+    connections::ConnectionService, persistence::Repository, query::QueryService,
+    schema::SchemaService,
+};
 
 use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
     BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, ConnectionDetails,
-    ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
-    DiagnosticsSnapshot, DisconnectSessionResult, ListSchemaChildrenRequest,
-    ListSchemaChildrenResult, MockJobRunner, RefreshSchemaScopeRequest, SaveConnectionRequest,
-    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
+    CancelQueryExecutionResult, ConnectionSummary, ConnectionTestResult,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot,
+    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner,
+    QueryExecutionAccepted, QueryExecutionRequest, RefreshSchemaScopeRequest,
+    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
+    TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -64,6 +69,7 @@ pub struct AppState {
     mock_jobs: MockJobRunner,
     connections: ConnectionService,
     schema: SchemaService,
+    query: QueryService,
 }
 
 impl AppState {
@@ -74,6 +80,7 @@ impl AppState {
         mock_jobs: MockJobRunner,
         connections: ConnectionService,
         schema: SchemaService,
+        query: QueryService,
     ) -> Self {
         Self {
             paths,
@@ -82,6 +89,7 @@ impl AppState {
             mock_jobs,
             connections,
             schema,
+            query,
         }
     }
 
@@ -107,6 +115,7 @@ impl AppState {
             feature_flags: vec![
                 "phase2-connections".to_string(),
                 "phase3-schema-browser".to_string(),
+                "phase4-query-workspace".to_string(),
                 "diagnostics-surface".to_string(),
                 "mock-background-job".to_string(),
             ],
@@ -216,6 +225,29 @@ impl AppState {
         request: SchemaSearchRequest,
     ) -> Result<SchemaSearchResult, AppError> {
         let result = self.schema.search_cache(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn start_query_execution(
+        &self,
+        app: AppHandle,
+        request: QueryExecutionRequest,
+    ) -> Result<QueryExecutionAccepted, AppError> {
+        let result = self.query.start_query(Some(app), request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn cancel_query_execution(
+        &self,
+        job_id: String,
+    ) -> Result<CancelQueryExecutionResult, AppError> {
+        let result = self.query.cancel_query(job_id).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

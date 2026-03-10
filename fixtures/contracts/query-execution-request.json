@@ -1,0 +1,7 @@
+{
+  "tabId": "tab-1",
+  "connectionId": "conn-local-postgres",
+  "sql": "select id, email from users;",
+  "origin": "current-statement",
+  "isSelectionMultiStatement": false
+}

@@ -1,0 +1,37 @@
+{
+  "jobId": "query-job-2026",
+  "correlationId": "query-corr-2026",
+  "tabId": "tab-1",
+  "connectionId": "conn-local-postgres",
+  "status": "completed",
+  "elapsedMs": 28,
+  "message": "Query completed with 2 preview rows.",
+  "startedAt": "2026-03-10T16:45:00.000Z",
+  "finishedAt": "2026-03-10T16:45:00.028Z",
+  "lastError": null,
+  "result": {
+    "kind": "rows",
+    "columns": [
+      {
+        "name": "id",
+        "postgresType": "int4"
+      },
+      {
+        "name": "email",
+        "postgresType": "text"
+      }
+    ],
+    "previewRows": [
+      [
+        "1",
+        "ada@example.com"
+      ],
+      [
+        "2",
+        "grace@example.com"
+      ]
+    ],
+    "previewRowCount": 2,
+    "truncated": false
+  }
+}

@@ -4,9 +4,11 @@ use crate::foundation::{
     AppBootstrap, AppError, AppState, BackgroundJobAccepted, BackgroundJobProgressEvent,
     BackgroundJobRequest, CancelJobResult, ConnectionDetails, ConnectionSummary,
     ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult, DisconnectSessionResult,
-    ListSchemaChildrenRequest, ListSchemaChildrenResult, RefreshSchemaScopeRequest,
-    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
-    TestConnectionRequest, BACKGROUND_JOB_EVENT,
+    CancelQueryExecutionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
+    QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted,
+    SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest, BACKGROUND_JOB_EVENT,
+    QUERY_EXECUTION_EVENT,
 };
 
 #[tauri::command]
@@ -95,6 +97,23 @@ pub async fn search_schema_cache(
 }
 
 #[tauri::command]
+pub async fn start_query_execution(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: QueryExecutionRequest,
+) -> Result<QueryExecutionAccepted, AppError> {
+    state.start_query_execution(app, request).await
+}
+
+#[tauri::command]
+pub async fn cancel_query_execution(
+    state: State<'_, AppState>,
+    job_id: String,
+) -> Result<CancelQueryExecutionResult, AppError> {
+    state.cancel_query_execution(job_id).await
+}
+
+#[tauri::command]
 pub async fn start_mock_job(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -119,6 +138,19 @@ pub fn emit_background_job_event(
         AppError::internal(
             "emit_failed",
             "Failed to emit background job event.",
+            Some(error.to_string()),
+        )
+    })
+}
+
+pub fn emit_query_execution_event(
+    app: &AppHandle,
+    event: &QueryExecutionProgressEvent,
+) -> Result<(), AppError> {
+    app.emit(QUERY_EXECUTION_EVENT, event).map_err(|error| {
+        AppError::internal(
+            "emit_failed",
+            "Failed to emit query execution event.",
             Some(error.to_string()),
         )
     })

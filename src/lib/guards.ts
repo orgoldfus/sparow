@@ -13,6 +13,13 @@ import type {
   DisconnectSessionResult,
   ListSchemaChildrenRequest,
   ListSchemaChildrenResult,
+  QueryExecutionAccepted,
+  QueryExecutionOrigin,
+  QueryExecutionProgressEvent,
+  QueryExecutionRequest,
+  QueryExecutionResult,
+  QueryExecutionStatus,
+  QueryResultColumn,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
   SchemaCacheStatus,
@@ -58,6 +65,20 @@ function isSchemaRefreshStatus(value: unknown): value is SchemaRefreshStatus {
   return value === 'queued' || value === 'running' || value === 'completed' || value === 'failed';
 }
 
+function isQueryExecutionOrigin(value: unknown): value is QueryExecutionOrigin {
+  return value === 'selection' || value === 'current-statement';
+}
+
+function isQueryExecutionStatus(value: unknown): value is QueryExecutionStatus {
+  return (
+    value === 'queued' ||
+    value === 'running' ||
+    value === 'completed' ||
+    value === 'cancelled' ||
+    value === 'failed'
+  );
+}
+
 function isBackgroundJobStatus(value: unknown): value is BackgroundJobProgressEvent['status'] {
   return (
     value === 'queued' ||
@@ -90,6 +111,14 @@ function isNullableBoolean(value: unknown): value is boolean | null {
 
 function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
+}
+
+function isPreviewCell(value: unknown): value is string | null {
+  return typeof value === 'string' || value === null;
+}
+
+function isQueryPreviewRow(value: unknown): value is (string | null)[] {
+  return Array.isArray(value) && value.every(isPreviewCell);
 }
 
 function isEncodedPathSegment(segment: string): boolean {
@@ -493,6 +522,71 @@ export function isSchemaSearchResult(value: unknown): value is SchemaSearchResul
     typeof value.query === 'string' &&
     Array.isArray(value.nodes) &&
     value.nodes.every((node) => isSchemaNode(node) && node.connectionId === value.connectionId)
+  );
+}
+
+export function isQueryResultColumn(value: unknown): value is QueryResultColumn {
+  return isRecord(value) && typeof value.name === 'string' && typeof value.postgresType === 'string';
+}
+
+export function isQueryExecutionResult(value: unknown): value is QueryExecutionResult {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  switch (value.kind) {
+    case 'rows':
+      return (
+        Array.isArray(value.columns) &&
+        value.columns.every(isQueryResultColumn) &&
+        Array.isArray(value.previewRows) &&
+        value.previewRows.every(isQueryPreviewRow) &&
+        typeof value.previewRowCount === 'number' &&
+        typeof value.truncated === 'boolean'
+      );
+    case 'command':
+      return typeof value.commandTag === 'string' && isNullableNumber(value.rowsAffected);
+    default:
+      return false;
+  }
+}
+
+export function isQueryExecutionRequest(value: unknown): value is QueryExecutionRequest {
+  return (
+    isRecord(value) &&
+    typeof value.tabId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    typeof value.sql === 'string' &&
+    isQueryExecutionOrigin(value.origin) &&
+    typeof value.isSelectionMultiStatement === 'boolean'
+  );
+}
+
+export function isQueryExecutionAccepted(value: unknown): value is QueryExecutionAccepted {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.tabId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    typeof value.startedAt === 'string'
+  );
+}
+
+export function isQueryExecutionProgressEvent(value: unknown): value is QueryExecutionProgressEvent {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.tabId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    isQueryExecutionStatus(value.status) &&
+    typeof value.elapsedMs === 'number' &&
+    typeof value.message === 'string' &&
+    typeof value.startedAt === 'string' &&
+    isNullableString(value.finishedAt) &&
+    (value.lastError === null || isAppError(value.lastError)) &&
+    (value.result === null || isQueryExecutionResult(value.result))
   );
 }
 

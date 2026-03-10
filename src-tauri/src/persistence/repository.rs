@@ -117,11 +117,19 @@ impl Repository {
     }
 
     pub fn record_history(&self, sql: String) -> Result<(), AppError> {
+        self.record_history_entry(sql, None)
+    }
+
+    pub fn record_history_entry(
+        &self,
+        sql: String,
+        connection_profile_id: Option<String>,
+    ) -> Result<(), AppError> {
         let connection = self.open()?;
         connection
             .execute(
                 "insert into query_history (id, sql, connection_profile_id, created_at) values (?1, ?2, ?3, datetime('now'))",
-                params![uuid::Uuid::new_v4().to_string(), sql, Option::<String>::None],
+                params![uuid::Uuid::new_v4().to_string(), sql, connection_profile_id],
             )
             .map_err(|error| {
                 AppError::internal(

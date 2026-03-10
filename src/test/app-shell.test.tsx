@@ -13,7 +13,12 @@ import type {
   SaveConnectionRequest,
 } from '../lib/contracts';
 import { isConnectionDetails, isDatabaseSessionSnapshot } from '../lib/guards';
-import { getSavedConnection, saveConnection, subscribeToSchemaRefreshEvent } from '../lib/ipc';
+import {
+  getSavedConnection,
+  saveConnection,
+  subscribeToQueryExecutionEvent,
+  subscribeToSchemaRefreshEvent,
+} from '../lib/ipc';
 
 function expectConnectionDetails(value: unknown): ConnectionDetails {
   expect(isConnectionDetails(value)).toBe(true);
@@ -66,27 +71,41 @@ vi.mock('../lib/ipc', () => ({
   ),
   refreshSchemaScope: vi.fn(() => Promise.resolve({})),
   searchSchemaCache: vi.fn(() => Promise.resolve(schemaSearchResultFixture)),
+  startQueryExecution: vi.fn(() =>
+    Promise.resolve({
+      jobId: 'query-job-1',
+      correlationId: 'query-corr-1',
+      tabId: 'tab-1',
+      connectionId: databaseSession.connectionId,
+      startedAt: '2026-03-10T16:45:00.000Z',
+    }),
+  ),
+  cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  subscribeToQueryExecutionEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToSchemaRefreshEvent: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 const saveConnectionMock = vi.mocked(saveConnection);
 const getSavedConnectionMock = vi.mocked(getSavedConnection);
+const subscribeToQueryExecutionEventMock = vi.mocked(subscribeToQueryExecutionEvent);
 const subscribeToSchemaRefreshEventMock = vi.mocked(subscribeToSchemaRefreshEvent);
 
 describe('App shell', () => {
   beforeEach(() => {
     saveConnectionMock.mockClear();
     getSavedConnectionMock.mockReset();
+    subscribeToQueryExecutionEventMock.mockReset();
     subscribeToSchemaRefreshEventMock.mockReset();
     getSavedConnectionMock.mockResolvedValue(connectionDetails);
     saveConnectionMock.mockResolvedValue(connectionDetails);
+    subscribeToQueryExecutionEventMock.mockResolvedValue(() => {});
     subscribeToSchemaRefreshEventMock.mockResolvedValue(() => {});
   });
 
   it('renders the five shell regions after bootstrap', async () => {
     render(<App />);
 
-    await screen.findByText(/Native-feeling PostgreSQL browsing with explicit cached metadata/i);
+    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
 
     expect(screen.getByTestId('connections-region')).toBeInTheDocument();
     expect(screen.getByTestId('editor-tabs-region')).toBeInTheDocument();
@@ -184,7 +203,28 @@ describe('App shell', () => {
     );
 
     const view = render(<App />);
-    await screen.findByText(/Native-feeling PostgreSQL browsing with explicit cached metadata/i);
+    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
+
+    view.unmount();
+    resolveCleanup?.(cleanup);
+    await Promise.resolve();
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up a query listener that resolves after unmount', async () => {
+    let resolveCleanup: ((cleanup: () => void) => void) | undefined;
+    const cleanup = vi.fn();
+
+    subscribeToQueryExecutionEventMock.mockImplementation(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveCleanup = resolve;
+        }),
+    );
+
+    const view = render(<App />);
+    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
 
     view.unmount();
     resolveCleanup?.(cleanup);

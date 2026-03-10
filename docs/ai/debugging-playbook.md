@@ -40,8 +40,22 @@
 - Cache entries older than 2 minutes are treated as stale and should trigger a background refresh.
 - For real PostgreSQL validation, run `npm run smoke:postgres`.
 
+## If Query Execution Fails
+- Check `src/features/query/sqlStatement.ts` first for selection-vs-cursor execution and ambiguous-current-statement validation.
+- Check `src/features/query/useQueryWorkspace.ts` for per-tab state reduction and event ownership.
+- Check `src-tauri/src/query/service.rs` for request validation, per-tab locking, history recording, and event emission.
+- Check `src-tauri/src/query/driver.rs` for PostgreSQL execution, cancel-token wiring, and result mapping.
+- Confirm `query://execution-progress` still matches on both sides.
+- Use the diagnostics panel to inspect the latest query status, job id, connection id, correlation id, elapsed time, and terminal error code.
+- Use `node ./scripts/inspect-query-history.mjs --db <sqlite-path> [--connection <connection-id>] [--limit <n>]` to inspect accepted query-history rows without opening SQLite manually.
+- `scripts/inspect-query-history.mjs` currently shells out to `python3`; install Python 3 before relying on it.
+- Backend query error codes currently include `query_no_active_session`, `query_tab_target_mismatch`, `query_empty_sql`, `query_multi_statement_selection`, `query_tab_already_running`, `query_job_missing`, `query_sql_execution_failed`, `query_cancel_failed`, and `query_cancelled`.
+- Ambiguous cursor placement is a frontend validation failure from the SQL slicing helper, not a Rust `AppError`.
+- For real PostgreSQL validation, run `npm run smoke:postgres`.
+
 ## If The Shell Renders Incorrectly
 - Run `npm run smoke:foundation`.
 - Check `src/test/app-shell.test.tsx` and `src/test/foundation-smoke.test.tsx`.
 - Check `src/test/schema-browser.test.tsx` for schema tree, search, and diagnostics expectations.
+- Check `src/test/query-workspace.test.tsx`, `src/test/query-execution-slice.test.ts`, `src/test/sql-statement.test.ts`, and `src/test/sql-autocomplete.test.ts` for Phase 4 workspace expectations.
 - Keep layout regions stable; replace content before reshaping the shell grid.

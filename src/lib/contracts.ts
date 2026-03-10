@@ -1,5 +1,6 @@
 export const BACKGROUND_JOB_EVENT = 'foundation://job-progress';
 export const SCHEMA_REFRESH_EVENT = 'schema://refresh-progress';
+export const QUERY_EXECUTION_EVENT = 'query://execution-progress';
 
 export type AppEnvironment = 'development' | 'production' | 'test';
 export type BackgroundJobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
@@ -10,6 +11,8 @@ export type SchemaNodeKind = 'schema' | 'table' | 'view' | 'column' | 'index';
 export type SchemaScopeKind = 'root' | 'schema' | 'table' | 'view';
 export type SchemaCacheStatus = 'empty' | 'fresh' | 'stale';
 export type SchemaRefreshStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type QueryExecutionOrigin = 'selection' | 'current-statement';
+export type QueryExecutionStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
 
 export type ConnectionSummary = {
   id: string;
@@ -207,6 +210,61 @@ export type SchemaSearchResult = {
   connectionId: string;
   query: string;
   nodes: SchemaNode[];
+};
+
+export type QueryResultColumn = {
+  name: string;
+  postgresType: string;
+};
+
+export type QueryRowsResult = {
+  kind: 'rows';
+  columns: QueryResultColumn[];
+  previewRows: (string | null)[][];
+  previewRowCount: number;
+  truncated: boolean;
+};
+
+export type QueryCommandResult = {
+  kind: 'command';
+  commandTag: string;
+  rowsAffected: number | null;
+};
+
+export type QueryExecutionResult = QueryRowsResult | QueryCommandResult;
+
+export type QueryExecutionRequest = {
+  tabId: string;
+  connectionId: string;
+  sql: string;
+  origin: QueryExecutionOrigin;
+  isSelectionMultiStatement: boolean;
+};
+
+export type QueryExecutionAccepted = {
+  jobId: string;
+  correlationId: string;
+  tabId: string;
+  connectionId: string;
+  startedAt: string;
+};
+
+export type QueryExecutionProgressEvent = {
+  jobId: string;
+  correlationId: string;
+  tabId: string;
+  connectionId: string;
+  status: QueryExecutionStatus;
+  elapsedMs: number;
+  message: string;
+  startedAt: string;
+  finishedAt: string | null;
+  lastError: AppError | null;
+  result: QueryExecutionResult | null;
+};
+
+export type CancelQueryExecutionResult = {
+  jobId: string;
 };
 
 export type AppError = {
