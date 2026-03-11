@@ -196,19 +196,21 @@ export default function App() {
     };
   }, []);
 
-  const healthTone = error ? 'danger' : workspace.activeSession ? 'success' : 'warning';
+  const activeQueryError = queryWorkspace.activeTab?.execution.lastError ?? null;
+  const isDegraded = Boolean(error || activeQueryError);
+  const healthTone = isDegraded ? 'danger' : workspace.activeSession ? 'success' : 'warning';
   const latestStatusText = useMemo(() => {
     if (error) {
       return error.message;
     }
-    if (queryWorkspace.activeTab?.execution.lastError) {
-      return queryWorkspace.activeTab.execution.lastError.message;
+    if (activeQueryError) {
+      return activeQueryError.message;
     }
     if (workspace.activeSession) {
       return `Connected to ${workspace.activeSession.name}.`;
     }
     return 'No active database session.';
-  }, [error, queryWorkspace.activeTab?.execution.lastError, workspace.activeSession]);
+  }, [activeQueryError, error, workspace.activeSession]);
 
   function openNewConnectionDialog() {
     workspace.createConnection();
@@ -261,7 +263,7 @@ export default function App() {
                   latestError={error ?? bootstrap?.diagnostics.lastError ?? null}
                   pending={workspace.pending}
                   replacePassword={workspace.replacePassword}
-                  selectedConnectionId={editingConnectionId}
+                  selectedConnectionId={editingConnectionId ?? workspace.selectedConnectionId}
                   onConnect={workspace.connectSelectedConnection}
                   onDelete={workspace.deleteSelectedConnection}
                   onDisconnect={workspace.disconnectSelectedConnection}
@@ -336,7 +338,7 @@ export default function App() {
           statusBar={
             <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
-                <Badge variant={healthTone}>{error ? 'Degraded' : workspace.activeSession ? 'Ready' : 'Idle'}</Badge>
+                <Badge variant={healthTone}>{isDegraded ? 'Degraded' : workspace.activeSession ? 'Ready' : 'Idle'}</Badge>
                 <span>{workspace.activeSession?.name ?? 'No active session'}</span>
                 <span className="inline-flex items-center gap-1">
                   <Dot className="h-4 w-4" />

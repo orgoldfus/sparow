@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleSlash2, Database, Edit3, KeyRound, Plus, RefreshCcw, Shield, Trash2, Unplug, Wifi, Zap } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -82,6 +82,9 @@ export function ConnectionsRail({
   pending,
   selectedConnectionId,
 }: ConnectionsRailProps) {
+  const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null;
+  const selectedSession = activeSession?.connectionId === selectedConnectionId ? activeSession : null;
+
   return (
     <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
       <div className="flex items-center justify-between px-4 pb-3 pt-4">
@@ -107,13 +110,23 @@ export function ConnectionsRail({
             <div>
               <p className="text-xs font-medium text-[var(--text-primary)]">Selected target</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {connections.find((connection) => connection.id === selectedConnectionId)?.name ?? 'None selected'}
+                {selectedConnection?.name ?? 'None selected'}
               </p>
             </div>
-            {activeSession ? <Badge variant="success">Live</Badge> : <Badge variant="warning">Idle</Badge>}
+            {selectedSession ? <Badge variant="success">Live</Badge> : <Badge variant="warning">Idle</Badge>}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button onClick={onEditSelected} size="sm" type="button" variant="secondary">
+            <Button
+              disabled={!selectedConnection}
+              onClick={() => {
+                if (selectedConnection) {
+                  onEditSelected();
+                }
+              }}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
               <Edit3 className="h-3.5 w-3.5" />
               Edit
             </Button>
@@ -275,13 +288,10 @@ export function ConnectionEditor({
                   />
                 </Field>
                 <Field label="Port" error={draftErrors.port}>
-                  <Input
-                    inputMode="numeric"
-                    onChange={(event) => {
-                      onUpdateDraft('port', Number(event.currentTarget.value) || 0);
-                    }}
-                    type="number"
-                    value={draft.port}
+                  <PortInputField
+                    key={`${selectedConnectionId ?? 'draft'}:${draft.port}`}
+                    onUpdateDraft={onUpdateDraft}
+                    port={draft.port}
                   />
                 </Field>
               </div>
@@ -497,6 +507,40 @@ function Field({
       {children}
       {error ? <span className="text-xs text-[var(--danger-text)]">{error}</span> : null}
     </label>
+  );
+}
+
+function PortInputField({
+  onUpdateDraft,
+  port,
+}: {
+  onUpdateDraft: <Key extends keyof ConnectionDraft>(key: Key, value: ConnectionDraft[Key]) => void;
+  port: number;
+}) {
+  const [inputValue, setInputValue] = useState(() => String(port));
+
+  return (
+    <Input
+      inputMode="numeric"
+      onBlur={() => {
+        if (inputValue === '') {
+          onUpdateDraft('port', 0);
+        }
+      }}
+      onChange={(event) => {
+        const nextValue = event.currentTarget.value;
+        setInputValue(nextValue);
+
+        if (nextValue !== '') {
+          const parsedPort = Number(nextValue);
+          if (!Number.isNaN(parsedPort)) {
+            onUpdateDraft('port', parsedPort);
+          }
+        }
+      }}
+      type="number"
+      value={inputValue}
+    />
   );
 }
 
