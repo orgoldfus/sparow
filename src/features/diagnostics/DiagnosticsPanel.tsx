@@ -1,4 +1,6 @@
-import { Bug, DatabaseZap, FileClock, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, DatabaseZap, FileClock, ShieldAlert, Waves } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import type {
   AppBootstrap,
   AppError,
@@ -29,136 +31,174 @@ export function DiagnosticsPanel({
   selectedSchemaNode,
 }: DiagnosticsPanelProps) {
   return (
-    <aside className="flex h-full min-h-[320px] flex-col">
-      <div className="border-b border-[var(--line-soft)] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Bug className="h-4 w-4 text-[var(--accent-strong)]" />
-          <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">
-            Diagnostics Surface
-          </h2>
-        </div>
+    <div className="grid max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)]" data-testid="diagnostics-dialog">
+      <div className="border-b border-[var(--border-subtle)] px-6 py-5">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Diagnostics</p>
+        <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Runtime visibility</h2>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)]">
+          Background jobs, storage paths, recent failures, and schema selection details live here so the workspace can
+          stay clean by default.
+        </p>
       </div>
-      <div className="grid flex-1 gap-4 p-4">
-        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4">
-          <div className="flex items-center gap-2 text-[var(--ink-1)]">
-            <DatabaseZap className="h-4 w-4 text-[var(--accent-strong)]" />
-            <h3 className="font-medium">Runtime paths</h3>
-          </div>
-          <dl className="mt-3 grid gap-3 text-sm text-[var(--ink-2)]">
-            <div>
-              <dt className="text-[var(--ink-3)]">SQLite store</dt>
-              <dd className="break-all">{bootstrap?.storage.databasePath ?? 'pending'}</dd>
-            </div>
-            <div>
-              <dt className="text-[var(--ink-3)]">Log file</dt>
-              <dd className="break-all">{bootstrap?.storage.logFilePath ?? 'pending'}</dd>
-            </div>
-          </dl>
-        </section>
 
-        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4">
-          <div className="flex items-center gap-2 text-[var(--ink-1)]">
-            <ShieldAlert className="h-4 w-4 text-[var(--accent-strong)]" />
-            <h3 className="font-medium">Last error</h3>
-          </div>
-          <div className="mt-3 text-sm text-[var(--ink-2)]">
-            {lastError ? (
-              <>
-                <p>{lastError.message}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-                  {lastError.code} / {lastError.correlationId}
-                </p>
-              </>
-            ) : (
-              <p>No recorded error.</p>
-            )}
-          </div>
-        </section>
+      <ScrollArea className="min-h-0 px-6 pb-6 pt-5">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card
+            icon={<DatabaseZap className="h-4 w-4" />}
+            title="Runtime paths"
+            content={
+              <dl className="grid gap-3 text-sm text-[var(--text-secondary)]">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">SQLite store</dt>
+                  <dd className="mt-1 break-all">{bootstrap?.storage.databasePath ?? 'pending'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">Log file</dt>
+                  <dd className="mt-1 break-all">{bootstrap?.storage.logFilePath ?? 'pending'}</dd>
+                </div>
+              </dl>
+            }
+          />
 
-        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4">
-          <div className="flex items-center gap-2 text-[var(--ink-1)]">
-            <FileClock className="h-4 w-4 text-[var(--accent-strong)]" />
-            <h3 className="font-medium">Recent events</h3>
-          </div>
-          <ul className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-            {recentEvents.length > 0 || recentSchemaEvents.length > 0 || recentQueryEvents.length > 0 ? (
-              <>
-                {recentQueryEvents.slice(0, 3).map((event) => (
-                  <li
-                    className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
-                    key={`${event.jobId}-${event.status}-${event.startedAt}`}
-                  >
-                    <p>{event.message}</p>
-                    <div className="mt-1 grid gap-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-                      <p>
-                        {event.status} / {event.tabId} / {event.correlationId}
-                      </p>
-                      <p>
-                        Job {event.jobId} / {event.connectionId} / {event.elapsedMs} ms
-                      </p>
-                      {event.lastError ? <p>{event.lastError.code}</p> : null}
-                    </div>
-                  </li>
-                ))}
-                {recentSchemaEvents.slice(0, 3).map((event) => (
-                  <li
-                    className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
-                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
-                  >
-                    <p>{event.message}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-                      {event.status} / {event.scopePath ?? 'root'} / {event.correlationId}
-                    </p>
-                  </li>
-                ))}
-                {recentEvents.slice(0, 3).map((event) => (
-                <li
-                  className="border border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2"
-                  key={`${event.jobId}-${event.status}-${event.timestamp}`}
-                >
-                  <p>{event.message}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-                    {event.status} / {event.correlationId}
+          <Card
+            icon={<ShieldAlert className="h-4 w-4" />}
+            title="Last error"
+            content={
+              lastError ? (
+                <div className="grid gap-3 text-sm text-[var(--text-secondary)]">
+                  <p className="text-[var(--danger-text)]">{lastError.message}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    {lastError.code} / {lastError.correlationId}
                   </p>
-                </li>
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--text-secondary)]">No recorded error.</p>
+              )
+            }
+          />
+
+          <Card
+            icon={<Waves className="h-4 w-4" />}
+            title="Connection snapshot"
+            content={
+              <div className="grid gap-2 text-sm text-[var(--text-secondary)]">
+                <p>Saved targets: {bootstrap?.savedConnections.length ?? 0}</p>
+                <p>Selected id: {bootstrap?.selectedConnectionId ?? 'none'}</p>
+                <p>Active session: {activeSession?.name ?? 'none'}</p>
+                <p>
+                  SSL:{' '}
+                  {activeSession?.sslInUse === true
+                    ? 'enabled'
+                    : activeSession?.sslInUse === false
+                      ? 'disabled'
+                      : activeSession
+                        ? 'unknown'
+                        : 'n/a'}
+                </p>
+              </div>
+            }
+          />
+
+          <Card
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title="Selected schema node"
+            content={
+              <div className="grid gap-2 text-sm text-[var(--text-secondary)]">
+                <p>Name: {selectedSchemaNode?.name ?? 'none'}</p>
+                <p>Kind: {selectedSchemaNode?.kind ?? 'none'}</p>
+                <p className="break-all">Path: {selectedSchemaNode?.path ?? 'none'}</p>
+              </div>
+            }
+          />
+        </div>
+
+        <section className="mt-5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4">
+          <div className="flex items-center gap-2">
+            <FileClock className="h-4 w-4 text-[var(--accent-text)]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Recent events</h3>
+            <Badge className="ml-auto">{recentEvents.length + recentSchemaEvents.length + recentQueryEvents.length}</Badge>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {recentQueryEvents.length > 0 || recentSchemaEvents.length > 0 || recentEvents.length > 0 ? (
+              <>
+                {recentQueryEvents.slice(0, 4).map((event) => (
+                  <EventRow
+                    key={`${event.jobId}-${event.status}-${event.startedAt}`}
+                    label={`${event.status} / ${event.tabId}`}
+                    message={event.message}
+                    meta={`Job ${event.jobId} / ${event.connectionId} / ${event.elapsedMs} ms`}
+                    tone={event.lastError ? 'danger' : 'default'}
+                  />
+                ))}
+                {recentSchemaEvents.slice(0, 4).map((event) => (
+                  <EventRow
+                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
+                    label={`${event.status} / ${event.scopePath ?? 'root'}`}
+                    message={event.message}
+                    meta={event.correlationId}
+                    tone={event.status === 'failed' ? 'danger' : 'default'}
+                  />
+                ))}
+                {recentEvents.slice(0, 4).map((event) => (
+                  <EventRow
+                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
+                    label={event.status}
+                    message={event.message}
+                    meta={event.correlationId}
+                    tone={event.lastError ? 'danger' : 'default'}
+                  />
                 ))}
               </>
             ) : (
-              <li className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-0)] px-3 py-2">
+              <div className="rounded-xl border border-dashed border-[var(--border-subtle)] px-3 py-4 text-sm text-[var(--text-secondary)]">
                 Event history will appear here as background tasks report status.
-              </li>
+              </div>
             )}
-          </ul>
-        </section>
-
-        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
-          <p className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">Connection snapshot</p>
-          <div className="mt-3 grid gap-2">
-            <p>Saved targets: {bootstrap?.savedConnections.length ?? 0}</p>
-            <p>Selected id: {bootstrap?.selectedConnectionId ?? 'none'}</p>
-            <p>Active session: {activeSession?.name ?? 'none'}</p>
-            <p>
-              SSL:{' '}
-              {activeSession?.sslInUse === true
-                ? 'enabled'
-                : activeSession?.sslInUse === false
-                  ? 'disabled'
-                  : activeSession
-                    ? 'unknown'
-                    : 'n/a'}
-            </p>
           </div>
         </section>
+      </ScrollArea>
+    </div>
+  );
+}
 
-        <section className="border border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
-          <p className="text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">Selected schema node</p>
-          <div className="mt-3 grid gap-2">
-            <p>Name: {selectedSchemaNode?.name ?? 'none'}</p>
-            <p>Kind: {selectedSchemaNode?.kind ?? 'none'}</p>
-            <p>Path: {selectedSchemaNode?.path ?? 'none'}</p>
-          </div>
-        </section>
+function Card({
+  content,
+  icon,
+  title,
+}: {
+  content: React.ReactNode;
+  icon: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4">
+      <div className="flex items-center gap-2">
+        <div className="rounded-lg bg-[var(--surface-highlight)] p-2 text-[var(--accent-text)]">{icon}</div>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
       </div>
-    </aside>
+      <div className="mt-4">{content}</div>
+    </section>
+  );
+}
+
+function EventRow({
+  label,
+  message,
+  meta,
+  tone,
+}: {
+  label: string;
+  message: string;
+  meta: string;
+  tone: 'danger' | 'default';
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-3 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-[var(--text-primary)]">{message}</p>
+        <Badge variant={tone === 'danger' ? 'danger' : 'default'}>{label}</Badge>
+      </div>
+      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">{meta}</p>
+    </div>
   );
 }

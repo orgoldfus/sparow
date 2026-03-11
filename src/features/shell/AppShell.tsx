@@ -1,160 +1,104 @@
-import { Database, PanelBottom, PanelLeftClose, ShieldCheck, TerminalSquare } from 'lucide-react';
+import { Command, Database, LoaderCircle, MoonStar } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type {
-  AppBootstrap,
-  AppError,
-  BackgroundJobProgressEvent,
-  QueryExecutionProgressEvent,
-} from '../../lib/contracts';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Separator } from '../../components/ui/separator';
+import { TooltipLabel } from '../../components/ui/tooltip';
 
 type AppShellProps = {
-  bootstrap: AppBootstrap | null;
-  connectionEditor: ReactNode;
-  connectionResults: ReactNode;
-  connectionsRail: ReactNode;
-  diagnosticsPanel: ReactNode;
-  error: AppError | null;
+  bootstrapEnvironment: string | null;
+  bootstrapPlatform: string | null;
+  editor: ReactNode;
+  editorTabs: ReactNode;
   isLoading: boolean;
-  recentEvents: BackgroundJobProgressEvent[];
-  recentQueryEvents: QueryExecutionProgressEvent[];
-  statusHeadline: string;
+  leftSidebar: ReactNode;
+  results: ReactNode;
+  statusBar: ReactNode;
+  connectionDialog: ReactNode;
+  diagnosticsDialog: ReactNode;
 };
 
 export function AppShell({
-  bootstrap,
-  connectionEditor,
-  connectionResults,
-  connectionsRail,
-  diagnosticsPanel,
-  error,
+  bootstrapEnvironment,
+  bootstrapPlatform,
+  editor,
+  editorTabs,
   isLoading,
-  recentEvents,
-  recentQueryEvents,
-  statusHeadline,
+  leftSidebar,
+  results,
+  statusBar,
+  connectionDialog,
+  diagnosticsDialog,
 }: AppShellProps) {
-  const statusTone = error ? 'text-[var(--danger-ink)]' : 'text-[var(--accent-strong)]';
-
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(229,122,76,0.16),_transparent_32%),linear-gradient(180deg,_var(--surface-0),_var(--surface-1))] px-4 py-4 text-[var(--ink-1)] sm:px-6">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1600px] flex-col border border-[var(--line-soft)] bg-[color-mix(in_oklch,_var(--surface-0)_92%,_white_8%)] shadow-[var(--shadow-shell)]">
-        <header className="grid gap-6 border-b border-[var(--line-soft)] px-5 py-5 md:grid-cols-[1.45fr_0.95fr] md:px-7">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.28em] text-[var(--ink-3)]">
-              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[var(--accent-strong)]" />
-              Sparow / Phase 4 Query Workspace
+    <main className="min-h-screen bg-[var(--surface-app)] px-4 py-4 text-[var(--text-primary)] sm:px-6">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1680px] flex-col overflow-hidden rounded-[28px] border border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-app)_90%,_black_10%)] shadow-[var(--shadow-shell)]">
+        <header className="flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_86%,_black_14%)] px-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)] text-[var(--accent-text)]">
+              <Database className="h-4 w-4" />
             </div>
-            <div className="max-w-3xl">
-              <h1 className="font-display text-4xl leading-none text-[var(--ink-1)] sm:text-5xl">
-                Native-feeling SQL work with explicit PostgreSQL state.
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-2)]">{statusHeadline}</p>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-              <span className="border border-[var(--line-soft)] px-3 py-2">Typed IPC only</span>
-              <span className="border border-[var(--line-soft)] px-3 py-2">SQLite-backed schema cache</span>
-              <span className="border border-[var(--line-soft)] px-3 py-2">One active session</span>
-              <span className="border border-[var(--line-soft)] px-3 py-2">Monaco query workspace</span>
+            <div className="flex items-center gap-3">
+              <div>
+                <p className="text-sm font-semibold tracking-[0.01em]">Sparow</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Query workspace</p>
+              </div>
+              <Separator className="hidden h-6 md:block" orientation="vertical" />
+              <div className="hidden items-center gap-2 md:flex">
+                <Badge data-testid="environment-value">{bootstrapEnvironment ?? 'booting'}</Badge>
+                <Badge>{bootstrapPlatform ?? 'desktop'}</Badge>
+              </div>
             </div>
           </div>
 
-          <section className="grid gap-3 border border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="uppercase tracking-[0.24em] text-[var(--ink-3)]">Boot Status</span>
-              <span className={`font-medium ${statusTone}`}>{error ? 'Degraded' : isLoading ? 'Loading' : 'Ready'}</span>
-            </div>
-            <dl className="grid gap-3 text-sm text-[var(--ink-2)] sm:grid-cols-2">
-              <div>
-                <dt className="text-[var(--ink-3)]">Environment</dt>
-                <dd data-testid="environment-value">{bootstrap?.environment ?? 'pending'}</dd>
+          <div className="flex items-center gap-2">
+            <TooltipLabel content="Command palette lands in a later pass.">
+              <Button size="sm" type="button" variant="ghost">
+                <Command className="h-3.5 w-3.5" />
+                Cmd+K
+              </Button>
+            </TooltipLabel>
+            <Badge className="hidden md:inline-flex" variant="accent">
+              <MoonStar className="mr-1.5 h-3.5 w-3.5" />
+              Dark by default
+            </Badge>
+            {isLoading ? (
+              <div className="inline-flex items-center gap-2 rounded-md bg-[var(--surface-panel)] px-3 py-1.5 text-xs text-[var(--text-secondary)]">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                Booting shell
               </div>
-              <div>
-                <dt className="text-[var(--ink-3)]">Platform</dt>
-                <dd>{bootstrap?.platform ?? 'pending'}</dd>
-              </div>
-              <div>
-                <dt className="text-[var(--ink-3)]">Saved targets</dt>
-                <dd>{bootstrap?.savedConnections.length ?? 0}</dd>
-              </div>
-              <div>
-                <dt className="text-[var(--ink-3)]">Recent events</dt>
-                <dd>{recentEvents.length + recentQueryEvents.length}</dd>
-              </div>
-            </dl>
-          </section>
+            ) : null}
+          </div>
         </header>
 
-        <div className="grid flex-1 gap-px bg-[var(--line-soft)] lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="flex flex-col bg-[var(--surface-1)]" data-testid="connections-region">
-            <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <PanelLeftClose className="h-4 w-4 text-[var(--accent-strong)]" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">Explorer</h2>
-              </div>
-              <span className="text-xs text-[var(--ink-3)]">Connections and schema</span>
-            </div>
-            {connectionsRail}
+        <div className="grid flex-1 min-h-0 bg-[var(--border-subtle)] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="min-h-0 bg-[var(--surface-sidebar)]" data-testid="connections-region">
+            {leftSidebar}
           </aside>
 
-          <section className="grid min-h-0 gap-px bg-[var(--line-soft)] xl:grid-rows-[auto_minmax(0,1fr)_280px]">
-            <div className="bg-[var(--surface-0)]" data-testid="editor-tabs-region">
-              <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[var(--accent-strong)]" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">Workspace</h2>
-                </div>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-[var(--ink-3)]">
-                  <ShieldCheck className="h-4 w-4" />
-                  PostgreSQL only
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 px-4 py-4">
-                <div className="border border-[var(--line-strong)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--ink-1)]">
-                  Monaco editor
-                </div>
-                <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Per-tab targets
-                </div>
-                <div className="border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-3)]">
-                  Query cancellation
-                </div>
-              </div>
+          <section className="grid min-h-0 gap-px bg-[var(--border-subtle)] grid-rows-[auto_minmax(0,1fr)_320px]">
+            <div className="bg-[var(--surface-panel)]" data-testid="editor-tabs-region">
+              {editorTabs}
             </div>
-
-            <section className="grid min-h-0 gap-px bg-[var(--line-soft)] xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="editor-region">
-              {connectionEditor}
-              <div className="min-h-[300px] bg-[var(--surface-0)]">{diagnosticsPanel}</div>
-            </section>
-
-            <section className="bg-[var(--surface-1)]" data-testid="results-region">
-              <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <PanelBottom className="h-4 w-4 text-[var(--accent-strong)]" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">
-                    Query results
-                  </h2>
-                </div>
-                <span className="text-xs text-[var(--ink-3)]">Execution status, result preview, and command summaries</span>
-              </div>
-              {connectionResults}
-            </section>
+            <div className="min-h-0 bg-[var(--surface-editor)]" data-testid="editor-region">
+              {editor}
+            </div>
+            <div className="min-h-0 bg-[var(--surface-panel)]" data-testid="results-region">
+              {results}
+            </div>
           </section>
         </div>
 
         <footer
-          className="flex flex-col gap-2 border-t border-[var(--line-soft)] bg-[var(--surface-0)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-[var(--ink-3)] md:flex-row md:items-center md:justify-between"
+          className="border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]"
           data-testid="status-region"
         >
-          <div className="flex items-center gap-2">
-            <TerminalSquare className="h-4 w-4" />
-            <span>{import.meta.env.DEV ? 'Diagnostics visible in development' : 'Production shell'}</span>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <span>Selection persists</span>
-            <span>Secrets externalized</span>
-            <span>Rust owns sessions, schema cache, and query execution</span>
-          </div>
+          {statusBar}
         </footer>
       </div>
+
+      {connectionDialog}
+      {diagnosticsDialog}
     </main>
   );
 }

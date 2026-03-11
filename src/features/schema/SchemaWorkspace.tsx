@@ -1,162 +1,87 @@
-import {
-  ChevronRight,
-  Columns3,
-  Eye,
-  FolderTree,
-  KeyRound,
-  LoaderCircle,
-  RefreshCcw,
-  Search,
-  Table2,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
+import { ChevronRight, FolderTree, LoaderCircle, RefreshCcw, Search, Table2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
-import { Metric } from '../../components/Metric';
-import { formatLongTime } from '../../lib/format';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { cn } from '../../lib/utils';
 import type {
-  ConnectionSummary,
-  ConnectionTestResult,
   DatabaseSessionSnapshot,
   SchemaNode,
-  SchemaRefreshProgressEvent,
 } from '../../lib/contracts';
 import type { SchemaBrowserState } from './useSchemaBrowser';
 
 type SchemaSidebarProps = {
   activeSession: DatabaseSessionSnapshot | null;
-  connections: ConnectionSummary[];
-  onCreateConnection: () => void;
-  onSelectConnection: (connectionId: string | null) => void;
   schema: SchemaBrowserState;
-  selectedConnectionId: string | null;
 };
 
-type SchemaDetailsPanelProps = {
-  activeSession: DatabaseSessionSnapshot | null;
-  latestRefreshEvent: SchemaRefreshProgressEvent | null;
-  latestTestResult: ConnectionTestResult | null;
-  selectedNode: SchemaNode | null;
-};
-
-export function SchemaSidebar({
-  activeSession,
-  connections,
-  onCreateConnection,
-  onSelectConnection,
-  schema,
-  selectedConnectionId,
-}: SchemaSidebarProps) {
+export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <section className="border-b border-[var(--line-soft)] bg-[var(--surface-1)]">
-        <div className="flex items-center justify-between px-4 py-3">
+    <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)]">
+      <div className="px-4 pb-3 pt-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--ink-3)]">Saved targets</p>
-            <h2 className="mt-1 font-display text-2xl text-[var(--ink-1)]">Switcher</h2>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Schema</p>
+            <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
+              {activeSession?.database ?? 'Metadata browser'}
+            </h3>
           </div>
-          <button
-            className="border border-[var(--line-soft)] px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--ink-2)] transition hover:border-[var(--line-strong)] hover:text-[var(--ink-1)]"
-            onClick={onCreateConnection}
+          <Button
+            disabled={schema.isDisabled}
+            onClick={() => {
+              void schema.refreshSelectedScope();
+            }}
+            size="sm"
             type="button"
+            variant="ghost"
           >
-            New
-          </button>
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
         </div>
-        <div className="grid gap-2 px-4 pb-4">
-          {connections.map((connection) => {
-            const isSelected = selectedConnectionId === connection.id;
-            const isActive = activeSession?.connectionId === connection.id;
-            return (
-              <button
-                className={`flex items-center justify-between border px-3 py-2 text-left transition ${
-                  isSelected
-                    ? 'border-[var(--line-strong)] bg-[var(--surface-0)]'
-                    : 'border-[var(--line-soft)] bg-[color-mix(in_oklch,_var(--surface-1)_90%,_white_10%)] hover:border-[var(--line-strong)]'
-                }`}
-                key={connection.id}
-                onClick={() => {
-                  onSelectConnection(connection.id);
-                }}
-                type="button"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--ink-1)]">{connection.name}</p>
-                  <p className="text-xs text-[var(--ink-3)]">
-                    {connection.database} / {connection.username}
-                  </p>
-                </div>
-                {isActive ? <Wifi className="h-4 w-4 text-[var(--accent-strong)]" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-[var(--surface-0)]">
-        <div className="border-b border-[var(--line-soft)] px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FolderTree className="h-4 w-4 text-[var(--accent-strong)]" />
-              <h3 className="text-sm font-medium uppercase tracking-[0.22em] text-[var(--ink-3)]">Schema</h3>
-            </div>
-            <button
-              className="inline-flex items-center gap-2 border border-[var(--line-soft)] px-2.5 py-2 text-xs uppercase tracking-[0.16em] text-[var(--ink-2)] transition hover:border-[var(--line-strong)] hover:text-[var(--ink-1)] disabled:cursor-not-allowed disabled:opacity-45"
-              disabled={schema.isDisabled}
-              onClick={() => {
-                void schema.refreshSelectedScope();
-              }}
-              type="button"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            aria-label="Search schema cache"
+            className="h-9"
+            disabled={schema.isDisabled}
+            onChange={(event) => {
+              schema.setSearchQuery(event.currentTarget.value);
+            }}
+            placeholder={schema.isDisabled ? 'Connect to browse metadata' : 'Search tables, views, columns'}
+            value={schema.searchQuery}
+          />
+          <div className="rounded-md bg-[var(--surface-panel)] p-2 text-[var(--text-muted)]">
+            <Search className="h-4 w-4" />
           </div>
-          <label className="mt-3 flex items-center gap-2 border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--ink-2)]">
-            <Search className="h-4 w-4 text-[var(--ink-3)]" />
-            <input
-              aria-label="Search schema cache"
-              className="w-full bg-transparent outline-none"
-              disabled={schema.isDisabled}
-              onChange={(event) => {
-                schema.setSearchQuery(event.currentTarget.value);
-              }}
-              placeholder={schema.isDisabled ? 'Connect to browse metadata' : 'Search cached schema'}
-              value={schema.searchQuery}
-            />
-          </label>
         </div>
+      </div>
 
-        <div className="min-h-0 overflow-auto px-3 py-3">
+      <ScrollArea className="min-h-0 px-3 pb-3">
+        <div className="grid gap-2">
           {schema.isDisabled ? (
-            <div className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
-              Connect a saved PostgreSQL target to browse schemas, relations, and cached metadata.
-            </div>
+            <EmptyState message="Connect a saved PostgreSQL target to browse cached schema and relation metadata." />
           ) : schema.searchQuery.trim().length > 0 ? (
-            <div className="grid gap-2">
-              {schema.searchResults.length > 0 ? (
-                schema.searchResults.map((node) => (
-                  <button
-                    className="grid gap-1 border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-left transition hover:border-[var(--line-strong)]"
-                    key={node.path}
-                    onClick={() => {
-                      schema.selectNode(node);
-                    }}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-medium text-[var(--ink-1)]">
-                      {iconForNode(node)}
-                      {node.name}
-                    </div>
-                    <p className="text-xs text-[var(--ink-3)]">{node.path}</p>
-                  </button>
-                ))
-              ) : (
-                <div className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
-                  No cached matches yet. Expand a few scopes or run refresh to grow the local metadata cache.
-                </div>
-              )}
-            </div>
+            schema.searchResults.length > 0 ? (
+              schema.searchResults.map((node) => (
+                <button
+                  className="grid gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3 py-2 text-left transition hover:border-[var(--border-strong)]"
+                  key={node.path}
+                  onClick={() => {
+                    schema.selectNode(node);
+                  }}
+                  type="button"
+                >
+                  <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                    {iconForNode(node)}
+                    {node.name}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">{node.path}</p>
+                </button>
+              ))
+            ) : (
+              <EmptyState message="No cached matches yet. Refresh more scopes to grow the local metadata index." />
+            )
           ) : (
             <div
               aria-label="Schema browser"
@@ -169,21 +94,25 @@ export function SchemaSidebar({
               tabIndex={0}
             >
               {schema.isLoadingRoot ? (
-                <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--ink-2)]">
+                <div className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3 py-3 text-sm text-[var(--text-secondary)]">
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                   Loading cached root metadata…
                 </div>
               ) : schema.visibleRows.length > 0 ? (
                 schema.visibleRows.map((row) => {
                   const isSelected = schema.selectedNode?.path === row.node.path;
+
                   return (
                     <button
                       aria-expanded={row.node.hasChildren ? row.isExpanded : undefined}
                       aria-level={row.depth + 1}
                       aria-selected={isSelected}
-                      className={`flex items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                        isSelected ? 'bg-[var(--accent-soft)] text-[var(--ink-1)]' : 'text-[var(--ink-2)] hover:bg-[var(--surface-1)]'
-                      }`}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition',
+                        isSelected
+                          ? 'bg-[var(--surface-highlight)] text-[var(--text-primary)]'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)]',
+                      )}
                       data-testid={`schema-node-${row.node.path}`}
                       key={row.node.path}
                       onClick={() => {
@@ -193,12 +122,12 @@ export function SchemaSidebar({
                         void schema.toggleNode(row.node);
                       }}
                       role="treeitem"
-                      style={{ paddingLeft: `${row.depth * 18 + 12}px` }}
+                      style={{ paddingLeft: `${row.depth * 16 + 12}px` }}
                       type="button"
                     >
                       {row.node.hasChildren ? (
                         <ChevronRight
-                          className={`h-3.5 w-3.5 transition ${row.isExpanded ? 'rotate-90' : ''}`}
+                          className={cn('h-3.5 w-3.5 transition', row.isExpanded ? 'rotate-90' : '')}
                           onClick={(event) => {
                             event.stopPropagation();
                             void schema.toggleNode(row.node);
@@ -210,124 +139,28 @@ export function SchemaSidebar({
                       {iconForNode(row.node)}
                       <span className="min-w-0 flex-1 truncate">{row.node.name}</span>
                       {row.isRefreshing ? (
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[var(--accent-strong)]" />
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[var(--accent-text)]" />
                       ) : row.childScopeStatus === 'stale' ? (
-                        <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--danger-ink)]">Stale</span>
+                        <Badge variant="warning">Stale</Badge>
                       ) : null}
                     </button>
                   );
                 })
               ) : (
-                <div className="border border-dashed border-[var(--line-soft)] bg-[var(--surface-1)] p-4 text-sm text-[var(--ink-2)]">
-                  No cached schema rows yet. Refresh the root scope to seed the browser.
-                </div>
+                <EmptyState message="No cached schema rows yet. Refresh the root scope to seed the browser." />
               )}
             </div>
           )}
         </div>
-      </section>
-    </div>
+      </ScrollArea>
+    </section>
   );
 }
 
-export function SchemaDetailsPanel({
-  activeSession,
-  latestRefreshEvent,
-  latestTestResult,
-  selectedNode,
-}: SchemaDetailsPanelProps) {
+function EmptyState({ message }: { message: string }) {
   return (
-    <div className="grid gap-4 p-4 xl:grid-cols-[280px_280px_minmax(0,1fr)]">
-      <section className="grid gap-4">
-        <article className="border border-[var(--line-soft)] bg-[var(--surface-0)] p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--ink-3)]">Active session</p>
-          {activeSession ? (
-            <div className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-              <p className="font-medium text-[var(--ink-1)]">{activeSession.name}</p>
-              <p>
-                {activeSession.database} / {activeSession.username}
-              </p>
-              <p>
-                {activeSession.host}:{activeSession.port}
-              </p>
-              <p>
-                SSL:{' '}
-                {activeSession.sslInUse === true
-                  ? 'enabled'
-                  : activeSession.sslInUse === false
-                    ? 'disabled'
-                    : 'unknown'}
-              </p>
-            </div>
-          ) : (
-            <div className="mt-3 flex items-center gap-2 text-sm text-[var(--ink-2)]">
-              <WifiOff className="h-4 w-4 text-[var(--danger-ink)]" />
-              No active schema session.
-            </div>
-          )}
-        </article>
-
-        <article className="border border-[var(--line-soft)] bg-[var(--surface-0)] p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--ink-3)]">Latest connection test</p>
-          {latestTestResult ? (
-            <div className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-              <p className="font-medium text-[var(--ink-1)]">{latestTestResult.summaryMessage}</p>
-              <p>Round trip: {latestTestResult.roundTripMs ?? 'n/a'} ms</p>
-              <p>Server: {latestTestResult.serverVersion ?? 'Unavailable'}</p>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-[var(--ink-2)]">Run a connection test to capture transport and identity details.</p>
-          )}
-        </article>
-      </section>
-
-      <article className="border border-[var(--line-soft)] bg-[var(--surface-0)] p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--ink-3)]">Refresh activity</p>
-          <span className="text-xs text-[var(--ink-3)]">Schema events</span>
-        </div>
-        {latestRefreshEvent ? (
-          <div className="mt-3 grid gap-2 text-sm text-[var(--ink-2)]">
-            <p className="font-medium text-[var(--ink-1)]">{latestRefreshEvent.message}</p>
-            <p>Status: {latestRefreshEvent.status}</p>
-            <p>Scope: {latestRefreshEvent.scopePath ?? 'root'}</p>
-            <p>Correlation: {latestRefreshEvent.correlationId}</p>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-[var(--ink-2)]">Refresh events appear here as cached scopes update in the background.</p>
-        )}
-      </article>
-
-      <article className="border border-[var(--line-soft)] bg-[color-mix(in_oklch,_var(--surface-0)_92%,_white_8%)] p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--ink-3)]">Selected node</p>
-          <span className="text-xs text-[var(--ink-3)]">Schema detail rail</span>
-        </div>
-        {selectedNode ? (
-          <dl className="mt-4 grid gap-3 text-sm text-[var(--ink-2)] md:grid-cols-2">
-            <Metric label="Kind" value={selectedNode.kind} />
-            <Metric label="Name" value={selectedNode.name} />
-            <Metric label="Schema" value={selectedNode.schemaName} />
-            <Metric label="Relation" value={selectedNode.relationName ?? 'n/a'} />
-            <Metric label="Path" value={selectedNode.path} />
-            <Metric label="Refreshed" value={formatLongTime(selectedNode.refreshedAt)} />
-            {'dataType' in selectedNode ? <Metric label="Data type" value={selectedNode.dataType} /> : null}
-            {'dataType' in selectedNode ? (
-              <Metric label="Nullable" value={selectedNode.isNullable ? 'yes' : 'no'} />
-            ) : null}
-            {'columnNames' in selectedNode ? (
-              <Metric label="Index columns" value={selectedNode.columnNames.join(', ') || 'n/a'} />
-            ) : null}
-            {'columnNames' in selectedNode ? (
-              <Metric label="Unique" value={selectedNode.isUnique ? 'yes' : 'no'} />
-            ) : null}
-          </dl>
-        ) : (
-          <div className="mt-4 border border-dashed border-[var(--line-soft)] p-4 text-sm text-[var(--ink-2)]">
-            Select a schema node to inspect its cached metadata without leaving the main workspace.
-          </div>
-        )}
-      </article>
+    <div className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
+      {message}
     </div>
   );
 }
@@ -350,20 +183,19 @@ function handleTreeKeyDown(event: KeyboardEvent<HTMLDivElement>, schema: SchemaB
       event.preventDefault();
       void schema.handleTreeNavigation('right');
       break;
+    default:
+      break;
   }
 }
 
 function iconForNode(node: SchemaNode) {
   switch (node.kind) {
     case 'schema':
-      return <FolderTree className="h-4 w-4 text-[var(--accent-strong)]" />;
+      return <FolderTree className="h-4 w-4 text-[var(--accent-text)]" />;
     case 'table':
-      return <Table2 className="h-4 w-4 text-[var(--ink-3)]" />;
     case 'view':
-      return <Eye className="h-4 w-4 text-[var(--ink-3)]" />;
-    case 'column':
-      return <Columns3 className="h-4 w-4 text-[var(--ink-3)]" />;
-    case 'index':
-      return <KeyRound className="h-4 w-4 text-[var(--ink-3)]" />;
+      return <Table2 className="h-4 w-4 text-[var(--text-muted)]" />;
+    default:
+      return <div className="h-2.5 w-2.5 rounded-full bg-[var(--border-strong)]" />;
   }
 }

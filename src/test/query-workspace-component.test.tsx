@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import { TooltipProvider } from '../components/ui/tooltip';
 import { QueryWorkspace } from '../features/query/QueryWorkspace';
 import type {
   AppError,
@@ -117,12 +118,14 @@ function WorkspaceHarness({
   };
 
   return (
-    <QueryWorkspace
-      activeSession={activeSession}
-      connections={connections}
-      onError={onError}
-      workspace={workspace}
-    />
+    <TooltipProvider>
+      <QueryWorkspace
+        activeSession={activeSession}
+        connections={connections}
+        onError={onError}
+        workspace={workspace}
+      />
+    </TooltipProvider>
   );
 }
 

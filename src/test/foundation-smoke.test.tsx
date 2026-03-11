@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 import appBootstrapFixture from '../../fixtures/contracts/app-bootstrap.json';
 import connectionDetailsFixture from '../../fixtures/contracts/connection-details.json';
@@ -60,11 +60,15 @@ vi.mock('../lib/ipc', () => ({
 }));
 
 describe('foundation smoke', () => {
-  it('boots the shell with diagnostics visible', async () => {
+  it('boots the shell and opens diagnostics on demand', async () => {
     render(<App />);
 
     expect(await screen.findByTestId('environment-value')).toHaveTextContent('development');
-    expect(screen.getByText(/Diagnostics Surface/i)).toBeInTheDocument();
-    expect(screen.getByText(/Query results/i)).toBeInTheDocument();
+    expect(screen.getByTestId('results-region')).toBeInTheDocument();
+    expect(screen.queryByTestId('diagnostics-dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /diagnostics/i }));
+
+    expect(await screen.findByTestId('diagnostics-dialog')).toBeInTheDocument();
   });
 });

@@ -105,7 +105,7 @@ describe('App shell', () => {
   it('renders the five shell regions after bootstrap', async () => {
     render(<App />);
 
-    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
+    await screen.findByTestId('environment-value');
 
     expect(screen.getByTestId('connections-region')).toBeInTheDocument();
     expect(screen.getByTestId('editor-tabs-region')).toBeInTheDocument();
@@ -114,17 +114,30 @@ describe('App shell', () => {
     expect(screen.getByTestId('status-region')).toBeInTheDocument();
   });
 
-  it('renders selected connection details and active session information', async () => {
+  it('opens the selected connection in the modal editor with saved profile details', async () => {
     render(<App />);
 
+    fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
+
     expect(await screen.findByDisplayValue(connectionDetails.name)).toBeInTheDocument();
-    expect(screen.getByText(`SSL: ${databaseSession.sslInUse ? 'enabled' : 'disabled'}`)).toBeInTheDocument();
+    expect(screen.getByText(/Saved profile selected/i)).toBeInTheDocument();
     expect(screen.getByText(/Credentials are already stored securely/i)).toBeInTheDocument();
+  });
+
+  it('opens a blank modal when creating a new connection', async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByTestId('new-connection-button'));
+
+    expect(await screen.findByTestId('connection-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('connection-name-input')).toHaveValue('');
+    expect(screen.getByTestId('connection-host-input')).toHaveValue('');
   });
 
   it('disables connect when the selected profile has unsaved changes', async () => {
     render(<App />);
 
+    fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     const hostInput = await screen.findByDisplayValue(connectionDetails.host);
     const connectButton = screen.getByTestId('connect-connection-button');
 
@@ -144,6 +157,7 @@ describe('App shell', () => {
   it('switches into replacement-password mode for stored secrets', async () => {
     render(<App />);
 
+    fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     const replaceButton = await screen.findByText(/Replace password/i);
     fireEvent.click(replaceButton);
 
@@ -166,6 +180,7 @@ describe('App shell', () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     await screen.findByDisplayValue(connectionWithoutSecret.name);
     fireEvent.change(screen.getByTestId('connection-password-input'), {
       target: { value: 'sup3r-secret' },
@@ -191,6 +206,18 @@ describe('App shell', () => {
     expect(request.draft.password).toBe('sup3r-secret');
   });
 
+  it('keeps diagnostics hidden by default and opens them from the status bar', async () => {
+    render(<App />);
+
+    await screen.findByTestId('environment-value');
+    expect(screen.queryByTestId('diagnostics-dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /diagnostics/i }));
+
+    expect(await screen.findByTestId('diagnostics-dialog')).toBeInTheDocument();
+    expect(screen.getByText(/Runtime visibility/i)).toBeInTheDocument();
+  });
+
   it('cleans up a schema listener that resolves after unmount', async () => {
     let resolveCleanup: ((cleanup: () => void) => void) | undefined;
     const cleanup = vi.fn();
@@ -203,7 +230,7 @@ describe('App shell', () => {
     );
 
     const view = render(<App />);
-    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
+    await screen.findByTestId('environment-value');
 
     view.unmount();
     resolveCleanup?.(cleanup);
@@ -224,7 +251,7 @@ describe('App shell', () => {
     );
 
     const view = render(<App />);
-    await screen.findByText(/Native-feeling SQL work with explicit PostgreSQL state/i);
+    await screen.findByTestId('environment-value');
 
     view.unmount();
     resolveCleanup?.(cleanup);

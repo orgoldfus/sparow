@@ -14,6 +14,11 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - [completed] Run final Phase 4 verification and record results
 
 ## Blockers And Decisions
+- 2026-03-11: Started a CodeRabbit autofix pass on `ui-overhaul` for PR #7. The unresolved review items target status-bar degradation state, connection-dialog selection sync, selected-target sidebar state, and the port-input UX in the modal editor.
+- 2026-03-10: Started the query-first dark shell overhaul. This pass replaces the phase-demo shell, adopts shadcn-style primitives, moves connection management into a modal, and hides diagnostics behind the status bar by default.
+- 2026-03-10: The new dark shell, modal connection editor, hidden diagnostics surface, and vendored shadcn-style primitives compile cleanly after the first implementation pass. Verification is now focused on updated frontend expectations and interaction coverage.
+- 2026-03-10: The final verification pass is clean after teaching the Monaco test double about custom themes, updating diagnostics tests for the hidden-by-default workflow, and removing the remaining React Fast Refresh lint warning from the new button primitive.
+- 2026-03-11: Completed the CodeRabbit autofix pass on `ui-overhaul`. The follow-up fixes keep the shell health badge aligned with query failures, let the connection dialog follow the saved id after create, make the selected-target sidebar reflect the selected profile rather than any active session, and preserve a blank port field until blur without changing the typed connection contract.
 - 2026-03-10: Completed the second CodeRabbit autofix pass on `phase-4`. The remaining fixes made `closeTab` StrictMode-safe and made the Monaco editor test mock mount once per instance so stale-closure regressions stay visible.
 - 2026-03-10: Started a second CodeRabbit autofix pass on `phase-4` after pushing the latest Clippy fix. Unresolved review threads and validation results from this pass will be logged here before it ends.
 - 2026-03-10: Completed the Rust formatter + `cargo clippy` repair pass. Clippy is green again after removing a redundant `u64` cast in the query driver.
@@ -31,6 +36,12 @@ Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-base
 - 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
 
 ## Verification
+- `npm run verify` ✅
+  - The CodeRabbit autofix rerun passed end-to-end after the status-bar, connection-selection, and port-input fixes, with lint, 69 frontend tests, `smoke:foundation`, and 63 Rust tests all green.
+- `npm run verify` ✅
+  - Typecheck, lint, Vitest, `smoke:foundation`, and `cargo test --manifest-path src-tauri/Cargo.toml` all passed after the dark-shell refactor, with 69 frontend tests and 63 Rust tests green plus 4 expected ignored PostgreSQL smoke tests.
+- `npm run test` ✅
+  - Vitest passed with 9 files / 69 tests after updating the shell, schema-browser, and modal-flow expectations for the new dark workspace layout.
 - `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
   - The targeted query workspace regressions passed with 7 tests green after the hook and Monaco mock fixes.
 - `npm run verify` ✅
