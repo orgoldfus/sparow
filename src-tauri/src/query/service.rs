@@ -42,6 +42,7 @@ pub(crate) struct QueryService {
     driver: Arc<dyn QueryExecutionDriver>,
     jobs: crate::foundation::JobRegistry,
     export_jobs: crate::foundation::JobRegistry,
+    active_export_result_sets: Arc<Mutex<HashMap<String, usize>>>,
     tab_jobs: Arc<Mutex<HashMap<String, String>>>,
 }
 
@@ -61,10 +62,12 @@ impl QueryService {
             driver,
             jobs,
             export_jobs,
+            active_export_result_sets: Arc::new(Mutex::new(HashMap::new())),
             tab_jobs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
+    /// Starts a query execution job for one editor tab.
     pub(crate) async fn start_query(
         &self,
         app: Option<AppHandle>,
@@ -110,7 +113,17 @@ impl QueryService {
             guard.insert(request.tab_id.clone(), String::new());
         }
 
-        clear_tab_result_cache(self.repository.clone(), &request.tab_id).await?;
+        let preserved_result_set_ids = self.active_export_result_set_ids().await;
+        if let Err(error) = clear_tab_result_cache(
+            self.repository.clone(),
+            &request.tab_id,
+            preserved_result_set_ids,
+        )
+        .await
+        {
+            clear_tab_job(&self.tab_jobs, &request.tab_id, "").await;
+            return Err(error);
+        }
 
         let job_id = Uuid::new_v4().to_string();
         let correlation_id = Uuid::new_v4().to_string();
@@ -276,6 +289,7 @@ impl QueryService {
         Ok(accepted)
     }
 
+    /// Cancels an in-flight query execution job.
     pub(crate) async fn cancel_query(
         &self,
         job_id: String,
@@ -295,6 +309,7 @@ impl QueryService {
         Ok(CancelQueryExecutionResult { job_id })
     }
 
+    /// Loads one cached result window for the frontend result grid.
     pub(crate) async fn get_query_result_window(
         &self,
         request: QueryResultWindowRequest,
@@ -323,6 +338,7 @@ impl QueryService {
         Ok(result)
     }
 
+    /// Starts a background CSV export for a completed cached result set.
     pub(crate) async fn start_query_result_export(
         &self,
         app: Option<AppHandle>,
@@ -400,9 +416,11 @@ impl QueryService {
         self.export_jobs
             .insert(job_id.clone(), cancellation.clone())
             .await;
+        self.track_export_result_set(&request.result_set_id).await;
 
         let diagnostics = self.diagnostics.clone();
         let export_jobs = self.export_jobs.clone();
+        let active_export_result_sets = self.active_export_result_sets.clone();
         let export_repository = self.repository.clone();
         let export_request = request.clone();
         let task_accepted = accepted.clone();
@@ -436,12 +454,18 @@ impl QueryService {
             }
 
             export_jobs.remove(&job_id).await;
+            release_active_export_result_set(
+                &active_export_result_sets,
+                &task_accepted.result_set_id,
+            )
+            .await;
             info!(job_id = %job_id, result_set_id = %task_accepted.result_set_id, "query result export finished");
         });
 
         Ok(accepted)
     }
 
+    /// Cancels an in-flight cached-result export job.
     pub(crate) async fn cancel_query_result_export(
         &self,
         job_id: String,
@@ -472,6 +496,20 @@ impl QueryService {
             .insert(tab_id.to_string(), job_id.to_string());
     }
 
+    async fn active_export_result_set_ids(&self) -> Vec<String> {
+        self.active_export_result_sets
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    async fn track_export_result_set(&self, result_set_id: &str) {
+        let mut guard = self.active_export_result_sets.lock().await;
+        *guard.entry(result_set_id.to_string()).or_insert(0) += 1;
+    }
+
     async fn record_query_history(&self, request: &QueryExecutionRequest) {
         let repository = self.repository.clone();
         let sql = request.sql.clone();
@@ -495,17 +533,23 @@ impl QueryService {
     }
 }
 
-async fn clear_tab_result_cache(repository: Arc<Repository>, tab_id: &str) -> Result<(), AppError> {
+async fn clear_tab_result_cache(
+    repository: Arc<Repository>,
+    tab_id: &str,
+    preserved_result_set_ids: Vec<String>,
+) -> Result<(), AppError> {
     let tab_id = tab_id.to_string();
-    task::spawn_blocking(move || repository.delete_query_result_sets_for_tab(&tab_id))
-        .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_result_cleanup_join_failed",
-                "Failed to join query result cache cleanup.",
-                Some(error.to_string()),
-            )
-        })??;
+    task::spawn_blocking(move || {
+        repository.delete_query_result_sets_for_tab_except(&tab_id, &preserved_result_set_ids)
+    })
+    .await
+    .map_err(|error| {
+        AppError::internal(
+            "query_result_cleanup_join_failed",
+            "Failed to join query result cache cleanup.",
+            Some(error.to_string()),
+        )
+    })??;
 
     Ok(())
 }
@@ -814,6 +858,22 @@ async fn clear_tab_job(tab_jobs: &Arc<Mutex<HashMap<String, String>>>, tab_id: &
     let mut guard = tab_jobs.lock().await;
     if guard.get(tab_id).map(String::as_str) == Some(job_id) {
         guard.remove(tab_id);
+    }
+}
+
+async fn release_active_export_result_set(
+    active_export_result_sets: &Arc<Mutex<HashMap<String, usize>>>,
+    result_set_id: &str,
+) {
+    let mut guard = active_export_result_sets.lock().await;
+    let Some(active_count) = guard.get_mut(result_set_id) else {
+        return;
+    };
+
+    if *active_count <= 1 {
+        guard.remove(result_set_id);
+    } else {
+        *active_count -= 1;
     }
 }
 

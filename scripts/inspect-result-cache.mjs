@@ -124,17 +124,26 @@ function parseArgs(argv) {
         index += 1;
         break;
       case '--offset':
-        parsed.offset = Number(argv[index + 1] ?? '0') || 0;
+        parsed.offset = parseNonNegativeInteger(argv[index + 1], 0);
         index += 1;
         break;
       case '--limit':
-        parsed.limit = Number(argv[index + 1] ?? '50') || 50;
+        parsed.limit = parseNonNegativeInteger(argv[index + 1], 50);
         index += 1;
         break;
     }
   }
 
   return parsed;
+}
+
+function parseNonNegativeInteger(value, fallback) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const parsedValue = Number(value);
+  return Number.isInteger(parsedValue) && parsedValue >= 0 ? parsedValue : fallback;
 }
 
 function printUsage() {

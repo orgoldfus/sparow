@@ -172,6 +172,14 @@ function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isNullableNonNegativeInteger(value: unknown): value is number | null {
+  return value === null || isNonNegativeInteger(value);
+}
+
 function isSafeQueryResultNumber(value: number): boolean {
   return Number.isFinite(value) && (!Number.isInteger(value) || Number.isSafeInteger(value));
 }
@@ -657,13 +665,14 @@ export function isQueryResultWindow(value: unknown): value is QueryResultWindow 
   return (
     isRecord(value) &&
     typeof value.resultSetId === 'string' &&
-    typeof value.offset === 'number' &&
-    typeof value.limit === 'number' &&
+    isNonNegativeInteger(value.offset) &&
+    isNonNegativeInteger(value.limit) &&
+    value.limit > 0 &&
     Array.isArray(value.rows) &&
     value.rows.every(isQueryResultRow) &&
-    typeof value.visibleRowCount === 'number' &&
-    typeof value.bufferedRowCount === 'number' &&
-    isNullableNumber(value.totalRowCount) &&
+    isNonNegativeInteger(value.visibleRowCount) &&
+    isNonNegativeInteger(value.bufferedRowCount) &&
+    isNullableNonNegativeInteger(value.totalRowCount) &&
     isQueryResultStatus(value.status) &&
     (value.sort === null || isQueryResultSort(value.sort)) &&
     Array.isArray(value.filters) &&

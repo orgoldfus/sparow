@@ -27,6 +27,7 @@ use crate::{
 const RESULT_BATCH_SIZE: usize = 250;
 const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
 
+/// Context shared between the query driver and the query service while streaming rows.
 #[derive(Clone)]
 pub(crate) struct QueryResultStreamContext {
     pub repository: Arc<Repository>,
@@ -40,6 +41,7 @@ pub(crate) struct QueryResultStreamContext {
     pub started_at: String,
 }
 
+/// Executes SQL against the active PostgreSQL session and returns typed results/events.
 #[async_trait]
 pub(crate) trait QueryExecutionDriver: Send + Sync {
     async fn run_query(
@@ -51,6 +53,7 @@ pub(crate) trait QueryExecutionDriver: Send + Sync {
     ) -> Result<(QueryExecutionResult, u64), AppError>;
 }
 
+/// Production PostgreSQL-backed query driver.
 pub(crate) struct RuntimeQueryExecutionDriver;
 
 #[async_trait]
@@ -477,7 +480,8 @@ fn int8_cell(value: Option<i64>) -> QueryResultCell {
 
 fn float_cell(value: Option<f64>) -> QueryResultCell {
     match value {
-        Some(value) => QueryResultCell::Float(value),
+        Some(value) if value.is_finite() => QueryResultCell::Float(value),
+        Some(value) => QueryResultCell::String(value.to_string()),
         None => QueryResultCell::Null,
     }
 }

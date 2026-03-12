@@ -19,6 +19,11 @@ const devServer = spawn(viteExecutable, ['--host', '127.0.0.1', '--port', String
 });
 
 let serverOutput = '';
+let devServerError = null;
+devServer.once('error', (error) => {
+  devServerError = error;
+  serverOutput += `\n${error.stack ?? String(error)}`;
+});
 devServer.stdout.on('data', (chunk) => {
   serverOutput += chunk.toString();
 });
@@ -74,6 +79,9 @@ async function waitForServer(targetUrl, timeoutMs) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
+    if (devServerError !== null) {
+      throw new Error(`Failed to start ui:harness.\n\n${serverOutput}`);
+    }
     if (devServer.exitCode !== null) {
       throw new Error(`ui:harness exited early.\n\n${serverOutput}`);
     }

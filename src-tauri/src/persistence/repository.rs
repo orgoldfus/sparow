@@ -94,57 +94,95 @@ pub struct ReplaceSchemaScopeRecord {
     pub nodes: Vec<SchemaNode>,
 }
 
+/// Input record for creating a cached result set before row buffering begins.
 #[derive(Debug, Clone)]
 pub struct CreateQueryResultSetRecord {
+    /// Stable identifier for the cached result set and its buffered rows.
     pub result_set_id: String,
+    /// Query execution job identifier used for progress events.
     pub job_id: String,
+    /// Query tab that owns the cached result lifecycle.
     pub tab_id: String,
+    /// Saved connection/profile that produced the cached result.
     pub connection_id: String,
+    /// Original SQL text captured for diagnostics and future export context.
     pub sql: String,
+    /// Column metadata frozen when PostgreSQL statement metadata becomes available.
     pub columns: Vec<QueryResultColumn>,
+    /// ISO-8601 timestamp recorded when the cache entry is created.
     pub created_at: String,
 }
 
+/// Input record for appending one buffered batch of cached result rows.
 #[derive(Debug, Clone)]
 pub struct AppendQueryResultRowsRecord {
+    /// Cached result set that owns this row batch.
     pub result_set_id: String,
+    /// Zero-based row index for the first row in `rows`.
     pub starting_row_index: usize,
+    /// Serialized query rows for the current batch.
     pub rows: Vec<Vec<QueryResultCell>>,
+    /// Total number of rows buffered after this batch is committed.
     pub buffered_row_count: usize,
 }
 
+/// Input record for moving a cached result set into a terminal status.
 #[derive(Debug, Clone)]
 pub struct FinalizeQueryResultSetRecord {
+    /// Cached result set to finalize.
     pub result_set_id: String,
+    /// Final number of rows buffered into SQLite.
     pub buffered_row_count: usize,
+    /// Final visible row count when known; `None` while the terminal count is unknown.
     pub total_row_count: Option<usize>,
+    /// Terminal cache status persisted alongside the final counts.
     pub status: QueryResultSetStatus,
+    /// ISO-8601 completion timestamp for terminal states.
     pub completed_at: Option<String>,
+    /// Terminal error payload for cancelled or failed result sets.
     pub last_error: Option<AppError>,
 }
 
+/// Persisted lifecycle status for a cached query result set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResultSetStatus {
+    /// Metadata exists and rows may still be buffering into SQLite.
     Running,
+    /// All rows were buffered successfully.
     Completed,
+    /// The query was cancelled before the result set reached completion.
     Cancelled,
+    /// The query or buffering pipeline failed after result-set creation.
     Failed,
 }
 
 #[allow(dead_code)]
+/// Fully materialized cached result-set metadata reloaded from SQLite.
 #[derive(Debug, Clone)]
 pub struct QueryResultSetRecord {
+    /// Stable identifier for the cached result set and its buffered rows.
     pub result_set_id: String,
+    /// Query execution job identifier that produced the result set.
     pub job_id: String,
+    /// Query tab that currently owns the result set.
     pub tab_id: String,
+    /// Saved connection/profile that produced the cached result.
     pub connection_id: String,
+    /// Original SQL text captured when the result set was created.
     pub sql: String,
+    /// Column metadata associated with the cached rows.
     pub columns: Vec<QueryResultColumn>,
+    /// Number of rows currently buffered into SQLite.
     pub buffered_row_count: usize,
+    /// Final visible row count once the stream completes, or `None` while still running.
     pub total_row_count: Option<usize>,
+    /// Current persisted cache lifecycle status.
     pub status: QueryResultSetStatus,
+    /// ISO-8601 timestamp captured when the cache entry was created.
     pub created_at: String,
+    /// ISO-8601 timestamp captured when the cache reached a terminal state.
     pub completed_at: Option<String>,
+    /// Terminal error payload for cancelled or failed result sets.
     pub last_error: Option<AppError>,
 }
 
@@ -796,6 +834,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Persists cache metadata for a row-returning query before any rows are buffered.
     pub fn create_query_result_set(
         &self,
         record: CreateQueryResultSetRecord,
@@ -853,6 +892,7 @@ impl Repository {
             })
     }
 
+    /// Appends one buffered row batch and updates the buffered-row counter atomically.
     pub fn append_query_result_rows(
         &self,
         record: AppendQueryResultRowsRecord,
@@ -919,6 +959,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Persists the terminal state for a cached result set after buffering stops.
     pub fn finalize_query_result_set(
         &self,
         record: FinalizeQueryResultSetRecord,
@@ -966,6 +1007,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Loads one cached result-set record by id.
     pub fn load_query_result_set(
         &self,
         result_set_id: &str,
@@ -974,86 +1016,53 @@ impl Repository {
         Self::load_query_result_set_from_connection(&connection, result_set_id)
     }
 
-    pub fn delete_query_result_set(&self, result_set_id: &str) -> Result<(), AppError> {
+    /// Deletes cached result sets for a tab while preserving ids still needed by background work.
+    pub fn delete_query_result_sets_for_tab_except(
+        &self,
+        tab_id: &str,
+        preserved_result_set_ids: &[String],
+    ) -> Result<(), AppError> {
         let mut connection = self.open()?;
         let transaction = connection.transaction().map_err(|error| {
             AppError::internal(
-                "query_result_delete_transaction_failed",
-                "Failed to start a query result delete transaction.",
+                "query_result_tab_delete_transaction_failed",
+                "Failed to start a tab-scoped query result cleanup transaction.",
                 Some(error.to_string()),
             )
         })?;
 
-        transaction
-            .execute(
-                "delete from query_result_rows where result_set_id = ?1",
-                params![result_set_id],
-            )
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_rows_delete_failed",
-                    "Failed to delete cached query result rows.",
-                    Some(error.to_string()),
-                )
-            })?;
+        let mut delete_sql = String::from("delete from query_result_sets where tab_id = ?1");
+        let mut delete_params = vec![rusqlite::types::Value::from(tab_id.to_string())];
+        if !preserved_result_set_ids.is_empty() {
+            delete_sql.push_str(" and result_set_id not in (");
+            for (index, result_set_id) in preserved_result_set_ids.iter().enumerate() {
+                if index > 0 {
+                    delete_sql.push_str(", ");
+                }
+                delete_sql.push('?');
+                delete_sql.push_str(&(index + 2).to_string());
+                delete_params.push(rusqlite::types::Value::from(result_set_id.clone()));
+            }
+            delete_sql.push(')');
+        }
 
         transaction
-            .execute(
-                "delete from query_result_sets where result_set_id = ?1",
-                params![result_set_id],
-            )
+            .execute(&delete_sql, params_from_iter(delete_params))
             .map_err(|error| {
                 AppError::internal(
-                    "query_result_set_delete_failed",
-                    "Failed to delete cached query result metadata.",
+                    "query_result_tab_delete_failed",
+                    "Failed to delete cached query results for a tab.",
                     Some(error.to_string()),
                 )
             })?;
 
         transaction.commit().map_err(|error| {
             AppError::internal(
-                "query_result_delete_commit_failed",
-                "Failed to commit query result deletion.",
+                "query_result_tab_delete_commit_failed",
+                "Failed to commit cached query result cleanup for a tab.",
                 Some(error.to_string()),
             )
         })?;
-
-        Ok(())
-    }
-
-    pub fn delete_query_result_sets_for_tab(&self, tab_id: &str) -> Result<(), AppError> {
-        let connection = self.open()?;
-        let mut statement = connection
-            .prepare("select result_set_id from query_result_sets where tab_id = ?1")
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_tab_prepare_failed",
-                    "Failed to prepare query result lookup for a tab.",
-                    Some(error.to_string()),
-                )
-            })?;
-
-        let result_set_ids = statement
-            .query_map(params![tab_id], |row| row.get::<_, String>(0))
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_tab_query_failed",
-                    "Failed to load cached query results for a tab.",
-                    Some(error.to_string()),
-                )
-            })?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_tab_row_failed",
-                    "Failed to decode a cached query result id.",
-                    Some(error.to_string()),
-                )
-            })?;
-
-        for result_set_id in result_set_ids {
-            self.delete_query_result_set(&result_set_id)?;
-        }
 
         Ok(())
     }
@@ -1098,6 +1107,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Loads one filtered, sorted result window from a single SQLite snapshot.
     pub fn load_query_result_window(
         &self,
         request: &QueryResultWindowRequest,
@@ -1172,7 +1182,7 @@ impl Repository {
                         Some(error.to_string()),
                     )
                 })?;
-            let rows = mapped_rows
+            mapped_rows
                 .map(|row| {
                     let payload = row?;
                     serde_json::from_str::<Vec<QueryResultCell>>(&payload).map_err(|error| {
@@ -1190,9 +1200,7 @@ impl Repository {
                         "Failed to decode cached query result rows.",
                         Some(error.to_string()),
                     )
-                })?;
-
-            rows
+                })?
         };
 
         transaction.commit().map_err(|error| {
@@ -2020,6 +2028,36 @@ mod tests {
 
         assert_eq!(window.status, QueryResultStatus::Cancelled);
         assert_eq!(window.rows.len(), 1);
+    }
+
+    #[test]
+    fn preserves_requested_result_sets_when_clearing_a_tab_cache() {
+        let database_path = test_database_path("query-result-tab-preserve.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .create_query_result_set(sample_result_set_record("result-set-preserved"))
+            .expect("preserved result set should store");
+        repository
+            .create_query_result_set(sample_result_set_record("result-set-deleted"))
+            .expect("second result set should store");
+
+        repository
+            .delete_query_result_sets_for_tab_except(
+                "tab-1",
+                &[String::from("result-set-preserved")],
+            )
+            .expect("tab cleanup should succeed");
+
+        assert!(repository
+            .load_query_result_set("result-set-preserved")
+            .expect("preserved result set should load")
+            .is_some());
+        assert!(repository
+            .load_query_result_set("result-set-deleted")
+            .expect("deleted result set should load")
+            .is_none());
     }
 
     fn sample_schema_scope(connection_id: &str) -> ReplaceSchemaScopeRecord {

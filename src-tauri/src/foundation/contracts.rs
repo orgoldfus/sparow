@@ -1,15 +1,23 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::AppError;
 
+const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
+
+/// App-wide mock/background job progress event channel.
 pub const BACKGROUND_JOB_EVENT: &str = "foundation://job-progress";
+/// Schema refresh progress event channel.
 pub const SCHEMA_REFRESH_EVENT: &str = "schema://refresh-progress";
+/// Query execution progress event channel.
 pub const QUERY_EXECUTION_EVENT: &str = "query://execution-progress";
+/// Cached query-result streaming event channel.
 pub const QUERY_RESULT_STREAM_EVENT: &str = "query://result-stream";
+/// Query result export progress event channel.
 pub const QUERY_RESULT_EXPORT_EVENT: &str = "query://result-export-progress";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -472,7 +480,7 @@ pub struct QueryResultSetSummary {
 }
 
 /// JSON-safe scalar cell value returned to the frontend.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum QueryResultCell {
     String(String),
@@ -480,6 +488,27 @@ pub enum QueryResultCell {
     Float(f64),
     Boolean(bool),
     Null,
+}
+
+impl Serialize for QueryResultCell {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::String(value) => serializer.serialize_str(value),
+            Self::Integer(value)
+                if (-MAX_SAFE_JS_INTEGER..=MAX_SAFE_JS_INTEGER).contains(value) =>
+            {
+                serializer.serialize_i64(*value)
+            }
+            Self::Integer(value) => serializer.serialize_str(&value.to_string()),
+            Self::Float(value) if value.is_finite() => serializer.serialize_f64(*value),
+            Self::Float(value) => serializer.serialize_str(&value.to_string()),
+            Self::Boolean(value) => serializer.serialize_bool(*value),
+            Self::Null => serializer.serialize_none(),
+        }
+    }
 }
 
 /// Sorting descriptor for cached result windows.
@@ -837,11 +866,12 @@ mod tests {
         ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
         DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
         QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-        QueryExecutionResult, QueryResultExportAccepted, QueryResultExportProgressEvent,
-        QueryResultExportRequest, QueryResultStatus, QueryResultStreamEvent, QueryResultWindow,
-        QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
-        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
-        SslMode, TestConnectionRequest,
+        QueryExecutionResult, QueryResultCell, QueryResultExportAccepted,
+        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
+        QueryResultStreamEvent, QueryResultWindow, QueryResultWindowRequest,
+        RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
+        SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
+        TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -1162,5 +1192,19 @@ mod tests {
             serde_json::from_str(CANCEL_QUERY_RESULT_EXPORT_RESULT_FIXTURE)
                 .expect("cancel query result export fixture should deserialize");
         assert_eq!(fixture.job_id, "export-job-2026");
+    }
+
+    #[test]
+    fn serializes_query_result_cells_with_json_safe_numbers() {
+        assert_eq!(
+            serde_json::to_string(&QueryResultCell::Integer(9_007_199_254_740_992))
+                .expect("unsafe integer should serialize"),
+            "\"9007199254740992\""
+        );
+        assert_eq!(
+            serde_json::to_string(&QueryResultCell::Float(f64::INFINITY))
+                .expect("non-finite float should serialize"),
+            "\"inf\""
+        );
     }
 }

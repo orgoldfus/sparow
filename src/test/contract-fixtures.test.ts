@@ -351,6 +351,34 @@ describe('contract fixtures', () => {
         rows: [[Number.MAX_SAFE_INTEGER + 1]],
       }),
     ).toBe(false);
+
+    expect(
+      isQueryResultWindow({
+        ...queryResultWindowFixture,
+        offset: -1,
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultWindow({
+        ...queryResultWindowFixture,
+        limit: 0,
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultWindow({
+        ...queryResultWindowFixture,
+        visibleRowCount: 1.5,
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultWindow({
+        ...queryResultWindowFixture,
+        totalRowCount: -2,
+      }),
+    ).toBe(false);
   });
 
   it('rejects schema nodes with impossible path invariants', () => {
