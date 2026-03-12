@@ -10,6 +10,7 @@ import type {
   QueryResultExportProgressEvent,
   QueryResultExportStatus,
   QueryResultFilter,
+  QueryResultStatus,
   QueryResultSetSummary,
   QueryResultSort,
   QueryResultStreamEvent,
@@ -753,6 +754,7 @@ function applyQueryEvent(tab: QueryTabState, event: QueryExecutionProgressEvent)
 function applyResultStreamEvent(tab: QueryTabState, event: QueryResultStreamEvent): QueryTabState {
   const previousSummary = tab.result.summary;
   const columns = event.columns ?? previousSummary?.columns ?? [];
+  const nextStatus = resultStatusForStreamEvent(event, previousSummary?.status);
   const nextSummary =
     columns.length > 0 || previousSummary?.resultSetId === event.resultSetId
       ? {
@@ -760,9 +762,13 @@ function applyResultStreamEvent(tab: QueryTabState, event: QueryResultStreamEven
           columns,
           bufferedRowCount: event.bufferedRowCount,
           totalRowCount: event.totalRowCount ?? previousSummary?.totalRowCount ?? null,
-          isComplete: event.status === 'completed' ? true : previousSummary?.isComplete ?? false,
+          status: nextStatus,
         }
       : previousSummary;
+  const countsAdvanced =
+    event.bufferedRowCount > (previousSummary?.bufferedRowCount ?? 0) ||
+    (event.totalRowCount !== null && event.totalRowCount > (previousSummary?.totalRowCount ?? 0));
+  const shouldResetWindow = countsAdvanced || !shouldKeepWindow(tab.result.window, event.resultSetId);
 
   return {
     ...tab,
@@ -775,7 +781,10 @@ function applyResultStreamEvent(tab: QueryTabState, event: QueryResultStreamEven
         nextSummary && tab.result.exportOutputPath.length === 0
           ? defaultExportPath(nextSummary.resultSetId)
           : tab.result.exportOutputPath,
-      window: shouldKeepWindow(tab.result.window, event.resultSetId) ? tab.result.window : null,
+      window: shouldResetWindow ? null : tab.result.window,
+      windowStatus: shouldResetWindow ? 'idle' : tab.result.windowStatus,
+      requestedWindowSignature: shouldResetWindow ? null : tab.result.requestedWindowSignature,
+      windowError: shouldResetWindow ? null : tab.result.windowError,
     },
   };
 }
@@ -813,7 +822,7 @@ function summarizeExecutionEvent(event: QueryExecutionProgressEvent): string {
 
   if (event.result?.kind === 'rows') {
     const total = event.result.totalRowCount ?? event.result.bufferedRowCount;
-    return `${total} cached row${total === 1 ? '' : 's'} ready${event.result.isComplete ? '.' : ' so far.'}`;
+    return `${total} cached row${total === 1 ? '' : 's'} ready${isTerminalResultStatus(event.result.status) ? '.' : ' so far.'}`;
   }
 
   return event.message;
@@ -824,6 +833,10 @@ function isTerminalStatus(status: QueryExecutionStatus): boolean {
 }
 
 function isTerminalExportStatus(status: QueryResultExportStatus): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'failed';
+}
+
+function isTerminalResultStatus(status: QueryResultStatus): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed';
 }
 
@@ -853,8 +866,24 @@ function mergeSummaryFromWindow(
     ...summary,
     bufferedRowCount: window.bufferedRowCount,
     totalRowCount: window.totalRowCount,
-    isComplete: window.isComplete,
+    status: window.status,
   };
+}
+
+function resultStatusForStreamEvent(
+  event: QueryResultStreamEvent,
+  previousStatus: QueryResultStatus | undefined,
+): QueryResultStatus {
+  switch (event.status) {
+    case 'completed':
+    case 'cancelled':
+    case 'failed':
+      return event.status;
+    case 'metadata-ready':
+    case 'rows-buffered':
+      void previousStatus;
+      return 'running';
+  }
 }
 
 function defaultExportPath(resultSetId: string): string {

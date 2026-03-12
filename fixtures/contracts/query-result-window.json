@@ -9,7 +9,7 @@
   "visibleRowCount": 2,
   "bufferedRowCount": 2,
   "totalRowCount": 2,
-  "isComplete": true,
+  "status": "completed",
   "sort": {
     "columnIndex": 0,
     "direction": "asc"

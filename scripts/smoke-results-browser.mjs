@@ -100,17 +100,33 @@ async function stopProcess(child) {
     return;
   }
 
-  if (typeof child.pid === 'number') {
-    try {
-      process.kill(-child.pid, 'SIGTERM');
-    } catch {
-      // The process group may already be gone.
-    }
-  } else {
-    child.kill('SIGTERM');
-  }
   await new Promise((resolvePromise) => {
-    const timeout = setTimeout(() => {
+    let timeout;
+    const resolveIfStopped = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      resolvePromise(undefined);
+    };
+
+    child.once('exit', resolveIfStopped);
+    if (child.exitCode !== null) {
+      child.off('exit', resolveIfStopped);
+      resolvePromise(undefined);
+      return;
+    }
+
+    if (typeof child.pid === 'number') {
+      try {
+        process.kill(-child.pid, 'SIGTERM');
+      } catch {
+        child.kill('SIGTERM');
+      }
+    } else {
+      child.kill('SIGTERM');
+    }
+
+    timeout = setTimeout(() => {
       if (child.exitCode === null) {
         if (typeof child.pid === 'number') {
           try {
@@ -123,10 +139,5 @@ async function stopProcess(child) {
         }
       }
     }, 2_000);
-
-    child.once('exit', () => {
-      clearTimeout(timeout);
-      resolvePromise(undefined);
-    });
   });
 }

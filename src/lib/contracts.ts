@@ -15,6 +15,7 @@ export type SchemaCacheStatus = 'empty' | 'fresh' | 'stale';
 export type SchemaRefreshStatus = 'queued' | 'running' | 'completed' | 'failed';
 export type QueryExecutionOrigin = 'selection' | 'current-statement';
 export type QueryExecutionStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
+export type QueryResultStatus = 'running' | 'completed' | 'cancelled' | 'failed';
 export type QueryResultStreamStatus =
   | 'metadata-ready'
   | 'rows-buffered'
@@ -243,7 +244,7 @@ export type QueryResultSetSummary = {
   columns: QueryResultColumn[];
   bufferedRowCount: number;
   totalRowCount: number | null;
-  isComplete: boolean;
+  status: QueryResultStatus;
 };
 
 export type QueryRowsResult = QueryResultSetSummary & {
@@ -322,7 +323,7 @@ export type QueryResultWindow = {
   visibleRowCount: number;
   bufferedRowCount: number;
   totalRowCount: number | null;
-  isComplete: boolean;
+  status: QueryResultStatus;
   sort: QueryResultSort | null;
   filters: QueryResultFilter[];
   quickFilter: string;

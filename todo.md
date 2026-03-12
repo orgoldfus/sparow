@@ -13,6 +13,7 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-12: Started a CodeRabbit autofix pass on `codex/phase-5` to resolve unresolved PR review threads against the current branch state.
 - 2026-03-12: Started a CI follow-up to fix a failing `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` run and verify the Rust workspace formatting state locally.
 - 2026-03-12: Started Phase 5 implementation. `docs/MVP/PHASE5_PLAN.md` is present as an untracked file; it is being left untouched because it is not part of the current tracked baseline.
 - 2026-03-12: Phase 5 keeps the current shell layout and upgrades the results region instead of starting the broader shell redesign.
@@ -42,7 +43,7 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - `npm run verify` ❌
   - Typecheck passed, but lint failed on a missing result-grid effect dependency and several harness lint issues. Those were fixed before the next full verification run.
 - `npm run smoke:results-browser` ✅
-  - The harness smoke completed after the teardown fix and wrote [artifacts/result-viewer-smoke.png](/Users/orgoldfus/Workspace/personal/sparow/artifacts/result-viewer-smoke.png).
+  - The harness smoke completed after the teardown fix and wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
 - `npm run verify` ✅
   - Phase 5 full verification passed with frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and Rust tests green.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
@@ -53,3 +54,11 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
   - Rust verification is green again after the Phase 5 backend wiring pass: 70 tests passed, 4 PostgreSQL smoke tests remained ignored as expected, and the service/contract suite now builds against cached result summaries plus export commands.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
   - CI formatting drift was reproduced locally, corrected with `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the Rust workspace now passes the formatter check again.
+- `npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace.test.tsx` ✅
+  - The targeted frontend contract and workspace tests passed after the cached-result status contract switched from `isComplete` to explicit terminal states.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ❌
+  - The first Rust verification pass failed on a missing `QueryResultStatus` import in the foundation contract tests and a borrow-lifetime issue in the transactional `load_query_result_window` rewrite. Both are being corrected before retrying.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed after the contract-test import fix and the transactional window-read lifetime cleanup, with 72 tests green and 4 PostgreSQL smoke tests still ignored as expected.
+- `npm run verify` ✅
+  - Full verification passed after the CodeRabbit autofix pass: frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all stayed green with the new cached-result status contract and export/runtime fixes.

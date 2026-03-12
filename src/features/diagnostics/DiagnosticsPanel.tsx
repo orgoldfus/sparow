@@ -157,7 +157,7 @@ export function DiagnosticsPanel({
                 ))}
                 {recentResultExportEvents.slice(0, 4).map((event) => (
                   <EventRow
-                    key={`${event.jobId}-${event.status}-${event.outputPath}`}
+                    key={`${event.jobId}-${event.status}-${event.outputPath}-${event.rowsWritten}-${event.finishedAt ?? 'active'}`}
                     label={`${event.status} / export`}
                     message={event.message}
                     meta={`${event.outputPath} / ${event.rowsWritten} rows`}

@@ -94,6 +94,16 @@ pub enum QueryResultStreamStatus {
     Failed,
 }
 
+/// Lifecycle status for a cached query result set.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultStatus {
+    Running,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
 /// Background export status for writing cached query results to CSV.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -458,7 +468,7 @@ pub struct QueryResultSetSummary {
     pub columns: Vec<QueryResultColumn>,
     pub buffered_row_count: usize,
     pub total_row_count: Option<usize>,
-    pub is_complete: bool,
+    pub status: QueryResultStatus,
 }
 
 /// JSON-safe scalar cell value returned to the frontend.
@@ -500,7 +510,7 @@ pub struct QueryResultWindow {
     pub visible_row_count: usize,
     pub buffered_row_count: usize,
     pub total_row_count: Option<usize>,
-    pub is_complete: bool,
+    pub status: QueryResultStatus,
     pub sort: Option<QueryResultSort>,
     pub filters: Vec<QueryResultFilter>,
     pub quick_filter: String,
@@ -828,7 +838,7 @@ mod tests {
         DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
         QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
         QueryExecutionResult, QueryResultExportAccepted, QueryResultExportProgressEvent,
-        QueryResultExportRequest, QueryResultStreamEvent, QueryResultWindow,
+        QueryResultExportRequest, QueryResultStatus, QueryResultStreamEvent, QueryResultWindow,
         QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
         SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
         SslMode, TestConnectionRequest,
@@ -1110,7 +1120,7 @@ mod tests {
         let fixture: QueryResultWindow = serde_json::from_str(QUERY_RESULT_WINDOW_FIXTURE)
             .expect("query result window fixture should deserialize");
         assert_eq!(fixture.rows.len(), 2);
-        assert!(fixture.is_complete);
+        assert_eq!(fixture.status, QueryResultStatus::Completed);
     }
 
     #[test]

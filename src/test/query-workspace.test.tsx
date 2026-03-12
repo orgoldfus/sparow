@@ -35,7 +35,7 @@ vi.mock('../lib/ipc', () => ({
       visibleRowCount: 0,
       bufferedRowCount: 0,
       totalRowCount: 0,
-      isComplete: true,
+      status: 'completed',
       sort: null,
       filters: [],
       quickFilter: '',

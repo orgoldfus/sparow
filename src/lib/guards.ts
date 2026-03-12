@@ -25,6 +25,7 @@ import type {
   QueryResultExportStatus,
   QueryResultFilter,
   QueryResultFilterMode,
+  QueryResultStatus,
   QueryResultSetSummary,
   QueryResultSort,
   QueryResultSortDirection,
@@ -103,6 +104,10 @@ function isQueryResultStreamStatus(value: unknown): value is QueryResultStreamSt
   );
 }
 
+function isQueryResultStatus(value: unknown): value is QueryResultStatus {
+  return value === 'running' || value === 'completed' || value === 'cancelled' || value === 'failed';
+}
+
 function isQueryResultExportStatus(value: unknown): value is QueryResultExportStatus {
   return (
     value === 'queued' ||
@@ -167,8 +172,17 @@ function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
 }
 
+function isSafeQueryResultNumber(value: number): boolean {
+  return Number.isFinite(value) && (!Number.isInteger(value) || Number.isSafeInteger(value));
+}
+
 function isQueryResultCell(value: unknown): value is string | number | boolean | null {
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null;
+  return (
+    typeof value === 'string' ||
+    (typeof value === 'number' && isSafeQueryResultNumber(value)) ||
+    typeof value === 'boolean' ||
+    value === null
+  );
 }
 
 function isQueryResultRow(value: unknown): value is (string | number | boolean | null)[] {
@@ -597,7 +611,7 @@ export function isQueryResultSetSummary(value: unknown): value is QueryResultSet
     value.columns.every(isQueryResultColumn) &&
     typeof value.bufferedRowCount === 'number' &&
     isNullableNumber(value.totalRowCount) &&
-    typeof value.isComplete === 'boolean'
+    isQueryResultStatus(value.status)
   );
 }
 
@@ -650,7 +664,7 @@ export function isQueryResultWindow(value: unknown): value is QueryResultWindow 
     typeof value.visibleRowCount === 'number' &&
     typeof value.bufferedRowCount === 'number' &&
     isNullableNumber(value.totalRowCount) &&
-    typeof value.isComplete === 'boolean' &&
+    isQueryResultStatus(value.status) &&
     (value.sort === null || isQueryResultSort(value.sort)) &&
     Array.isArray(value.filters) &&
     value.filters.every(isQueryResultFilter) &&

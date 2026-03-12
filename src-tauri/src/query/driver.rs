@@ -15,8 +15,8 @@ use crate::{
     connections::{build_tls_connector, ActiveSessionRuntime},
     foundation::{
         iso_timestamp, AppError, QueryExecutionResult, QueryResultCell, QueryResultColumn,
-        QueryResultColumnSemanticType, QueryResultSetSummary, QueryResultStreamEvent,
-        QueryResultStreamStatus, SslMode,
+        QueryResultColumnSemanticType, QueryResultSetSummary, QueryResultStatus,
+        QueryResultStreamEvent, QueryResultStreamStatus, SslMode,
     },
     persistence::{
         AppendQueryResultRowsRecord, CreateQueryResultSetRecord, FinalizeQueryResultSetRecord,
@@ -25,6 +25,7 @@ use crate::{
 };
 
 const RESULT_BATCH_SIZE: usize = 250;
+const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
 
 #[derive(Clone)]
 pub(crate) struct QueryResultStreamContext {
@@ -200,7 +201,7 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
                     columns: result_columns,
                     buffered_row_count,
                     total_row_count: Some(buffered_row_count),
-                    is_complete: true,
+                    status: QueryResultStatus::Completed,
                 },
             },
             start.elapsed().as_millis() as u64,
@@ -378,7 +379,7 @@ fn read_query_result_cell(row: &Row, index: usize, postgres_type: &str) -> Query
                 .flatten()
                 .map(i64::from),
         ),
-        "int8" => integer_cell(row.try_get::<usize, Option<i64>>(index).ok().flatten()),
+        "int8" => int8_cell(row.try_get::<usize, Option<i64>>(index).ok().flatten()),
         "oid" => integer_cell(
             row.try_get::<usize, Option<u32>>(index)
                 .ok()
@@ -392,7 +393,13 @@ fn read_query_result_cell(row: &Row, index: usize, postgres_type: &str) -> Query
                 .map(f64::from),
         ),
         "float8" => float_cell(row.try_get::<usize, Option<f64>>(index).ok().flatten()),
-        "numeric" => QueryResultCell::String(format!("<unsupported:{postgres_type}>")),
+        "numeric" => {
+            if let Ok(value) = row.try_get::<usize, Option<String>>(index) {
+                return string_like_cell(value);
+            }
+
+            QueryResultCell::String(format!("<unsupported:{postgres_type}>"))
+        }
         "uuid" => string_like_cell(
             row.try_get::<usize, Option<Uuid>>(index)
                 .ok()
@@ -458,6 +465,16 @@ fn integer_cell(value: Option<i64>) -> QueryResultCell {
     }
 }
 
+fn int8_cell(value: Option<i64>) -> QueryResultCell {
+    match value {
+        Some(value) if (-MAX_SAFE_JS_INTEGER..=MAX_SAFE_JS_INTEGER).contains(&value) => {
+            QueryResultCell::Integer(value)
+        }
+        Some(value) => QueryResultCell::String(value.to_string()),
+        None => QueryResultCell::Null,
+    }
+}
+
 fn float_cell(value: Option<f64>) -> QueryResultCell {
     match value {
         Some(value) => QueryResultCell::Float(value),
@@ -483,9 +500,10 @@ fn format_bytes(bytes: Vec<u8>) -> String {
 fn semantic_type_for_postgres_type(postgres_type: &str) -> QueryResultColumnSemanticType {
     match postgres_type {
         "bool" => QueryResultColumnSemanticType::Boolean,
-        "int2" | "int4" | "int8" | "float4" | "float8" | "numeric" | "oid" => {
+        "int2" | "int4" | "int8" | "float4" | "float8" | "oid" => {
             QueryResultColumnSemanticType::Number
         }
+        "numeric" => QueryResultColumnSemanticType::Text,
         "json" | "jsonb" => QueryResultColumnSemanticType::Json,
         "bytea" => QueryResultColumnSemanticType::Binary,
         "date" | "time" | "timetz" | "timestamp" | "timestamptz" => {

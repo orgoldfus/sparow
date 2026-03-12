@@ -9,6 +9,7 @@ import type {
   QueryResultExportProgressEvent,
   QueryResultExportStatus,
   QueryResultFilter,
+  QueryResultStatus,
   QueryResultSetSummary,
   QueryResultSort,
   QueryResultStreamEvent,
@@ -66,6 +67,10 @@ export function ResultViewerHarness() {
   const [scenarioId, setScenarioId] = useState<HarnessScenarioId>('large-complete');
   const [tab, setTab] = useState<QueryTabState>(() => initialScenario.tab);
   const [rows, setRows] = useState<QueryResultCell[][]>(() => initialScenario.rows);
+  const visibleRows = useMemo(
+    () => applyViewerDescriptors(rows, tab.result.sort, tab.result.filters, tab.result.quickFilter),
+    [rows, tab.result.sort, tab.result.filters, tab.result.quickFilter],
+  );
 
   const workspace: QueryWorkspaceState = {
     activeTab: tab,
@@ -86,7 +91,7 @@ export function ResultViewerHarness() {
     cancelActiveTab: noopAsync as QueryWorkspaceState['cancelActiveTab'],
     loadTabResultWindow: (tabId: string, offset: number, limit: number) => {
       void tabId;
-      setTab((current) => loadScenarioWindow(current, rows, offset, limit));
+      setTab((current) => loadScenarioWindow(current, visibleRows, offset, limit));
       return Promise.resolve();
     },
     setTabQuickFilter: (tabId: string, value: string) => {
@@ -263,8 +268,8 @@ export function ResultViewerHarness() {
 }
 
 function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows: QueryResultCell[][]; label: string; description: string; id: HarnessScenarioId }> {
-  const summary = buildSummary('harness-large-complete', baseRows.length, baseRows.length, true);
-  const streamingSummary = buildSummary('harness-large-stream', 620, null, false);
+  const summary = buildSummary('harness-large-complete', baseRows.length, baseRows.length, 'completed');
+  const streamingSummary = buildSummary('harness-large-stream', 620, null, 'running');
   return {
     command: {
       id: 'command',
@@ -286,10 +291,10 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
       tab: buildTab({
         title: 'select * from customers limit 24',
         status: 'completed',
-        result: { kind: 'rows', ...buildSummary('harness-small-complete', 24, 24, true) },
+        result: { kind: 'rows', ...buildSummary('harness-small-complete', 24, 24, 'completed') },
         resultState: {
           ...emptyResultState(),
-          summary: buildSummary('harness-small-complete', 24, 24, true),
+          summary: buildSummary('harness-small-complete', 24, 24, 'completed'),
           exportOutputPath: './small-complete.csv',
         },
       }),
@@ -352,8 +357,8 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
         result: null,
         resultState: {
           ...emptyResultState(),
-          summary: buildSummary('harness-cancelled', 180, null, false),
-          latestStreamEvent: buildStreamEvent('cancelled', buildSummary('harness-cancelled', 180, null, false)),
+          summary: buildSummary('harness-cancelled', 180, null, 'cancelled'),
+          latestStreamEvent: buildStreamEvent('cancelled', buildSummary('harness-cancelled', 180, null, 'cancelled')),
           exportOutputPath: './cancelled.csv',
         },
         lastError: buildError('query_cancelled', 'The running query was cancelled.'),
@@ -429,8 +434,7 @@ function buildTab(input: {
   };
 }
 
-function loadScenarioWindow(tab: QueryTabState, rows: QueryResultCell[][], offset: number, limit: number): QueryTabState {
-  const visibleRows = applyViewerDescriptors(rows, tab.result.sort, tab.result.filters, tab.result.quickFilter);
+function loadScenarioWindow(tab: QueryTabState, visibleRows: QueryResultCell[][], offset: number, limit: number): QueryTabState {
   const nextRows = visibleRows.slice(offset, offset + limit);
   return {
     ...tab,
@@ -444,7 +448,7 @@ function loadScenarioWindow(tab: QueryTabState, rows: QueryResultCell[][], offse
         visibleRowCount: visibleRows.length,
         bufferedRowCount: tab.result.summary?.bufferedRowCount ?? visibleRows.length,
         totalRowCount: tab.result.summary?.totalRowCount ?? null,
-        isComplete: tab.result.summary?.isComplete ?? false,
+        status: tab.result.summary?.status ?? 'running',
         sort: tab.result.sort,
         filters: tab.result.filters,
         quickFilter: tab.result.quickFilter,
@@ -559,14 +563,14 @@ function buildSummary(
   resultSetId: string,
   bufferedRowCount: number,
   totalRowCount: number | null,
-  isComplete: boolean,
+  status: QueryResultStatus,
 ): QueryResultSetSummary {
   return {
     resultSetId,
     columns: [...baseColumns],
     bufferedRowCount,
     totalRowCount,
-    isComplete,
+    status,
   };
 }
 

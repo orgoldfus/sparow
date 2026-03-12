@@ -20,6 +20,7 @@ import type {
   ConnectionSummary,
   DatabaseSessionSnapshot,
   QueryResultCell,
+  QueryResultStatus,
 } from '../../lib/contracts';
 import { formatLongTime } from '../../lib/format';
 import { resolveExecutionSlice } from './executionSlice';
@@ -401,11 +402,17 @@ export function QueryResultsPanel({
       <TabsContent className="min-h-0" value="results">
         <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
           <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-secondary)]">
-            <Badge variant={summary ? (summary.isComplete ? 'success' : 'accent') : result ? 'accent' : 'default'}>
+            <Badge
+              variant={
+                summary
+                  ? resultStatusBadgeVariant(summary.status)
+                  : result
+                    ? 'accent'
+                    : 'default'
+              }
+            >
               {summary
-                ? summary.isComplete
-                  ? 'cached result complete'
-                  : 'streaming cached rows'
+                ? resultStatusLabel(summary.status)
                 : result?.kind === 'command'
                   ? result.commandTag
                   : 'No result'}
@@ -418,7 +425,7 @@ export function QueryResultsPanel({
             </span>
             <span>Connection: {activeSession?.name ?? 'none'}</span>
             <span>Elapsed: {tab?.execution.lastEvent ? `${tab.execution.lastEvent.elapsedMs} ms` : 'n/a'}</span>
-            {tab?.result.latestStreamEvent && !summary?.isComplete ? (
+            {tab?.result.latestStreamEvent && summary?.status === 'running' ? (
               <span data-testid="result-streaming-note">
                 Viewer reflects cached rows only while streaming continues.
               </span>
@@ -464,7 +471,7 @@ export function QueryResultsPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   data-testid="result-export-button"
-                  disabled={!summary || !summary.isComplete || tab?.result.exportJobId !== null}
+                  disabled={!summary || summary.status !== 'completed' || tab?.result.exportJobId !== null}
                   onClick={() => {
                     if (tab) {
                       void workspace.startTabResultExport(tab.id);
@@ -759,4 +766,30 @@ function renderCell(cell: QueryResultCell): string {
 
 function cellTitle(cell: QueryResultCell): string {
   return renderCell(cell);
+}
+
+function resultStatusBadgeVariant(status: QueryResultStatus): 'accent' | 'success' | 'warning' | 'danger' {
+  switch (status) {
+    case 'completed':
+      return 'success';
+    case 'cancelled':
+      return 'warning';
+    case 'failed':
+      return 'danger';
+    case 'running':
+      return 'accent';
+  }
+}
+
+function resultStatusLabel(status: QueryResultStatus): string {
+  switch (status) {
+    case 'completed':
+      return 'cached result complete';
+    case 'cancelled':
+      return 'cached result cancelled';
+    case 'failed':
+      return 'cached result failed';
+    case 'running':
+      return 'streaming cached rows';
+  }
 }

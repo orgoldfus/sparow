@@ -373,9 +373,6 @@ impl QueryService {
         let correlation_id = Uuid::new_v4().to_string();
         let started_at = iso_timestamp();
         let cancellation = CancellationToken::new();
-        self.export_jobs
-            .insert(job_id.clone(), cancellation.clone())
-            .await;
 
         let accepted = QueryResultExportAccepted {
             job_id: job_id.clone(),
@@ -400,6 +397,9 @@ impl QueryService {
             };
             emit_query_result_export_event(app, &queued_event)?;
         }
+        self.export_jobs
+            .insert(job_id.clone(), cancellation.clone())
+            .await;
 
         let diagnostics = self.diagnostics.clone();
         let export_jobs = self.export_jobs.clone();
@@ -419,6 +419,18 @@ impl QueryService {
             .await;
 
             if let Err(error) = export_result {
+                if let Err(emit_error) = emit_failed_query_result_export_event(
+                    maybe_app.as_ref(),
+                    &task_accepted,
+                    &error,
+                    0,
+                ) {
+                    diagnostics.record_error(emit_error.clone());
+                    error!(
+                        ?emit_error,
+                        "failed to emit failed query result export event"
+                    );
+                }
                 diagnostics.record_error(error.clone());
                 error!(?error, "query result export failed");
             }
@@ -618,6 +630,7 @@ async fn run_query_result_export(
                 "The CSV export was cancelled.",
                 Some(accepted.result_set_id.clone()),
             );
+            drop(writer);
             let _ = fs::remove_file(&request.output_path);
             if let Some(app) = app.as_ref() {
                 emit_query_result_export_event(
@@ -700,6 +713,33 @@ async fn run_query_result_export(
     }
 
     Ok(())
+}
+
+fn emit_failed_query_result_export_event(
+    app: Option<&AppHandle>,
+    accepted: &QueryResultExportAccepted,
+    error: &AppError,
+    rows_written: usize,
+) -> Result<(), AppError> {
+    let Some(app) = app else {
+        return Ok(());
+    };
+
+    emit_query_result_export_event(
+        app,
+        &QueryResultExportProgressEvent {
+            job_id: accepted.job_id.clone(),
+            correlation_id: accepted.correlation_id.clone(),
+            result_set_id: accepted.result_set_id.clone(),
+            output_path: accepted.output_path.clone(),
+            status: QueryResultExportStatus::Failed,
+            rows_written,
+            message: error.message.clone(),
+            started_at: accepted.started_at.clone(),
+            finished_at: Some(iso_timestamp()),
+            last_error: Some(error.clone()),
+        },
+    )
 }
 
 async fn load_export_window(
@@ -852,7 +892,7 @@ mod tests {
                         }],
                         buffered_row_count: 1,
                         total_row_count: Some(1),
-                        is_complete: true,
+                        status: crate::foundation::QueryResultStatus::Completed,
                     },
                 },
                 if sql.contains("select") { 7 } else { 3 },

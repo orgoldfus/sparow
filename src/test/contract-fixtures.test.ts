@@ -330,7 +330,7 @@ describe('contract fixtures', () => {
         columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
         bufferedRowCount: 2,
         totalRowCount: 2,
-        isComplete: true,
+        status: 'completed',
       }),
     ).toBe(true);
 
@@ -341,7 +341,14 @@ describe('contract fixtures', () => {
         columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
         bufferedRowCount: '2',
         totalRowCount: 2,
-        isComplete: true,
+        status: 'completed',
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultWindow({
+        ...queryResultWindowFixture,
+        rows: [[Number.MAX_SAFE_INTEGER + 1]],
       }),
     ).toBe(false);
   });

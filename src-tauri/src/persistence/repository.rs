@@ -5,11 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::foundation::{
     ensure_parent_directory, AppError, QueryResultCell, QueryResultColumn, QueryResultFilter,
-    QueryResultFilterMode, QueryResultSort, QueryResultSortDirection, QueryResultWindow,
-    QueryResultWindowRequest, SchemaNode, SchemaScopeKind, SecretProvider, SslMode,
+    QueryResultFilterMode, QueryResultSort, QueryResultSortDirection, QueryResultStatus,
+    QueryResultWindow, QueryResultWindowRequest, SchemaNode, SchemaScopeKind, SecretProvider,
+    SslMode,
 };
 
-const MIGRATIONS: [(&str, &str); 4] = [
+const MIGRATIONS: [(&str, &str); 5] = [
     ("0001_init", include_str!("migrations/0001_init.sql")),
     (
         "0002_connection_management",
@@ -22,6 +23,10 @@ const MIGRATIONS: [(&str, &str); 4] = [
     (
         "0004_result_viewer",
         include_str!("migrations/0004_result_viewer.sql"),
+    ),
+    (
+        "0005_query_result_rows_foreign_key",
+        include_str!("migrations/0005_query_result_rows_foreign_key.sql"),
     ),
 ];
 
@@ -966,34 +971,7 @@ impl Repository {
         result_set_id: &str,
     ) -> Result<Option<QueryResultSetRecord>, AppError> {
         let connection = self.open()?;
-        connection
-            .query_row(
-                "select
-                    result_set_id,
-                    job_id,
-                    tab_id,
-                    connection_profile_id,
-                    sql,
-                    columns_json,
-                    buffered_row_count,
-                    total_row_count,
-                    status,
-                    created_at,
-                    completed_at,
-                    last_error_json
-                 from query_result_sets
-                 where result_set_id = ?1",
-                params![result_set_id],
-                Self::read_query_result_set,
-            )
-            .optional()
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_set_read_failed",
-                    "Failed to read cached query result metadata.",
-                    Some(error.to_string()),
-                )
-            })
+        Self::load_query_result_set_from_connection(&connection, result_set_id)
     }
 
     pub fn delete_query_result_set(&self, result_set_id: &str) -> Result<(), AppError> {
@@ -1124,16 +1102,23 @@ impl Repository {
         &self,
         request: &QueryResultWindowRequest,
     ) -> Result<QueryResultWindow, AppError> {
-        let connection = self.open()?;
-        let result_set = self
-            .load_query_result_set(&request.result_set_id)?
-            .ok_or_else(|| {
-                AppError::retryable(
-                    "query_result_set_missing",
-                    "The requested cached result set no longer exists.",
-                    Some(request.result_set_id.clone()),
-                )
-            })?;
+        let mut connection = self.open()?;
+        let transaction = connection.transaction().map_err(|error| {
+            AppError::internal(
+                "query_result_window_transaction_failed",
+                "Failed to start the cached result window transaction.",
+                Some(error.to_string()),
+            )
+        })?;
+        let result_set =
+            Self::load_query_result_set_from_connection(&transaction, &request.result_set_id)?
+                .ok_or_else(|| {
+                    AppError::retryable(
+                        "query_result_set_missing",
+                        "The requested cached result set no longer exists.",
+                        Some(request.result_set_id.clone()),
+                    )
+                })?;
 
         let (where_sql, where_params) = build_query_result_filter_clause(
             &result_set.columns,
@@ -1145,7 +1130,7 @@ impl Repository {
 
         let mut count_params = vec![rusqlite::types::Value::from(request.result_set_id.clone())];
         count_params.extend(where_params.clone());
-        let visible_row_count: i64 = connection
+        let visible_row_count: i64 = transaction
             .query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))
             .map_err(|error| {
                 AppError::internal(
@@ -1168,43 +1153,55 @@ impl Repository {
         window_params.push(rusqlite::types::Value::from(request.limit as i64));
         window_params.push(rusqlite::types::Value::from(request.offset as i64));
 
-        let mut statement = connection.prepare(&window_sql).map_err(|error| {
-            AppError::internal(
-                "query_result_window_prepare_failed",
-                "Failed to prepare the cached result window query.",
-                Some(error.to_string()),
-            )
-        })?;
-
-        let rows = statement
-            .query_map(params_from_iter(window_params), |row| {
-                row.get::<_, String>(0)
-            })
-            .map_err(|error| {
+        let rows = {
+            let mut statement = transaction.prepare(&window_sql).map_err(|error| {
                 AppError::internal(
-                    "query_result_window_query_failed",
-                    "Failed to read cached query result rows.",
-                    Some(error.to_string()),
-                )
-            })?
-            .map(|row| {
-                let payload = row?;
-                serde_json::from_str::<Vec<QueryResultCell>>(&payload).map_err(|error| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(error),
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_window_decode_failed",
-                    "Failed to decode cached query result rows.",
+                    "query_result_window_prepare_failed",
+                    "Failed to prepare the cached result window query.",
                     Some(error.to_string()),
                 )
             })?;
+            let mapped_rows = statement
+                .query_map(params_from_iter(window_params), |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(|error| {
+                    AppError::internal(
+                        "query_result_window_query_failed",
+                        "Failed to read cached query result rows.",
+                        Some(error.to_string()),
+                    )
+                })?;
+            let rows = mapped_rows
+                .map(|row| {
+                    let payload = row?;
+                    serde_json::from_str::<Vec<QueryResultCell>>(&payload).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    AppError::internal(
+                        "query_result_window_decode_failed",
+                        "Failed to decode cached query result rows.",
+                        Some(error.to_string()),
+                    )
+                })?;
+
+            rows
+        };
+
+        transaction.commit().map_err(|error| {
+            AppError::internal(
+                "query_result_window_commit_failed",
+                "Failed to close the cached result window transaction.",
+                Some(error.to_string()),
+            )
+        })?;
 
         Ok(QueryResultWindow {
             result_set_id: result_set.result_set_id,
@@ -1214,11 +1211,45 @@ impl Repository {
             visible_row_count: visible_row_count as usize,
             buffered_row_count: result_set.buffered_row_count,
             total_row_count: result_set.total_row_count,
-            is_complete: result_set.status == QueryResultSetStatus::Completed,
+            status: query_result_status_from_set_status(result_set.status),
             sort: request.sort.clone(),
             filters: request.filters.clone(),
             quick_filter: request.quick_filter.clone(),
         })
+    }
+
+    fn load_query_result_set_from_connection(
+        connection: &Connection,
+        result_set_id: &str,
+    ) -> Result<Option<QueryResultSetRecord>, AppError> {
+        connection
+            .query_row(
+                "select
+                    result_set_id,
+                    job_id,
+                    tab_id,
+                    connection_profile_id,
+                    sql,
+                    columns_json,
+                    buffered_row_count,
+                    total_row_count,
+                    status,
+                    created_at,
+                    completed_at,
+                    last_error_json
+                 from query_result_sets
+                 where result_set_id = ?1",
+                params![result_set_id],
+                Self::read_query_result_set,
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::internal(
+                    "query_result_set_read_failed",
+                    "Failed to read cached query result metadata.",
+                    Some(error.to_string()),
+                )
+            })
     }
 
     fn read_query_result_set(row: &rusqlite::Row<'_>) -> rusqlite::Result<QueryResultSetRecord> {
@@ -1463,13 +1494,24 @@ impl Repository {
     fn open(&self) -> Result<Connection, AppError> {
         ensure_parent_directory(&self.database_path)?;
 
-        Connection::open(&self.database_path).map_err(|error| {
+        let connection = Connection::open(&self.database_path).map_err(|error| {
             AppError::internal(
                 "sqlite_open_failed",
                 "Failed to open the local SQLite store.",
                 Some(error.to_string()),
             )
-        })
+        })?;
+        connection
+            .execute_batch("pragma foreign_keys = on;")
+            .map_err(|error| {
+                AppError::internal(
+                    "sqlite_foreign_keys_failed",
+                    "Failed to enable SQLite foreign key enforcement.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        Ok(connection)
     }
 }
 
@@ -1524,6 +1566,15 @@ fn query_result_set_status_from_str(value: &str) -> Result<QueryResultSetStatus,
         "cancelled" => Ok(QueryResultSetStatus::Cancelled),
         "failed" => Ok(QueryResultSetStatus::Failed),
         other => Err(format!("Unsupported query result status '{other}'.")),
+    }
+}
+
+fn query_result_status_from_set_status(value: QueryResultSetStatus) -> QueryResultStatus {
+    match value {
+        QueryResultSetStatus::Running => QueryResultStatus::Running,
+        QueryResultSetStatus::Completed => QueryResultStatus::Completed,
+        QueryResultSetStatus::Cancelled => QueryResultStatus::Cancelled,
+        QueryResultSetStatus::Failed => QueryResultStatus::Failed,
     }
 }
 
@@ -1604,8 +1655,17 @@ fn build_query_result_order_clause(
 
 #[cfg(test)]
 mod tests {
-    use super::{PersistedSecretRef, ReplaceSchemaScopeRecord, Repository, SaveConnectionRecord};
-    use crate::foundation::{SchemaNode, SchemaNodeBase, SchemaScopeKind, SecretProvider, SslMode};
+    use super::{
+        AppendQueryResultRowsRecord, CreateQueryResultSetRecord, FinalizeQueryResultSetRecord,
+        PersistedSecretRef, QueryResultSetStatus, ReplaceSchemaScopeRecord, Repository,
+        SaveConnectionRecord,
+    };
+    use crate::foundation::{
+        QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType, QueryResultStatus,
+        QueryResultWindowRequest, SchemaNode, SchemaNodeBase, SchemaScopeKind, SecretProvider,
+        SslMode,
+    };
+    use rusqlite::params;
 
     fn test_database_path(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join("sparow-phase2-tests");
@@ -1877,6 +1937,91 @@ mod tests {
         assert!(search_results.is_empty());
     }
 
+    #[test]
+    fn cascades_query_result_rows_when_parent_row_is_deleted() {
+        let database_path = test_database_path("query-result-row-cascade.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .create_query_result_set(sample_result_set_record("result-set-cascade"))
+            .expect("result set should store");
+        repository
+            .append_query_result_rows(AppendQueryResultRowsRecord {
+                result_set_id: "result-set-cascade".to_string(),
+                starting_row_index: 0,
+                rows: vec![vec![
+                    QueryResultCell::Integer(1),
+                    QueryResultCell::String("Ada".to_string()),
+                ]],
+                buffered_row_count: 1,
+            })
+            .expect("rows should store");
+
+        let connection = repository.open().expect("connection should open");
+        connection
+            .execute(
+                "delete from query_result_sets where result_set_id = ?1",
+                params!["result-set-cascade"],
+            )
+            .expect("parent result set should delete");
+
+        let remaining_rows: i64 = connection
+            .query_row(
+                "select count(*) from query_result_rows where result_set_id = ?1",
+                params!["result-set-cascade"],
+                |row| row.get(0),
+            )
+            .expect("row count should load");
+        assert_eq!(remaining_rows, 0);
+    }
+
+    #[test]
+    fn loads_cached_result_window_with_terminal_status() {
+        let database_path = test_database_path("query-result-window-status.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .create_query_result_set(sample_result_set_record("result-set-window"))
+            .expect("result set should store");
+        repository
+            .append_query_result_rows(AppendQueryResultRowsRecord {
+                result_set_id: "result-set-window".to_string(),
+                starting_row_index: 0,
+                rows: vec![vec![
+                    QueryResultCell::Integer(1),
+                    QueryResultCell::String("Ada".to_string()),
+                ]],
+                buffered_row_count: 1,
+            })
+            .expect("rows should store");
+        repository
+            .finalize_query_result_set(FinalizeQueryResultSetRecord {
+                result_set_id: "result-set-window".to_string(),
+                buffered_row_count: 1,
+                total_row_count: Some(1),
+                status: QueryResultSetStatus::Cancelled,
+                completed_at: Some("2026-03-12T09:05:00.000Z".to_string()),
+                last_error: None,
+            })
+            .expect("result set should finalize");
+
+        let window = repository
+            .load_query_result_window(&QueryResultWindowRequest {
+                result_set_id: "result-set-window".to_string(),
+                offset: 0,
+                limit: 50,
+                sort: None,
+                filters: Vec::new(),
+                quick_filter: String::new(),
+            })
+            .expect("window should load");
+
+        assert_eq!(window.status, QueryResultStatus::Cancelled);
+        assert_eq!(window.rows.len(), 1);
+    }
+
     fn sample_schema_scope(connection_id: &str) -> ReplaceSchemaScopeRecord {
         ReplaceSchemaScopeRecord {
             connection_id: connection_id.to_string(),
@@ -1900,6 +2045,31 @@ mod tests {
                 is_nullable: false,
                 ordinal_position: 3,
             }],
+        }
+    }
+
+    fn sample_result_set_record(result_set_id: &str) -> CreateQueryResultSetRecord {
+        CreateQueryResultSetRecord {
+            result_set_id: result_set_id.to_string(),
+            job_id: format!("job-{result_set_id}"),
+            tab_id: "tab-1".to_string(),
+            connection_id: "conn-1".to_string(),
+            sql: "select 1".to_string(),
+            columns: vec![
+                QueryResultColumn {
+                    name: "id".to_string(),
+                    postgres_type: "int4".to_string(),
+                    semantic_type: QueryResultColumnSemanticType::Number,
+                    is_nullable: false,
+                },
+                QueryResultColumn {
+                    name: "name".to_string(),
+                    postgres_type: "text".to_string(),
+                    semantic_type: QueryResultColumnSemanticType::Text,
+                    is_nullable: false,
+                },
+            ],
+            created_at: "2026-03-12T09:00:00.000Z".to_string(),
         }
     }
 }
