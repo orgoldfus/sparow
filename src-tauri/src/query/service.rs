@@ -20,10 +20,10 @@ use crate::{
     foundation::{
         ensure_parent_directory, iso_timestamp, AppError, CancelQueryExecutionResult,
         CancelQueryResultExportResult, DiagnosticsStore, QueryExecutionAccepted,
-        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionStatus,
-        QueryResultCell, QueryResultExportAccepted, QueryResultExportProgressEvent,
-        QueryResultExportRequest, QueryResultExportStatus, QueryResultStreamEvent,
-        QueryResultStreamStatus, QueryResultWindow, QueryResultWindowRequest,
+        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionStatus, QueryResultCell,
+        QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
+        QueryResultExportStatus, QueryResultStreamEvent, QueryResultStreamStatus,
+        QueryResultWindow, QueryResultWindowRequest,
     },
     persistence::{
         FinalizeQueryResultSetRecord, QueryResultSetRecord, QueryResultSetStatus, Repository,
@@ -218,11 +218,19 @@ impl QueryService {
                     "Query cancelled by user.".to_string(),
                 ),
                 Err(error) => {
-                    if let Err(finalize_error) =
-                        finalize_failed_result_set(repository.clone(), maybe_app.clone(), &stream_context, &error).await
+                    if let Err(finalize_error) = finalize_failed_result_set(
+                        repository.clone(),
+                        maybe_app.clone(),
+                        &stream_context,
+                        &error,
+                    )
+                    .await
                     {
                         diagnostics.record_error(finalize_error.clone());
-                        error!(?finalize_error, "failed to finalize cached query result after execution failure");
+                        error!(
+                            ?finalize_error,
+                            "failed to finalize cached query result after execution failure"
+                        );
                     }
 
                     (
@@ -730,7 +738,9 @@ where
         }
         first = false;
         let encoded = csv_field_for_cell(cell);
-        writer.write_all(encoded.as_bytes()).map_err(csv_write_error)?;
+        writer
+            .write_all(encoded.as_bytes())
+            .map_err(csv_write_error)?;
     }
     writer.write_all(b"\n").map_err(csv_write_error)?;
     Ok(())
@@ -795,9 +805,9 @@ mod tests {
         connections::{ActiveSessionRuntime, ConnectionService, MemorySecretStore},
         foundation::{
             iso_timestamp, AppError, ConnectionSessionStatus, DatabaseEngine,
-            DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin,
-            QueryExecutionRequest, QueryExecutionResult, QueryResultColumn,
-            QueryResultColumnSemanticType, QueryResultSetSummary, SslMode,
+            DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
+            QueryExecutionResult, QueryResultColumn, QueryResultColumnSemanticType,
+            QueryResultSetSummary, SslMode,
         },
         persistence::Repository,
     };

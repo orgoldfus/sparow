@@ -15,12 +15,11 @@ use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
     BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult,
     CancelQueryResultExportResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
-    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot,
-    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner,
-    QueryExecutionAccepted, QueryExecutionRequest, QueryResultExportAccepted,
-    QueryResultExportRequest, QueryResultWindow, QueryResultWindowRequest,
-    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest,
-    SchemaSearchResult, TestConnectionRequest,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
+    ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
+    QueryExecutionRequest, QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindow,
+    QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
+    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -272,7 +271,10 @@ impl AppState {
         app: AppHandle,
         request: QueryResultExportRequest,
     ) -> Result<QueryResultExportAccepted, AppError> {
-        let result = self.query.start_query_result_export(Some(app), request).await;
+        let result = self
+            .query
+            .start_query_result_export(Some(app), request)
+            .await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

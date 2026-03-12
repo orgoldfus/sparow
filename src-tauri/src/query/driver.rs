@@ -372,7 +372,12 @@ fn read_query_result_cell(row: &Row, index: usize, postgres_type: &str) -> Query
                 .flatten()
                 .map(i64::from),
         ),
-        "int4" => integer_cell(row.try_get::<usize, Option<i32>>(index).ok().flatten().map(i64::from)),
+        "int4" => integer_cell(
+            row.try_get::<usize, Option<i32>>(index)
+                .ok()
+                .flatten()
+                .map(i64::from),
+        ),
         "int8" => integer_cell(row.try_get::<usize, Option<i64>>(index).ok().flatten()),
         "oid" => integer_cell(
             row.try_get::<usize, Option<u32>>(index)

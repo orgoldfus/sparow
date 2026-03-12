@@ -4,13 +4,13 @@ use crate::foundation::{
     AppBootstrap, AppError, AppState, BackgroundJobAccepted, BackgroundJobProgressEvent,
     BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult, ConnectionDetails,
     ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
-    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
-    QueryExecutionProgressEvent, QueryExecutionRequest, QueryResultExportAccepted,
-    QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStreamEvent,
-    QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
+    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
+    QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
+    QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
+    QueryResultStreamEvent, QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
     SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
-    TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT,
-    QUERY_RESULT_EXPORT_EVENT, QUERY_RESULT_STREAM_EVENT,
+    TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT,
+    QUERY_RESULT_STREAM_EVENT,
 };
 
 #[tauri::command]

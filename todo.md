@@ -13,6 +13,7 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-12: Started a CI follow-up to fix a failing `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` run and verify the Rust workspace formatting state locally.
 - 2026-03-12: Started Phase 5 implementation. `docs/MVP/PHASE5_PLAN.md` is present as an untracked file; it is being left untouched because it is not part of the current tracked baseline.
 - 2026-03-12: Phase 5 keeps the current shell layout and upgrades the results region instead of starting the broader shell redesign.
 - 2026-03-12: Phase 5 uses a Rust/SQLite cached result store rather than a React-held full-row buffer so large-result behavior stays inspectable and bounded.
@@ -50,3 +51,5 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
   - Re-ran after the final result-grid accessibility pass. The full stack stayed green with 76 frontend tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all passing.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - Rust verification is green again after the Phase 5 backend wiring pass: 70 tests passed, 4 PostgreSQL smoke tests remained ignored as expected, and the service/contract suite now builds against cached result summaries plus export commands.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - CI formatting drift was reproduced locally, corrected with `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the Rust workspace now passes the formatter check again.

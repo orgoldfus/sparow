@@ -824,14 +824,14 @@ mod tests {
     use super::{
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
         CancelQueryExecutionResult, CancelQueryResultExportResult, ConnectionDetails,
-        ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
-        DeleteConnectionResult, DisconnectSessionResult, ListSchemaChildrenRequest,
-        ListSchemaChildrenResult, QueryExecutionAccepted, QueryExecutionProgressEvent,
-        QueryExecutionRequest, QueryExecutionResult, QueryResultExportAccepted,
-        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStreamEvent,
-        QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
-        SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-        SchemaSearchRequest, SchemaSearchResult, SslMode, TestConnectionRequest,
+        ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
+        DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
+        QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
+        QueryExecutionResult, QueryResultExportAccepted, QueryResultExportProgressEvent,
+        QueryResultExportRequest, QueryResultStreamEvent, QueryResultWindow,
+        QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode,
+        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
+        SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =

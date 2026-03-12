@@ -838,13 +838,14 @@ impl Repository {
                 )
             })?;
 
-        self.load_query_result_set(&record.result_set_id)?.ok_or_else(|| {
-            AppError::internal(
-                "query_result_set_missing_after_create",
-                "The query result metadata could not be reloaded after creation.",
-                Some(record.result_set_id),
-            )
-        })
+        self.load_query_result_set(&record.result_set_id)?
+            .ok_or_else(|| {
+                AppError::internal(
+                    "query_result_set_missing_after_create",
+                    "The query result metadata could not be reloaded after creation.",
+                    Some(record.result_set_id),
+                )
+            })
     }
 
     pub fn append_query_result_rows(
@@ -1134,11 +1135,13 @@ impl Repository {
                 )
             })?;
 
-        let (where_sql, where_params) =
-            build_query_result_filter_clause(&result_set.columns, &request.quick_filter, &request.filters);
-        let count_sql = format!(
-            "select count(*) from query_result_rows where result_set_id = ?{where_sql}"
+        let (where_sql, where_params) = build_query_result_filter_clause(
+            &result_set.columns,
+            &request.quick_filter,
+            &request.filters,
         );
+        let count_sql =
+            format!("select count(*) from query_result_rows where result_set_id = ?{where_sql}");
 
         let mut count_params = vec![rusqlite::types::Value::from(request.result_set_id.clone())];
         count_params.extend(where_params.clone());
@@ -1174,7 +1177,9 @@ impl Repository {
         })?;
 
         let rows = statement
-            .query_map(params_from_iter(window_params), |row| row.get::<_, String>(0))
+            .query_map(params_from_iter(window_params), |row| {
+                row.get::<_, String>(0)
+            })
             .map_err(|error| {
                 AppError::internal(
                     "query_result_window_query_failed",
@@ -1220,15 +1225,14 @@ impl Repository {
         let columns_json: String = row.get(5)?;
         let status_text: String = row.get(8)?;
         let last_error_json: Option<String> = row.get(11)?;
-        let columns = serde_json::from_str::<Vec<QueryResultColumn>>(&columns_json).map_err(
-            |error| {
+        let columns =
+            serde_json::from_str::<Vec<QueryResultColumn>>(&columns_json).map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                     5,
                     rusqlite::types::Type::Text,
                     Box::new(error),
                 )
-            },
-        )?;
+            })?;
         let status = query_result_set_status_from_str(&status_text).map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(
                 8,
