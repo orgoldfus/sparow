@@ -19,9 +19,16 @@ import schemaSearchRequestFixture from '../../fixtures/contracts/schema-search-r
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
 import testConnectionRequestFixture from '../../fixtures/contracts/test-connection-request.json';
 import cancelQueryExecutionResultFixture from '../../fixtures/contracts/cancel-query-execution-result.json';
+import cancelQueryResultExportResultFixture from '../../fixtures/contracts/cancel-query-result-export-result.json';
 import queryExecutionAcceptedFixture from '../../fixtures/contracts/query-execution-accepted.json';
 import queryExecutionProgressFixture from '../../fixtures/contracts/query-execution-progress.json';
 import queryExecutionRequestFixture from '../../fixtures/contracts/query-execution-request.json';
+import queryResultExportAcceptedFixture from '../../fixtures/contracts/query-result-export-accepted.json';
+import queryResultExportProgressFixture from '../../fixtures/contracts/query-result-export-progress.json';
+import queryResultExportRequestFixture from '../../fixtures/contracts/query-result-export-request.json';
+import queryResultStreamFixture from '../../fixtures/contracts/query-result-stream.json';
+import queryResultWindowFixture from '../../fixtures/contracts/query-result-window.json';
+import queryResultWindowRequestFixture from '../../fixtures/contracts/query-result-window-request.json';
 import {
   isAppBootstrap,
   isAppError,
@@ -39,6 +46,15 @@ import {
   isQueryExecutionProgressEvent,
   isQueryExecutionRequest,
   isQueryExecutionResult,
+  isQueryResultExportAccepted,
+  isQueryResultExportProgressEvent,
+  isQueryResultExportRequest,
+  isQueryResultFilter,
+  isQueryResultSetSummary,
+  isQueryResultSort,
+  isQueryResultStreamEvent,
+  isQueryResultWindow,
+  isQueryResultWindowRequest,
   isRefreshSchemaScopeRequest,
   isSaveConnectionRequest,
   isSchemaNode,
@@ -165,6 +181,34 @@ describe('contract fixtures', () => {
     expect(typeof cancelQueryExecutionResultFixture.jobId).toBe('string');
   });
 
+  it('validate the query result window request fixture', () => {
+    expect(isQueryResultWindowRequest(queryResultWindowRequestFixture)).toBe(true);
+  });
+
+  it('validate the query result window fixture', () => {
+    expect(isQueryResultWindow(queryResultWindowFixture)).toBe(true);
+  });
+
+  it('validate the query result stream fixture', () => {
+    expect(isQueryResultStreamEvent(queryResultStreamFixture)).toBe(true);
+  });
+
+  it('validate the query result export request fixture', () => {
+    expect(isQueryResultExportRequest(queryResultExportRequestFixture)).toBe(true);
+  });
+
+  it('validate the query result export accepted fixture', () => {
+    expect(isQueryResultExportAccepted(queryResultExportAcceptedFixture)).toBe(true);
+  });
+
+  it('validate the query result export progress fixture', () => {
+    expect(isQueryResultExportProgressEvent(queryResultExportProgressFixture)).toBe(true);
+  });
+
+  it('validate the cancel query result export result fixture', () => {
+    expect(typeof cancelQueryResultExportResultFixture.jobId).toBe('string');
+  });
+
   it('rejects schema nodes without a kind discriminant', () => {
     const nodeWithoutKind = { ...schemaNodeFixture };
     delete (nodeWithoutKind as { kind?: string }).kind;
@@ -265,8 +309,11 @@ describe('contract fixtures', () => {
     ).toBe(false);
   });
 
-  it('accepts both query result variants and rejects malformed preview rows', () => {
+  it('accepts both query result variants and rejects malformed row summaries', () => {
     expect(isQueryExecutionResult(queryExecutionProgressFixture.result)).toBe(true);
+    expect(isQueryResultSetSummary(queryExecutionProgressFixture.result)).toBe(true);
+    expect(isQueryResultSort(queryResultWindowRequestFixture.sort)).toBe(true);
+    expect(isQueryResultFilter(queryResultWindowRequestFixture.filters[0])).toBe(true);
 
     expect(
       isQueryExecutionResult({
@@ -279,10 +326,22 @@ describe('contract fixtures', () => {
     expect(
       isQueryExecutionResult({
         kind: 'rows',
-        columns: [{ name: 'id', postgresType: 'int4' }],
-        previewRows: [['1'], [2]],
-        previewRowCount: 2,
-        truncated: false,
+        resultSetId: 'result-set-1',
+        columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+        bufferedRowCount: 2,
+        totalRowCount: 2,
+        isComplete: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      isQueryExecutionResult({
+        kind: 'rows',
+        resultSetId: 'result-set-1',
+        columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+        bufferedRowCount: '2',
+        totalRowCount: 2,
+        isComplete: true,
       }),
     ).toBe(false);
   });

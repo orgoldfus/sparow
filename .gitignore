@@ -7,3 +7,5 @@ src-tauri/gen/
 *.db
 *.log
 *.tsbuildinfo
+tmp/
+artifacts/

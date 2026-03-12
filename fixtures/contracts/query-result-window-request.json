@@ -1,0 +1,17 @@
+{
+  "resultSetId": "result-set-2026",
+  "offset": 0,
+  "limit": 50,
+  "sort": {
+    "columnIndex": 0,
+    "direction": "asc"
+  },
+  "filters": [
+    {
+      "columnIndex": 1,
+      "mode": "contains",
+      "value": "@example.com"
+    }
+  ],
+  "quickFilter": "ada"
+}

@@ -1,7 +1,7 @@
 import { Editor } from '@monaco-editor/react';
-import { Command, Play, Plus, Square, X } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, Command, Download, Play, Plus, Search, Square, X } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -19,7 +19,7 @@ import type {
   AppError,
   ConnectionSummary,
   DatabaseSessionSnapshot,
-  QueryExecutionResult,
+  QueryResultCell,
 } from '../../lib/contracts';
 import { formatLongTime } from '../../lib/format';
 import { resolveExecutionSlice } from './executionSlice';
@@ -37,11 +37,13 @@ type QueryResultsPanelProps = {
   activeSession: DatabaseSessionSnapshot | null;
   activeView: 'messages' | 'results';
   onActiveViewChange: (view: 'messages' | 'results') => void;
-  result: QueryExecutionResult | null;
-  tab: QueryTabState | null;
+  workspace: QueryWorkspaceState;
 };
 
 const NO_TARGET_CONNECTION = '__none__';
+const GRID_ROW_HEIGHT = 34;
+const GRID_OVERSCAN = 12;
+const GRID_MIN_FETCH = 120;
 
 export function QueryWorkspace({
   activeSession,
@@ -90,20 +92,20 @@ export function QueryWorkspace({
       inherit: true,
       rules: [
         { token: 'comment', foreground: '6f7692' },
-        { token: 'keyword', foreground: 'b88cff' },
-        { token: 'number', foreground: 'f5c451' },
+        { token: 'keyword', foreground: 'c58b54' },
+        { token: 'number', foreground: 'e1c15a' },
         { token: 'string', foreground: '82d5c0' },
         { token: 'identifier', foreground: 'd9ddf4' },
       ],
       colors: {
-        'editor.background': '#181922',
-        'editorLineNumber.foreground': '#5d6175',
-        'editorLineNumber.activeForeground': '#cfd4ee',
-        'editor.selectionBackground': '#3c2c64',
-        'editor.inactiveSelectionBackground': '#2b2740',
-        'editorCursor.foreground': '#b88cff',
-        'editorIndentGuide.background1': '#242738',
-        'editorIndentGuide.activeBackground1': '#343851',
+        'editor.background': '#17181d',
+        'editorLineNumber.foreground': '#666b7e',
+        'editorLineNumber.activeForeground': '#f6f3eb',
+        'editor.selectionBackground': '#4a3521',
+        'editor.inactiveSelectionBackground': '#2e2520',
+        'editorCursor.foreground': '#f6d7ab',
+        'editorIndentGuide.background1': '#262931',
+        'editorIndentGuide.activeBackground1': '#3a3e49',
       },
     });
 
@@ -247,7 +249,17 @@ export function QueryWorkspace({
 
         <div className="grid gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-panel)] px-4 py-3 xl:grid-cols-[minmax(0,1fr)_280px]">
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <Badge variant={activeTab?.execution.status === 'failed' ? 'danger' : activeTab?.execution.status === 'completed' ? 'success' : 'default'}>
+            <Badge
+              variant={
+                activeTab?.execution.status === 'failed'
+                  ? 'danger'
+                  : activeTab?.execution.status === 'completed'
+                    ? 'success'
+                    : activeTab?.execution.status === 'running'
+                      ? 'accent'
+                      : 'default'
+              }
+            >
               {activeTab?.execution.status ?? 'idle'}
             </Badge>
             <span>Active connection: {activeSession?.name ?? 'none'}</span>
@@ -310,9 +322,61 @@ export function QueryResultsPanel({
   activeSession,
   activeView,
   onActiveViewChange,
-  result,
-  tab,
+  workspace,
 }: QueryResultsPanelProps) {
+  const tab = workspace.activeTab;
+  const result = tab?.execution.lastResult ?? null;
+  const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(480);
+  const totalRows = tab?.result.window?.visibleRowCount ?? summary?.bufferedRowCount ?? 0;
+  const firstVisibleIndex = Math.max(0, Math.floor(scrollTop / GRID_ROW_HEIGHT) - GRID_OVERSCAN);
+  const visibleRowCount = Math.max(
+    GRID_MIN_FETCH,
+    Math.ceil(viewportHeight / GRID_ROW_HEIGHT) + GRID_OVERSCAN * 2,
+  );
+  const gridTemplateColumns = useMemo(() => {
+    const columnCount = summary?.columns.length ?? 0;
+    return `72px repeat(${Math.max(columnCount, 1)}, minmax(180px, 1fr))`;
+  }, [summary?.columns.length]);
+
+  useEffect(() => {
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setViewportHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(element);
+    setViewportHeight(element.clientHeight);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeView, tab?.id]);
+
+  useEffect(() => {
+    if (activeView !== 'results' || !tab || !summary || result?.kind === 'command') {
+      return;
+    }
+
+    void workspace.loadTabResultWindow(tab.id, firstVisibleIndex, visibleRowCount);
+  }, [
+    activeView,
+    firstVisibleIndex,
+    result?.kind,
+    summary,
+    tab,
+    visibleRowCount,
+    workspace,
+  ]);
+
   return (
     <Tabs
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]"
@@ -325,7 +389,7 @@ export function QueryResultsPanel({
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Results</p>
           <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-            {tab?.title ?? 'Result preview'}
+            {tab?.title ?? 'Cached result viewer'}
           </h3>
         </div>
         <TabsList>
@@ -335,16 +399,140 @@ export function QueryResultsPanel({
       </div>
 
       <TabsContent className="min-h-0" value="results">
-        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
           <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-secondary)]">
-            <Badge variant={result ? 'success' : 'default'}>
-              {result ? (result.kind === 'rows' ? `${result.previewRowCount} rows` : result.commandTag) : 'No result'}
+            <Badge variant={summary ? (summary.isComplete ? 'success' : 'accent') : result ? 'accent' : 'default'}>
+              {summary
+                ? summary.isComplete
+                  ? 'cached result complete'
+                  : 'streaming cached rows'
+                : result?.kind === 'command'
+                  ? result.commandTag
+                  : 'No result'}
             </Badge>
+            <span>
+              Rows:{' '}
+              {summary
+                ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}`
+                : 'n/a'}
+            </span>
             <span>Connection: {activeSession?.name ?? 'none'}</span>
             <span>Elapsed: {tab?.execution.lastEvent ? `${tab.execution.lastEvent.elapsedMs} ms` : 'n/a'}</span>
+            {tab?.result.latestStreamEvent && !summary?.isComplete ? (
+              <span data-testid="result-streaming-note">
+                Viewer reflects cached rows only while streaming continues.
+              </span>
+            ) : null}
           </div>
+
+          <div className="grid gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-panel)] px-4 py-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <label className="grid gap-1">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Quick filter</span>
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2">
+                <Search className="h-4 w-4 text-[var(--text-muted)]" />
+                <input
+                  className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+                  data-testid="result-quick-filter"
+                  disabled={!summary}
+                  placeholder="Filter visible columns"
+                  value={tab?.result.quickFilter ?? ''}
+                  onChange={(event) => {
+                    if (tab) {
+                      workspace.setTabQuickFilter(tab.id, event.target.value);
+                    }
+                  }}
+                />
+              </div>
+            </label>
+
+            <div className="grid gap-2">
+              <label className="grid gap-1">
+                <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">CSV export path</span>
+                <input
+                  className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+                  data-testid="result-export-path"
+                  disabled={!summary}
+                  placeholder="./sparow-result.csv"
+                  value={tab?.result.exportOutputPath ?? ''}
+                  onChange={(event) => {
+                    if (tab) {
+                      workspace.setTabExportOutputPath(tab.id, event.target.value);
+                    }
+                  }}
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  data-testid="result-export-button"
+                  disabled={!summary || !summary.isComplete || tab?.result.exportJobId !== null}
+                  onClick={() => {
+                    if (tab) {
+                      void workspace.startTabResultExport(tab.id);
+                    }
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export CSV
+                </Button>
+                <Button
+                  data-testid="cancel-result-export-button"
+                  disabled={!tab?.result.exportJobId}
+                  onClick={() => {
+                    if (tab) {
+                      void workspace.cancelTabResultExport(tab.id);
+                    }
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  Cancel export
+                </Button>
+                {tab?.result.exportStatus && tab.result.exportStatus !== 'idle' ? (
+                  <Badge
+                    variant={
+                      tab.result.exportStatus === 'failed'
+                        ? 'danger'
+                        : tab.result.exportStatus === 'completed'
+                          ? 'success'
+                          : tab.result.exportStatus === 'cancelled'
+                            ? 'warning'
+                            : 'accent'
+                    }
+                  >
+                    {tab.result.exportStatus}
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div className="min-h-0 px-4 py-4">
-            {result ? <ResultPreview result={result} /> : <EmptyPanel message="Run a query to populate the result grid." />}
+            {result?.kind === 'command' ? (
+              <CommandResultCard commandTag={result.commandTag} rowsAffected={result.rowsAffected} />
+            ) : summary ? (
+              <ResultGrid
+                gridTemplateColumns={gridTemplateColumns}
+                scrollContainerRef={scrollContainerRef}
+                setScrollTop={setScrollTop}
+                tab={tab}
+                totalRows={totalRows}
+                workspace={workspace}
+              />
+            ) : (
+              <EmptyPanel
+                message={
+                  tab?.execution.status === 'failed'
+                    ? tab.execution.lastError?.message ?? 'The last query failed before rows were cached.'
+                    : tab?.execution.status === 'running'
+                      ? 'Waiting for result metadata from the running query.'
+                      : 'Run a query to populate the cached result grid.'
+                }
+              />
+            )}
           </div>
         </div>
       </TabsContent>
@@ -361,10 +549,28 @@ export function QueryResultsPanel({
                 <p>{tab?.lastExecutionSummary ?? 'Run a query to capture execution messages.'}</p>
               </div>
             </article>
+
+            <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Cached result</p>
+              <div className="mt-3 grid gap-2 text-sm text-[var(--text-secondary)]">
+                <p>Result set: {summary?.resultSetId ?? 'none'}</p>
+                <p>Columns: {summary ? formatResultColumns(summary.columns) : 'n/a'}</p>
+                <p>
+                  Rows buffered:{' '}
+                  {summary ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}` : 'n/a'}
+                </p>
+                <p>Window state: {tab?.result.windowStatus ?? 'idle'}</p>
+                <p>Export state: {tab?.result.exportStatus ?? 'idle'}</p>
+              </div>
+            </article>
+
             <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Last error</p>
               <p className="mt-3 text-sm text-[var(--text-secondary)]">
-                {tab?.execution.lastError?.message ?? 'No error recorded for the active tab.'}
+                {tab?.result.windowError?.message ??
+                  tab?.result.exportLastError?.message ??
+                  tab?.execution.lastError?.message ??
+                  'No error recorded for the active tab.'}
               </p>
             </article>
           </div>
@@ -374,51 +580,151 @@ export function QueryResultsPanel({
   );
 }
 
-function ResultPreview({ result }: { result: QueryExecutionResult }) {
-  if (result.kind === 'command') {
-    return (
-      <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-sm text-[var(--text-secondary)]">
-        <p className="font-medium text-[var(--text-primary)]">{result.commandTag}</p>
-        <p className="mt-2">Rows affected: {result.rowsAffected ?? 'unknown'}</p>
-      </div>
-    );
+function ResultGrid({
+  gridTemplateColumns,
+  scrollContainerRef,
+  setScrollTop,
+  tab,
+  totalRows,
+  workspace,
+}: {
+  gridTemplateColumns: string;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  setScrollTop: (value: number) => void;
+  tab: QueryTabState | null;
+  totalRows: number;
+  workspace: QueryWorkspaceState;
+}) {
+  const summary = tab?.result.summary;
+  const window = tab?.result.window;
+  const topSpacer = window ? window.offset * GRID_ROW_HEIGHT : 0;
+  const bottomSpacer = window
+    ? Math.max(0, (totalRows - window.offset - window.rows.length) * GRID_ROW_HEIGHT)
+    : 0;
+  const sort = tab?.result.sort ?? null;
+
+  if (!summary || !tab) {
+    return <EmptyPanel message="No cached result set is available for this tab." />;
   }
 
   return (
-    <div className="grid h-full min-h-0 gap-3">
-      <p className="text-sm text-[var(--text-secondary)]">{formatResultColumns(result.columns)}</p>
-      <div className="min-h-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
-        <ScrollArea className="h-full">
-          <table className="min-w-full border-collapse text-left text-sm">
-            <thead className="sticky top-0 bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)] text-[var(--text-muted)]">
-              <tr>
-                {result.columns.map((column, index) => (
-                  <th
-                    className="border-b border-[var(--border-subtle)] px-3 py-2 font-medium"
-                    key={`${column.name}-${index}`}
-                  >
-                    {column.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.previewRows.map((row, rowIndex) => (
-                <tr className="border-b border-[var(--border-subtle)]" key={`row-${rowIndex}`}>
-                  {row.map((cell, cellIndex) => (
-                    <td className="px-3 py-2 text-[var(--text-secondary)]" key={`cell-${rowIndex}-${cellIndex}`}>
-                      {cell ?? 'null'}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollArea>
+    <div className="grid h-full min-h-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
+      <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_84%,_black_16%)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+        {formatResultColumns(summary.columns)}
       </div>
-      <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">
-        {result.previewRowCount} rows previewed{result.truncated ? ' (truncated to 200 rows)' : ''}
-      </p>
+
+      <div
+        className="min-h-0 overflow-auto"
+        aria-colcount={summary.columns.length + 1}
+        aria-rowcount={totalRows}
+        data-testid="query-result-grid-scroll"
+        ref={scrollContainerRef}
+        role="grid"
+        onScroll={(event) => {
+          setScrollTop(event.currentTarget.scrollTop);
+        }}
+      >
+        <div className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)] backdrop-blur-sm" role="rowgroup">
+          <div className="grid min-w-max" role="row" style={{ gridTemplateColumns }}>
+            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]" role="columnheader">
+              Row
+            </div>
+            {summary.columns.map((column, index) => {
+              const isSorted = sort?.columnIndex === index;
+              return (
+                <button
+                  className="flex items-center justify-between gap-2 border-r border-[var(--border-subtle)] px-3 py-2 text-left text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)] last:border-r-0"
+                  data-testid={`result-column-${index}`}
+                  key={`${column.name}-${index}`}
+                  onClick={() => {
+                    workspace.toggleTabSort(tab.id, index);
+                  }}
+                  role="columnheader"
+                  type="button"
+                >
+                  <span className="truncate">{column.name}</span>
+                  {isSorted ? (
+                    sort.direction === 'asc' ? (
+                      <ArrowUpWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
+                    ) : (
+                      <ArrowDownWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
+                    )
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid min-w-max border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-elevated)_94%,_black_6%)]" role="row" style={{ gridTemplateColumns }}>
+            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] text-[var(--text-muted)]" role="gridcell">contains</div>
+            {summary.columns.map((column, index) => (
+              <label className="border-r border-[var(--border-subtle)] px-2 py-1.5 last:border-r-0" key={`filter-${column.name}-${index}`} role="gridcell">
+                <input
+                  className="w-full rounded-lg border border-transparent bg-[var(--surface-panel)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-accent)]"
+                  data-testid={`result-filter-${index}`}
+                  placeholder={column.name}
+                  value={filterValueForColumn(tab, index)}
+                  onChange={(event) => {
+                    workspace.setTabColumnFilter(tab.id, index, event.target.value);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {tab.result.windowStatus === 'failed' ? (
+          <div className="px-4 py-6">
+            <EmptyPanel message={tab.result.windowError?.message ?? 'Failed to load the cached result window.'} />
+          </div>
+        ) : (
+          <div className="min-w-max" role="rowgroup">
+            <div style={{ height: topSpacer }} />
+            {window?.rows.map((row, rowIndex) => {
+              const absoluteIndex = window.offset + rowIndex;
+              return (
+                <div
+                  aria-rowindex={absoluteIndex + 1}
+                  className="grid border-b border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]"
+                  data-testid={`result-row-${absoluteIndex}`}
+                  key={`row-${absoluteIndex}`}
+                  role="row"
+                  style={{ gridTemplateColumns, minHeight: GRID_ROW_HEIGHT }}
+                >
+                  <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    {absoluteIndex + 1}
+                  </div>
+                  {row.map((cell, cellIndex) => (
+                    <div
+                      className="truncate border-r border-[var(--border-subtle)] px-3 py-2 font-mono text-[13px] last:border-r-0"
+                      key={`cell-${absoluteIndex}-${cellIndex}`}
+                      role="gridcell"
+                      title={cellTitle(cell)}
+                    >
+                      {renderCell(cell)}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <div style={{ height: bottomSpacer }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CommandResultCard({
+  commandTag,
+  rowsAffected,
+}: {
+  commandTag: string;
+  rowsAffected: number | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-sm text-[var(--text-secondary)]">
+      <p className="font-medium text-[var(--text-primary)]">{commandTag}</p>
+      <p className="mt-2">Rows affected: {rowsAffected ?? 'unknown'}</p>
     </div>
   );
 }
@@ -437,4 +743,20 @@ function connectionNameFor(connectionId: string | null, connections: ConnectionS
   }
 
   return connections.find((connection) => connection.id === connectionId)?.name ?? connectionId;
+}
+
+function filterValueForColumn(tab: QueryTabState, columnIndex: number): string {
+  return tab.result.filters.find((filter) => filter.columnIndex === columnIndex)?.value ?? '';
+}
+
+function renderCell(cell: QueryResultCell): string {
+  if (cell === null) {
+    return 'null';
+  }
+
+  return String(cell);
+}
+
+function cellTitle(cell: QueryResultCell): string {
+  return renderCell(cell);
 }

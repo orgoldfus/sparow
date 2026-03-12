@@ -17,6 +17,8 @@ import {
   getSavedConnection,
   saveConnection,
   subscribeToQueryExecutionEvent,
+  subscribeToQueryResultExportEvent,
+  subscribeToQueryResultStreamEvent,
   subscribeToSchemaRefreshEvent,
 } from '../lib/ipc';
 
@@ -81,6 +83,8 @@ vi.mock('../lib/ipc', () => ({
     }),
   ),
   cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  subscribeToQueryResultStreamEvent: vi.fn(() => Promise.resolve(() => {})),
+  subscribeToQueryResultExportEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToQueryExecutionEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToSchemaRefreshEvent: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -88,6 +92,8 @@ vi.mock('../lib/ipc', () => ({
 const saveConnectionMock = vi.mocked(saveConnection);
 const getSavedConnectionMock = vi.mocked(getSavedConnection);
 const subscribeToQueryExecutionEventMock = vi.mocked(subscribeToQueryExecutionEvent);
+const subscribeToQueryResultStreamEventMock = vi.mocked(subscribeToQueryResultStreamEvent);
+const subscribeToQueryResultExportEventMock = vi.mocked(subscribeToQueryResultExportEvent);
 const subscribeToSchemaRefreshEventMock = vi.mocked(subscribeToSchemaRefreshEvent);
 
 describe('App shell', () => {
@@ -95,10 +101,14 @@ describe('App shell', () => {
     saveConnectionMock.mockClear();
     getSavedConnectionMock.mockReset();
     subscribeToQueryExecutionEventMock.mockReset();
+    subscribeToQueryResultStreamEventMock.mockReset();
+    subscribeToQueryResultExportEventMock.mockReset();
     subscribeToSchemaRefreshEventMock.mockReset();
     getSavedConnectionMock.mockResolvedValue(connectionDetails);
     saveConnectionMock.mockResolvedValue(connectionDetails);
     subscribeToQueryExecutionEventMock.mockResolvedValue(() => {});
+    subscribeToQueryResultStreamEventMock.mockResolvedValue(() => {});
+    subscribeToQueryResultExportEventMock.mockResolvedValue(() => {});
     subscribeToSchemaRefreshEventMock.mockResolvedValue(() => {});
   });
 

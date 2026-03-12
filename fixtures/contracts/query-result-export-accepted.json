@@ -1,0 +1,7 @@
+{
+  "jobId": "export-job-2026",
+  "correlationId": "export-corr-2026",
+  "resultSetId": "result-set-2026",
+  "outputPath": "/tmp/sparow-phase5-export.csv",
+  "startedAt": "2026-03-12T19:16:00.000Z"
+}

@@ -14,11 +14,13 @@ use crate::{
 use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
     BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult,
-    ConnectionDetails, ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot,
-    DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
-    ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
-    QueryExecutionRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted,
-    SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
+    CancelQueryResultExportResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot,
+    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner,
+    QueryExecutionAccepted, QueryExecutionRequest, QueryResultExportAccepted,
+    QueryResultExportRequest, QueryResultWindow, QueryResultWindowRequest,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest,
+    SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -115,6 +117,7 @@ impl AppState {
                 "phase2-connections".to_string(),
                 "phase3-schema-browser".to_string(),
                 "phase4-query-workspace".to_string(),
+                "phase5-result-viewer".to_string(),
                 "diagnostics-surface".to_string(),
                 "mock-background-job".to_string(),
             ],
@@ -247,6 +250,40 @@ impl AppState {
         job_id: String,
     ) -> Result<CancelQueryExecutionResult, AppError> {
         let result = self.query.cancel_query(job_id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn get_query_result_window(
+        &self,
+        request: QueryResultWindowRequest,
+    ) -> Result<QueryResultWindow, AppError> {
+        let result = self.query.get_query_result_window(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn start_query_result_export(
+        &self,
+        app: AppHandle,
+        request: QueryResultExportRequest,
+    ) -> Result<QueryResultExportAccepted, AppError> {
+        let result = self.query.start_query_result_export(Some(app), request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn cancel_query_result_export(
+        &self,
+        job_id: String,
+    ) -> Result<CancelQueryResultExportResult, AppError> {
+        let result = self.query.cancel_query_result_export(job_id).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

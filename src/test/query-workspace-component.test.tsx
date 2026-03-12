@@ -71,6 +71,22 @@ function createTab(id: string, title: string, sql: string): QueryTabState {
     lastExecutionSummary: null,
     lastRunSql: null,
     execution: { ...baseExecution },
+    result: {
+      summary: null,
+      latestStreamEvent: null,
+      window: null,
+      windowStatus: 'idle',
+      windowError: null,
+      requestedWindowSignature: null,
+      quickFilter: '',
+      filters: [],
+      sort: null,
+      exportOutputPath: '',
+      exportJobId: null,
+      exportStatus: 'idle',
+      exportLastEvent: null,
+      exportLastError: null,
+    },
   };
 }
 
@@ -115,6 +131,13 @@ function WorkspaceHarness({
     runActiveTab: vi.fn(),
     cancelTabQuery: vi.fn(),
     cancelActiveTab: vi.fn(),
+    loadTabResultWindow: vi.fn(() => Promise.resolve()),
+    setTabQuickFilter: vi.fn(),
+    setTabColumnFilter: vi.fn(),
+    toggleTabSort: vi.fn(),
+    setTabExportOutputPath: vi.fn(),
+    startTabResultExport: vi.fn(() => Promise.resolve()),
+    cancelTabResultExport: vi.fn(() => Promise.resolve()),
   };
 
   return (

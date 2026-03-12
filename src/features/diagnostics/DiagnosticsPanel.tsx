@@ -7,6 +7,8 @@ import type {
   BackgroundJobProgressEvent,
   DatabaseSessionSnapshot,
   QueryExecutionProgressEvent,
+  QueryResultExportProgressEvent,
+  QueryResultStreamEvent,
   SchemaNode,
   SchemaRefreshProgressEvent,
 } from '../../lib/contracts';
@@ -17,6 +19,8 @@ type DiagnosticsPanelProps = {
   lastError: AppError | null;
   recentEvents: BackgroundJobProgressEvent[];
   recentQueryEvents: QueryExecutionProgressEvent[];
+  recentResultExportEvents: QueryResultExportProgressEvent[];
+  recentResultStreamEvents: QueryResultStreamEvent[];
   recentSchemaEvents: SchemaRefreshProgressEvent[];
   selectedSchemaNode: SchemaNode | null;
 };
@@ -27,6 +31,8 @@ export function DiagnosticsPanel({
   lastError,
   recentEvents,
   recentQueryEvents,
+  recentResultExportEvents,
+  recentResultStreamEvents,
   recentSchemaEvents,
   selectedSchemaNode,
 }: DiagnosticsPanelProps) {
@@ -116,10 +122,20 @@ export function DiagnosticsPanel({
           <div className="flex items-center gap-2">
             <FileClock className="h-4 w-4 text-[var(--accent-text)]" />
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Recent events</h3>
-            <Badge className="ml-auto">{recentEvents.length + recentSchemaEvents.length + recentQueryEvents.length}</Badge>
+            <Badge className="ml-auto">
+              {recentEvents.length +
+                recentSchemaEvents.length +
+                recentQueryEvents.length +
+                recentResultStreamEvents.length +
+                recentResultExportEvents.length}
+            </Badge>
           </div>
           <div className="mt-4 grid gap-3">
-            {recentQueryEvents.length > 0 || recentSchemaEvents.length > 0 || recentEvents.length > 0 ? (
+            {recentQueryEvents.length > 0 ||
+            recentSchemaEvents.length > 0 ||
+            recentEvents.length > 0 ||
+            recentResultStreamEvents.length > 0 ||
+            recentResultExportEvents.length > 0 ? (
               <>
                 {recentQueryEvents.slice(0, 4).map((event) => (
                   <EventRow
@@ -127,6 +143,24 @@ export function DiagnosticsPanel({
                     label={`${event.status} / ${event.tabId}`}
                     message={event.message}
                     meta={`Job ${event.jobId} / ${event.connectionId} / ${event.elapsedMs} ms`}
+                    tone={event.lastError ? 'danger' : 'default'}
+                  />
+                ))}
+                {recentResultStreamEvents.slice(0, 4).map((event) => (
+                  <EventRow
+                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
+                    label={`${event.status} / ${event.resultSetId.slice(0, 8)}`}
+                    message={event.message}
+                    meta={`${event.connectionId} / ${event.bufferedRowCount} buffered`}
+                    tone={event.lastError ? 'danger' : 'default'}
+                  />
+                ))}
+                {recentResultExportEvents.slice(0, 4).map((event) => (
+                  <EventRow
+                    key={`${event.jobId}-${event.status}-${event.outputPath}`}
+                    label={`${event.status} / export`}
+                    message={event.message}
+                    meta={`${event.outputPath} / ${event.rowsWritten} rows`}
                     tone={event.lastError ? 'danger' : 'default'}
                   />
                 ))}

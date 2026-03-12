@@ -11,27 +11,23 @@
   "lastError": null,
   "result": {
     "kind": "rows",
+    "resultSetId": "result-set-2026",
     "columns": [
       {
         "name": "id",
-        "postgresType": "int4"
+        "postgresType": "int4",
+        "semanticType": "number",
+        "isNullable": false
       },
       {
         "name": "email",
-        "postgresType": "text"
+        "postgresType": "text",
+        "semanticType": "text",
+        "isNullable": false
       }
     ],
-    "previewRows": [
-      [
-        "1",
-        "ada@example.com"
-      ],
-      [
-        "2",
-        "grace@example.com"
-      ]
-    ],
-    "previewRowCount": 2,
-    "truncated": false
+    "bufferedRowCount": 2,
+    "totalRowCount": 2,
+    "isComplete": true
   }
 }

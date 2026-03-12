@@ -8,10 +8,11 @@ mod schema;
 use std::sync::Arc;
 
 use commands::{
-    bootstrap_app, cancel_mock_job, cancel_query_execution, connect_saved_connection,
-    delete_saved_connection, disconnect_active_connection, get_saved_connection,
-    list_saved_connections, list_schema_children, refresh_schema_scope, save_connection,
-    search_schema_cache, start_mock_job, start_query_execution, test_connection,
+    bootstrap_app, cancel_mock_job, cancel_query_execution, cancel_query_result_export,
+    connect_saved_connection, delete_saved_connection, disconnect_active_connection,
+    get_query_result_window, get_saved_connection, list_saved_connections, list_schema_children,
+    refresh_schema_scope, save_connection, search_schema_cache, start_mock_job,
+    start_query_execution, start_query_result_export, test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
 use foundation::{
@@ -32,6 +33,7 @@ pub fn run() {
 
             let repository = Arc::new(Repository::new(paths.database_path.clone())?);
             repository.seed_phase_one()?;
+            repository.purge_query_result_cache()?;
 
             let diagnostics = DiagnosticsStore::new();
             let connections = ConnectionService::new(
@@ -55,6 +57,7 @@ pub fn run() {
                 connections.clone(),
                 diagnostics.clone(),
                 Arc::new(RuntimeQueryExecutionDriver),
+                JobRegistry::default(),
                 JobRegistry::default(),
             );
             let state = AppState::new(
@@ -86,6 +89,9 @@ pub fn run() {
             search_schema_cache,
             start_query_execution,
             cancel_query_execution,
+            get_query_result_window,
+            start_query_result_export,
+            cancel_query_result_export,
             start_mock_job,
             cancel_mock_job
         ])

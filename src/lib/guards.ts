@@ -19,7 +19,21 @@ import type {
   QueryExecutionRequest,
   QueryExecutionResult,
   QueryExecutionStatus,
+  QueryResultExportAccepted,
+  QueryResultExportProgressEvent,
+  QueryResultExportRequest,
+  QueryResultExportStatus,
+  QueryResultFilter,
+  QueryResultFilterMode,
+  QueryResultSetSummary,
+  QueryResultSort,
+  QueryResultSortDirection,
   QueryResultColumn,
+  QueryResultColumnSemanticType,
+  QueryResultStreamEvent,
+  QueryResultStreamStatus,
+  QueryResultWindow,
+  QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
   SchemaCacheStatus,
@@ -79,6 +93,46 @@ function isQueryExecutionStatus(value: unknown): value is QueryExecutionStatus {
   );
 }
 
+function isQueryResultStreamStatus(value: unknown): value is QueryResultStreamStatus {
+  return (
+    value === 'metadata-ready' ||
+    value === 'rows-buffered' ||
+    value === 'completed' ||
+    value === 'cancelled' ||
+    value === 'failed'
+  );
+}
+
+function isQueryResultExportStatus(value: unknown): value is QueryResultExportStatus {
+  return (
+    value === 'queued' ||
+    value === 'running' ||
+    value === 'completed' ||
+    value === 'cancelled' ||
+    value === 'failed'
+  );
+}
+
+function isQueryResultColumnSemanticType(value: unknown): value is QueryResultColumnSemanticType {
+  return (
+    value === 'text' ||
+    value === 'number' ||
+    value === 'boolean' ||
+    value === 'json' ||
+    value === 'binary' ||
+    value === 'temporal' ||
+    value === 'unknown'
+  );
+}
+
+function isQueryResultSortDirection(value: unknown): value is QueryResultSortDirection {
+  return value === 'asc' || value === 'desc';
+}
+
+function isQueryResultFilterMode(value: unknown): value is QueryResultFilterMode {
+  return value === 'contains';
+}
+
 function isBackgroundJobStatus(value: unknown): value is BackgroundJobProgressEvent['status'] {
   return (
     value === 'queued' ||
@@ -113,12 +167,12 @@ function isNullableNumber(value: unknown): value is number | null {
   return typeof value === 'number' || value === null;
 }
 
-function isPreviewCell(value: unknown): value is string | null {
-  return typeof value === 'string' || value === null;
+function isQueryResultCell(value: unknown): value is string | number | boolean | null {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null;
 }
 
-function isQueryPreviewRow(value: unknown): value is (string | null)[] {
-  return Array.isArray(value) && value.every(isPreviewCell);
+function isQueryResultRow(value: unknown): value is (string | number | boolean | null)[] {
+  return Array.isArray(value) && value.every(isQueryResultCell);
 }
 
 function isEncodedPathSegment(segment: string): boolean {
@@ -526,7 +580,143 @@ export function isSchemaSearchResult(value: unknown): value is SchemaSearchResul
 }
 
 export function isQueryResultColumn(value: unknown): value is QueryResultColumn {
-  return isRecord(value) && typeof value.name === 'string' && typeof value.postgresType === 'string';
+  return (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    typeof value.postgresType === 'string' &&
+    isQueryResultColumnSemanticType(value.semanticType) &&
+    typeof value.isNullable === 'boolean'
+  );
+}
+
+export function isQueryResultSetSummary(value: unknown): value is QueryResultSetSummary {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    Array.isArray(value.columns) &&
+    value.columns.every(isQueryResultColumn) &&
+    typeof value.bufferedRowCount === 'number' &&
+    isNullableNumber(value.totalRowCount) &&
+    typeof value.isComplete === 'boolean'
+  );
+}
+
+export function isQueryResultSort(value: unknown): value is QueryResultSort {
+  return (
+    isRecord(value) &&
+    typeof value.columnIndex === 'number' &&
+    Number.isInteger(value.columnIndex) &&
+    value.columnIndex >= 0 &&
+    isQueryResultSortDirection(value.direction)
+  );
+}
+
+export function isQueryResultFilter(value: unknown): value is QueryResultFilter {
+  return (
+    isRecord(value) &&
+    typeof value.columnIndex === 'number' &&
+    Number.isInteger(value.columnIndex) &&
+    value.columnIndex >= 0 &&
+    isQueryResultFilterMode(value.mode) &&
+    typeof value.value === 'string'
+  );
+}
+
+export function isQueryResultWindowRequest(value: unknown): value is QueryResultWindowRequest {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    typeof value.offset === 'number' &&
+    Number.isInteger(value.offset) &&
+    value.offset >= 0 &&
+    typeof value.limit === 'number' &&
+    Number.isInteger(value.limit) &&
+    value.limit > 0 &&
+    (value.sort === null || isQueryResultSort(value.sort)) &&
+    Array.isArray(value.filters) &&
+    value.filters.every(isQueryResultFilter) &&
+    typeof value.quickFilter === 'string'
+  );
+}
+
+export function isQueryResultWindow(value: unknown): value is QueryResultWindow {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    typeof value.offset === 'number' &&
+    typeof value.limit === 'number' &&
+    Array.isArray(value.rows) &&
+    value.rows.every(isQueryResultRow) &&
+    typeof value.visibleRowCount === 'number' &&
+    typeof value.bufferedRowCount === 'number' &&
+    isNullableNumber(value.totalRowCount) &&
+    typeof value.isComplete === 'boolean' &&
+    (value.sort === null || isQueryResultSort(value.sort)) &&
+    Array.isArray(value.filters) &&
+    value.filters.every(isQueryResultFilter) &&
+    typeof value.quickFilter === 'string'
+  );
+}
+
+export function isQueryResultStreamEvent(value: unknown): value is QueryResultStreamEvent {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.tabId === 'string' &&
+    typeof value.connectionId === 'string' &&
+    typeof value.resultSetId === 'string' &&
+    isQueryResultStreamStatus(value.status) &&
+    typeof value.bufferedRowCount === 'number' &&
+    isNullableNumber(value.totalRowCount) &&
+    typeof value.chunkRowCount === 'number' &&
+    (value.columns === null || (Array.isArray(value.columns) && value.columns.every(isQueryResultColumn))) &&
+    typeof value.message === 'string' &&
+    typeof value.startedAt === 'string' &&
+    typeof value.timestamp === 'string' &&
+    (value.lastError === null || isAppError(value.lastError))
+  );
+}
+
+export function isQueryResultExportRequest(value: unknown): value is QueryResultExportRequest {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    typeof value.outputPath === 'string' &&
+    (value.sort === null || isQueryResultSort(value.sort)) &&
+    Array.isArray(value.filters) &&
+    value.filters.every(isQueryResultFilter) &&
+    typeof value.quickFilter === 'string'
+  );
+}
+
+export function isQueryResultExportAccepted(value: unknown): value is QueryResultExportAccepted {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.resultSetId === 'string' &&
+    typeof value.outputPath === 'string' &&
+    typeof value.startedAt === 'string'
+  );
+}
+
+export function isQueryResultExportProgressEvent(
+  value: unknown,
+): value is QueryResultExportProgressEvent {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === 'string' &&
+    typeof value.correlationId === 'string' &&
+    typeof value.resultSetId === 'string' &&
+    typeof value.outputPath === 'string' &&
+    isQueryResultExportStatus(value.status) &&
+    typeof value.rowsWritten === 'number' &&
+    typeof value.message === 'string' &&
+    typeof value.startedAt === 'string' &&
+    isNullableString(value.finishedAt) &&
+    (value.lastError === null || isAppError(value.lastError))
+  );
 }
 
 export function isQueryExecutionResult(value: unknown): value is QueryExecutionResult {
@@ -536,14 +726,7 @@ export function isQueryExecutionResult(value: unknown): value is QueryExecutionR
 
   switch (value.kind) {
     case 'rows':
-      return (
-        Array.isArray(value.columns) &&
-        value.columns.every(isQueryResultColumn) &&
-        Array.isArray(value.previewRows) &&
-        value.previewRows.every(isQueryPreviewRow) &&
-        typeof value.previewRowCount === 'number' &&
-        typeof value.truncated === 'boolean'
-      );
+      return isQueryResultSetSummary(value);
     case 'command':
       return typeof value.commandTag === 'string' && isNullableNumber(value.rowsAffected);
     default:
