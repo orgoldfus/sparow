@@ -1,0 +1,25 @@
+{
+  "resultSetId": "result-set-2026",
+  "offset": 0,
+  "limit": 50,
+  "rows": [
+    [1, "ada@example.com", true],
+    [2, "grace@example.com", false]
+  ],
+  "visibleRowCount": 2,
+  "bufferedRowCount": 2,
+  "totalRowCount": 2,
+  "status": "completed",
+  "sort": {
+    "columnIndex": 0,
+    "direction": "asc"
+  },
+  "filters": [
+    {
+      "columnIndex": 1,
+      "mode": "contains",
+      "value": "@example.com"
+    }
+  ],
+  "quickFilter": "ada"
+}

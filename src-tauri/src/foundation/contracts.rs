@@ -1,14 +1,24 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::AppError;
 
+const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
+
+/// App-wide mock/background job progress event channel.
 pub const BACKGROUND_JOB_EVENT: &str = "foundation://job-progress";
+/// Schema refresh progress event channel.
 pub const SCHEMA_REFRESH_EVENT: &str = "schema://refresh-progress";
+/// Query execution progress event channel.
 pub const QUERY_EXECUTION_EVENT: &str = "query://execution-progress";
+/// Cached query-result streaming event channel.
+pub const QUERY_RESULT_STREAM_EVENT: &str = "query://result-stream";
+/// Query result export progress event channel.
+pub const QUERY_RESULT_EXPORT_EVENT: &str = "query://result-export-progress";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -79,6 +89,66 @@ pub enum QueryExecutionStatus {
     Completed,
     Cancelled,
     Failed,
+}
+
+/// Streaming status for a cached query result set.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum QueryResultStreamStatus {
+    MetadataReady,
+    RowsBuffered,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+/// Lifecycle status for a cached query result set.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultStatus {
+    Running,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+/// Background export status for writing cached query results to CSV.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultExportStatus {
+    Queued,
+    Running,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+/// Coarse semantic classification used by the UI for result-grid alignment and sorting.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultColumnSemanticType {
+    Text,
+    Number,
+    Boolean,
+    Json,
+    Binary,
+    Temporal,
+    Unknown,
+}
+
+/// Supported sort direction for cached result windows.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultSortDirection {
+    Asc,
+    Desc,
+}
+
+/// Supported filter modes for cached result windows.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryResultFilterMode {
+    Contains,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -388,11 +458,168 @@ pub struct SchemaSearchResult {
     pub nodes: Vec<SchemaNode>,
 }
 
+/// Column metadata for a cached query result set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultColumn {
     pub name: String,
     pub postgres_type: String,
+    pub semantic_type: QueryResultColumnSemanticType,
+    pub is_nullable: bool,
+}
+
+/// Summary metadata for a row-returning query result set cached in SQLite.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultSetSummary {
+    pub result_set_id: String,
+    pub columns: Vec<QueryResultColumn>,
+    pub buffered_row_count: usize,
+    pub total_row_count: Option<usize>,
+    pub status: QueryResultStatus,
+}
+
+/// JSON-safe scalar cell value returned to the frontend.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum QueryResultCell {
+    String(String),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    Null,
+}
+
+impl Serialize for QueryResultCell {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::String(value) => serializer.serialize_str(value),
+            Self::Integer(value)
+                if (-MAX_SAFE_JS_INTEGER..=MAX_SAFE_JS_INTEGER).contains(value) =>
+            {
+                serializer.serialize_i64(*value)
+            }
+            Self::Integer(value) => serializer.serialize_str(&value.to_string()),
+            Self::Float(value) if value.is_finite() => serializer.serialize_f64(*value),
+            Self::Float(value) => serializer.serialize_str(&value.to_string()),
+            Self::Boolean(value) => serializer.serialize_bool(*value),
+            Self::Null => serializer.serialize_none(),
+        }
+    }
+}
+
+/// Sorting descriptor for cached result windows.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultSort {
+    pub column_index: usize,
+    pub direction: QueryResultSortDirection,
+}
+
+/// Filter descriptor for cached result windows.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultFilter {
+    pub column_index: usize,
+    pub mode: QueryResultFilterMode,
+    pub value: String,
+}
+
+/// Response payload for a cached result window request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultWindow {
+    pub result_set_id: String,
+    pub offset: usize,
+    pub limit: usize,
+    pub rows: Vec<Vec<QueryResultCell>>,
+    pub visible_row_count: usize,
+    pub buffered_row_count: usize,
+    pub total_row_count: Option<usize>,
+    pub status: QueryResultStatus,
+    pub sort: Option<QueryResultSort>,
+    pub filters: Vec<QueryResultFilter>,
+    pub quick_filter: String,
+}
+
+/// Request payload for a cached result window.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultWindowRequest {
+    pub result_set_id: String,
+    pub offset: usize,
+    pub limit: usize,
+    pub sort: Option<QueryResultSort>,
+    pub filters: Vec<QueryResultFilter>,
+    pub quick_filter: String,
+}
+
+/// Progress payload for cached result streaming.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultStreamEvent {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub tab_id: String,
+    pub connection_id: String,
+    pub result_set_id: String,
+    pub status: QueryResultStreamStatus,
+    pub buffered_row_count: usize,
+    pub total_row_count: Option<usize>,
+    pub chunk_row_count: usize,
+    pub columns: Option<Vec<QueryResultColumn>>,
+    pub message: String,
+    pub started_at: String,
+    pub timestamp: String,
+    pub last_error: Option<AppError>,
+}
+
+/// Request payload for exporting a cached result set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultExportRequest {
+    pub result_set_id: String,
+    pub output_path: String,
+    pub sort: Option<QueryResultSort>,
+    pub filters: Vec<QueryResultFilter>,
+    pub quick_filter: String,
+}
+
+/// Accepted payload for CSV export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultExportAccepted {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub result_set_id: String,
+    pub output_path: String,
+    pub started_at: String,
+}
+
+/// Progress payload for CSV export jobs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultExportProgressEvent {
+    pub job_id: String,
+    pub correlation_id: String,
+    pub result_set_id: String,
+    pub output_path: String,
+    pub status: QueryResultExportStatus,
+    pub rows_written: usize,
+    pub message: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub last_error: Option<AppError>,
+}
+
+/// Cancel payload for CSV export jobs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelQueryResultExportResult {
+    pub job_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -404,10 +631,8 @@ pub struct QueryResultColumn {
 pub enum QueryExecutionResult {
     #[serde(rename = "rows")]
     Rows {
-        columns: Vec<QueryResultColumn>,
-        preview_rows: Vec<Vec<Option<String>>>,
-        preview_row_count: usize,
-        truncated: bool,
+        #[serde(flatten)]
+        summary: QueryResultSetSummary,
     },
     #[serde(rename = "command")]
     Command {
@@ -637,10 +862,13 @@ pub fn ensure_parent_directory(path: &Path) -> Result<(), AppError> {
 mod tests {
     use super::{
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
-        CancelQueryExecutionResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
-        DatabaseSessionSnapshot, DeleteConnectionResult, DisconnectSessionResult,
-        ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
-        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
+        CancelQueryExecutionResult, CancelQueryResultExportResult, ConnectionDetails,
+        ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
+        DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
+        QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
+        QueryExecutionResult, QueryResultCell, QueryResultExportAccepted,
+        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
+        QueryResultStreamEvent, QueryResultWindow, QueryResultWindowRequest,
         RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
         SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
         TestConnectionRequest,
@@ -692,6 +920,20 @@ mod tests {
         include_str!("../../../fixtures/contracts/query-execution-progress.json");
     const CANCEL_QUERY_EXECUTION_RESULT_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/cancel-query-execution-result.json");
+    const QUERY_RESULT_WINDOW_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-window-request.json");
+    const QUERY_RESULT_WINDOW_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-window.json");
+    const QUERY_RESULT_STREAM_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-stream.json");
+    const QUERY_RESULT_EXPORT_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-export-request.json");
+    const QUERY_RESULT_EXPORT_ACCEPTED_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-export-accepted.json");
+    const QUERY_RESULT_EXPORT_PROGRESS_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-export-progress.json");
+    const CANCEL_QUERY_RESULT_EXPORT_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/cancel-query-result-export-result.json");
 
     #[test]
     fn deserializes_app_bootstrap_fixture() {
@@ -878,9 +1120,10 @@ mod tests {
                 .expect("query execution progress fixture should deserialize");
         assert_eq!(fixture.elapsed_ms, 28);
         match fixture.result.expect("query result should exist") {
-            QueryExecutionResult::Rows {
-                preview_row_count, ..
-            } => assert_eq!(preview_row_count, 2),
+            QueryExecutionResult::Rows { summary } => {
+                assert_eq!(summary.result_set_id, "result-set-2026");
+                assert_eq!(summary.buffered_row_count, 2);
+            }
             other => panic!("expected rows result, got {other:?}"),
         }
     }
@@ -891,5 +1134,77 @@ mod tests {
             serde_json::from_str(CANCEL_QUERY_EXECUTION_RESULT_FIXTURE)
                 .expect("cancel query execution result fixture should deserialize");
         assert_eq!(fixture.job_id, "query-job-2026");
+    }
+
+    #[test]
+    fn deserializes_query_result_window_request_fixture() {
+        let fixture: QueryResultWindowRequest =
+            serde_json::from_str(QUERY_RESULT_WINDOW_REQUEST_FIXTURE)
+                .expect("query result window request fixture should deserialize");
+        assert_eq!(fixture.limit, 50);
+        assert_eq!(fixture.filters.len(), 1);
+    }
+
+    #[test]
+    fn deserializes_query_result_window_fixture() {
+        let fixture: QueryResultWindow = serde_json::from_str(QUERY_RESULT_WINDOW_FIXTURE)
+            .expect("query result window fixture should deserialize");
+        assert_eq!(fixture.rows.len(), 2);
+        assert_eq!(fixture.status, QueryResultStatus::Completed);
+    }
+
+    #[test]
+    fn deserializes_query_result_stream_fixture() {
+        let fixture: QueryResultStreamEvent = serde_json::from_str(QUERY_RESULT_STREAM_FIXTURE)
+            .expect("query result stream fixture should deserialize");
+        assert_eq!(fixture.chunk_row_count, 250);
+        assert_eq!(fixture.buffered_row_count, 250);
+    }
+
+    #[test]
+    fn deserializes_query_result_export_request_fixture() {
+        let fixture: QueryResultExportRequest =
+            serde_json::from_str(QUERY_RESULT_EXPORT_REQUEST_FIXTURE)
+                .expect("query result export request fixture should deserialize");
+        assert_eq!(fixture.output_path, "/tmp/sparow-phase5-export.csv");
+        assert_eq!(fixture.filters.len(), 1);
+    }
+
+    #[test]
+    fn deserializes_query_result_export_accepted_fixture() {
+        let fixture: QueryResultExportAccepted =
+            serde_json::from_str(QUERY_RESULT_EXPORT_ACCEPTED_FIXTURE)
+                .expect("query result export accepted fixture should deserialize");
+        assert_eq!(fixture.result_set_id, "result-set-2026");
+    }
+
+    #[test]
+    fn deserializes_query_result_export_progress_fixture() {
+        let fixture: QueryResultExportProgressEvent =
+            serde_json::from_str(QUERY_RESULT_EXPORT_PROGRESS_FIXTURE)
+                .expect("query result export progress fixture should deserialize");
+        assert_eq!(fixture.rows_written, 250);
+    }
+
+    #[test]
+    fn deserializes_cancel_query_result_export_result_fixture() {
+        let fixture: CancelQueryResultExportResult =
+            serde_json::from_str(CANCEL_QUERY_RESULT_EXPORT_RESULT_FIXTURE)
+                .expect("cancel query result export fixture should deserialize");
+        assert_eq!(fixture.job_id, "export-job-2026");
+    }
+
+    #[test]
+    fn serializes_query_result_cells_with_json_safe_numbers() {
+        assert_eq!(
+            serde_json::to_string(&QueryResultCell::Integer(9_007_199_254_740_992))
+                .expect("unsafe integer should serialize"),
+            "\"9007199254740992\""
+        );
+        assert_eq!(
+            serde_json::to_string(&QueryResultCell::Float(f64::INFINITY))
+                .expect("non-finite float should serialize"),
+            "\"inf\""
+        );
     }
 }

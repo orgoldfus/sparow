@@ -1,0 +1,16 @@
+{
+  "resultSetId": "result-set-2026",
+  "outputPath": "/tmp/sparow-phase5-export.csv",
+  "sort": {
+    "columnIndex": 0,
+    "direction": "asc"
+  },
+  "filters": [
+    {
+      "columnIndex": 1,
+      "mode": "contains",
+      "value": "@example.com"
+    }
+  ],
+  "quickFilter": "ada"
+}

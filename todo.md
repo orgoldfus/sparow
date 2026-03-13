@@ -1,92 +1,92 @@
-# Phase 4 Todo
+# Phase 5 Todo
 
 ## Objective
-Build the Phase 4 SQL workspace and query execution flow for Sparow: Monaco-based multi-tab editing, single-statement execution and cancellation against the active PostgreSQL session, schema-cache-backed autocomplete, capped result previews, and AI-friendly diagnostics that stay green without a live database by default.
+Build the Phase 5 streamed results workflow for Sparow: Rust-owned result caching, virtualized result browsing, exact CSV export from cached results, agent-visible browser harness coverage, and AI-friendly diagnostics that keep large-result handling debuggable without a human in the loop.
 
 ## Checklist
-- [completed] Lock the Phase 4 baseline and record initial verification results
-- [completed] Lock query execution contracts, fixtures, and runtime guards in Rust and TypeScript
-- [completed] Implement the Rust query subsystem with execution jobs, cancellation, result mapping, and query-history recording
-- [completed] Build the frontend SQL workspace with in-memory tabs, tab targeting, run/cancel controls, and result/status presentation
-- [completed] Integrate Monaco, execution-slice helpers, and schema-cache-backed autocomplete
-- [completed] Wire query events, diagnostics updates, and shell integration while preserving the existing layout regions
-- [completed] Extend smoke coverage, AI docs, and query-history inspection tooling
-- [completed] Run final Phase 4 verification and record results
+- [completed] Lock the Phase 5 baseline and record kickoff verification results
+- [completed] Lock result-viewer contracts, fixtures, guards, and IPC surface
+- [completed] Implement the Rust result cache, streaming query path, and cleanup rules
+- [completed] Implement result-window fetches, cached sort/filter semantics, and CSV export in Rust
+- [completed] Build the frontend virtualized result viewer, diagnostics updates, and query-state integration
+- [completed] Add the browser harness, browser smoke automation, and Phase 5 AI/debug docs
+- [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
-- 2026-03-11: Started a CodeRabbit autofix pass on `ui-overhaul` for PR #7. The unresolved review items target status-bar degradation state, connection-dialog selection sync, selected-target sidebar state, and the port-input UX in the modal editor.
-- 2026-03-10: Started the query-first dark shell overhaul. This pass replaces the phase-demo shell, adopts shadcn-style primitives, moves connection management into a modal, and hides diagnostics behind the status bar by default.
-- 2026-03-10: The new dark shell, modal connection editor, hidden diagnostics surface, and vendored shadcn-style primitives compile cleanly after the first implementation pass. Verification is now focused on updated frontend expectations and interaction coverage.
-- 2026-03-10: The final verification pass is clean after teaching the Monaco test double about custom themes, updating diagnostics tests for the hidden-by-default workflow, and removing the remaining React Fast Refresh lint warning from the new button primitive.
-- 2026-03-11: Completed the CodeRabbit autofix pass on `ui-overhaul`. The follow-up fixes keep the shell health badge aligned with query failures, let the connection dialog follow the saved id after create, make the selected-target sidebar reflect the selected profile rather than any active session, and preserve a blank port field until blur without changing the typed connection contract.
-- 2026-03-10: Completed the second CodeRabbit autofix pass on `phase-4`. The remaining fixes made `closeTab` StrictMode-safe and made the Monaco editor test mock mount once per instance so stale-closure regressions stay visible.
-- 2026-03-10: Started a second CodeRabbit autofix pass on `phase-4` after pushing the latest Clippy fix. Unresolved review threads and validation results from this pass will be logged here before it ends.
-- 2026-03-10: Completed the Rust formatter + `cargo clippy` repair pass. Clippy is green again after removing a redundant `u64` cast in the query driver.
-- 2026-03-10: Started a Rust formatter + `cargo clippy` repair pass after the user reported a failing Clippy run. Formatter output and each verification result will be logged here before the pass ends.
-- 2026-03-10: Completed the CodeRabbit autofix pass on `phase-4`; the fixes covered Rust query cancellation/event rollback, batched query event application, Monaco shortcut freshness, accessibility/test hardening, and the formatter findings called out on the PR.
-- 2026-03-10: Started a CodeRabbit autofix pass on `phase-4`; unresolved review threads and follow-up verification results will be logged in this file before the run ends.
-- 2026-03-10: `README.md` was refreshed after Phase 4 completion so the repo landing page now matches the implemented SQL workspace, query execution model, debugging helpers, and verification flow.
-- 2026-03-10: Phase 4 keeps the current shell grid and replaces the placeholder workspace content instead of starting the broader shell redesign.
-- 2026-03-10: One active backend session remains the rule in Phase 4. Tabs store a target connection id, but Run is enabled only when the tab target matches the active saved connection.
-- 2026-03-10: Execution scope is single statement only. A non-empty selection wins; otherwise the app runs the current statement around the cursor. Multi-statement selections must fail with a stable error.
-- 2026-03-10: Result handling is limited to command summaries and capped row previews. Streaming, virtualization, CSV export, and large-result tuning stay in Phase 5.
-- 2026-03-10: Prefer docs and scripts over creating a new repo skill for query debugging in this phase.
-- 2026-03-10: `npm run verify` failed once at lint because Monaco's `onMount` callback was inferred as an unsafe error-typed value in `src/features/query/QueryWorkspace.tsx`; the callback is being retyped explicitly before the final rerun.
-- 2026-03-10: The second `npm run verify` rerun exposed a Rust test-only import break after removing a `foundation` re-export. `src-tauri/src/query/service.rs` now imports `QueryExecutionOrigin` from `foundation::contracts` directly before the next rerun.
-- 2026-03-10: The direct `foundation::contracts` import failed because the module is private. The correct fix is to restore the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` and keep the tests on the public `foundation` surface.
+- 2026-03-13: Started a follow-up CodeRabbit autofix pass after one new CSV export review comment landed on `codex/phase-5`.
+- 2026-03-13: Started another CodeRabbit autofix pass on `codex/phase-5` to clear any newly unresolved review threads before the final commit/push.
+- 2026-03-12: Started a full local CI reproduction pass for the current branch to match `.github/workflows/ci.yml`, fix any failing step (currently suspected `cargo clippy`), and re-verify before handling remaining review feedback.
+- 2026-03-12: Started a second CodeRabbit unresolved-thread pass after CI stabilization so the branch ends with both CI and PR review state aligned.
+- 2026-03-12: Started a CodeRabbit autofix pass on `codex/phase-5` to resolve unresolved PR review threads against the current branch state.
+- 2026-03-12: Started a CI follow-up to fix a failing `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` run and verify the Rust workspace formatting state locally.
+- 2026-03-12: Started Phase 5 implementation. `docs/MVP/PHASE5_PLAN.md` is present as an untracked file; it is being left untouched because it is not part of the current tracked baseline.
+- 2026-03-12: Phase 5 keeps the current shell layout and upgrades the results region instead of starting the broader shell redesign.
+- 2026-03-12: Phase 5 uses a Rust/SQLite cached result store rather than a React-held full-row buffer so large-result behavior stays inspectable and bounded.
+- 2026-03-12: Sort and filter semantics are viewer-only over the cached result set. There is no SQL rewriting in this phase.
+- 2026-03-12: CSV export will use the cached result set plus the current viewer descriptors rather than rerunning the SQL.
+- 2026-03-12: Prefer repo-local scripts and docs for AI/browser automation in this phase. Add a new skill only if the existing `agent-browser` workflow proves insufficient during implementation.
+- 2026-03-12: Rust command/state/service wiring now targets cached result windows and export jobs. The next gate is focused Rust verification to flush out compile errors and any SQLite/streaming regressions before the frontend result viewer is replaced.
 
 ## Verification
-- `npm run verify` ✅
-  - The CodeRabbit autofix rerun passed end-to-end after the status-bar, connection-selection, and port-input fixes, with lint, 69 frontend tests, `smoke:foundation`, and 63 Rust tests all green.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and `cargo test --manifest-path src-tauri/Cargo.toml` all passed after the dark-shell refactor, with 69 frontend tests and 63 Rust tests green plus 4 expected ignored PostgreSQL smoke tests.
-- `npm run test` ✅
-  - Vitest passed with 9 files / 69 tests after updating the shell, schema-browser, and modal-flow expectations for the new dark workspace layout.
-- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The targeted query workspace regressions passed with 7 tests green after the hook and Monaco mock fixes.
-- `npm run verify` ✅
-  - The first rerun passed end-to-end but exposed a hook dependency warning in `src/test/setup.ts`; the mock was tightened to preserve one-time mount semantics without the warning.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed cleanly after the final test-mock adjustment with 67 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting completed cleanly at the start of the Clippy repair pass.
-- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` ❌
-  - Clippy failed on `src-tauri/src/query/driver.rs` because `extract_rows_affected` was casting `u64` to `u64`. The redundant cast has been removed and Clippy must be rerun.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting still passed after the Clippy fix; no additional formatter changes were needed.
-- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` ✅
-  - Clippy passed cleanly after removing the redundant cast in `extract_rows_affected`.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting passed after the autofix patch and rewrote the flagged module/export blocks to repository style.
-- `cargo test --manifest-path src-tauri/Cargo.toml query::service` ✅
-  - The focused query service suite passed with 8 tests green and 2 PostgreSQL smoke tests still ignored as expected.
-- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/sql-autocomplete.test.ts` ✅
-  - The targeted frontend regression suite passed with 9 tests green, including the new Monaco shortcut and batched query-event coverage.
-- `npm run typecheck` ✅
-  - TypeScript compilation passed after preserving structured `AppError` values through the query workspace.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and full Rust tests all passed after the CodeRabbit autofix run with 66 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The final follow-up verification passed under Node `v24.13.0`: `npm run verify` stayed green with typecheck, ESLint, 76 Vitest tests, both smoke suites, and the Rust workspace finishing with 75 passing tests plus 4 expected ignored PostgreSQL smoke tests.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping` ✅
+  - The CSV export follow-up verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, and the updated CSV sanitization unit test confirmed formula hardening still applies to string cells without mutating negative numeric exports.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && npm run verify` ✅
+  - The final autofix verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, `npm run verify` passed with 76 Vitest tests plus both smoke suites green, and the Rust workspace finished with 75 tests passed and 4 expected PostgreSQL smoke tests ignored.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ✅
+  - The focused autofix verification passed under Node `v24.13.0`: Rust formatting stayed clean, the new CSV sanitization unit test passed, the contract-fixture suite passed with the tightened result guards, and ESLint stayed green.
 - `fnm use` ✅
-  - `Using Node v24.13.0`
+  - Warning about shell initialization is unchanged; the command still resolved to `Using Node v24.13.0`.
 - `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and Rust tests all passed before Phase 4 feature work started.
-- `npm run test -- src/test/contract-fixtures.test.ts` ✅
-  - The new query request, accepted, progress, and cancel fixtures validated successfully on the TypeScript side.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The full Rust suite passed after adding the query execution contracts, runtime driver, cancellation flow, and query-service coverage.
-- `npm run test -- src/test/sql-statement.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx` ✅
-  - The narrowed frontend rerun passed after fixing the SQL statement helper, restoring explicit SSL state in diagnostics, and aligning shell expectations with the Phase 4 UI copy.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - 63 tests passed, 4 PostgreSQL smoke tests were ignored as expected, and the warning-free rerun is now ready for the final `npm run verify` pass.
-- `npm run verify` ❌
-  - Typecheck passed, but lint failed on `src/features/query/QueryWorkspace.tsx` because Monaco's `onMount` callback parameters were inferred unsafely. The callback has been retyped explicitly and `npm run verify` must be rerun.
-- `npm run verify` ❌
-  - Typecheck, lint, Vitest, and `smoke:foundation` passed, but the Rust test leg failed because `src-tauri/src/query/service.rs` was still importing `QueryExecutionOrigin` from a removed `foundation` re-export. The test module now imports it directly from `foundation::contracts` and verification must be rerun.
+  - Typecheck, lint, Vitest, `smoke:foundation`, and `cargo test --manifest-path src-tauri/Cargo.toml` all passed at the Phase 5 kickoff, with 69 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests green.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ❌
-  - The direct `foundation::contracts::QueryExecutionOrigin` import failed because `contracts` is a private module. The fix is to restore the `foundation` re-export and rerun.
-- `npm run verify` ❌
-  - Typecheck, lint, Vitest, and `smoke:foundation` passed again, but the Rust test leg still failed for the same private-module import issue. The `foundation` re-export has now been restored and verification must be rerun.
+  - Failed before compilation because `tokio-postgres 0.7.16` does not expose the `with-bigdecimal-0_4` feature. The dependency config was corrected before the next verification run.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The final rerun passed cleanly after restoring the `QueryExecutionOrigin` re-export with an explicit `#[allow(unused_imports)]` for the internal test surface.
+  - Rust backend compiled and passed after the Phase 5 service/driver integration, with 70 tests green and the same 4 PostgreSQL-dependent tests still ignored.
+- `npm run typecheck` ✅
+  - TypeScript compiled after the query workspace moved to cached result summaries, result windows, and export job state.
+- `node ./scripts/run-with-node-version.mjs vitest run src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
+  - The wrapper could not resolve `vitest` directly in PATH on this machine, so the targeted frontend run was retried through `npm run test -- ...` instead of treating this as an application failure.
+- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
+  - The query workspace, query editor component, and app-shell integration tests all passed after the cached-result viewer state and listener mocks were updated.
+- `npm run smoke:results-browser` ❌
+  - The harness booted and the browser reached the page, but the smoke assertion matched a hidden scenario `<option>` containing the word `running` instead of the visible export-status badge. The script was tightened before retrying.
+- `npm run verify` ❌
+  - Typecheck passed, but lint failed on a missing result-grid effect dependency and several harness lint issues. Those were fixed before the next full verification run.
+- `npm run smoke:results-browser` ✅
+  - The harness smoke completed after the teardown fix and wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
 - `npm run verify` ✅
-  - Typecheck passed, lint passed, Vitest passed with 8 files / 64 tests, `smoke:foundation` passed, and `cargo test --manifest-path src-tauri/Cargo.toml` passed with 63 tests and 4 expected ignored PostgreSQL smoke tests.
+  - Phase 5 full verification passed with frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and Rust tests green.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - Re-ran after silencing the cached-result metadata warning. The Rust suite stayed green with 70 passed tests and 4 expected ignored PostgreSQL smoke tests.
+- `npm run verify` ✅
+  - Re-ran after the final result-grid accessibility pass. The full stack stayed green with 76 frontend tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all passing.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust verification is green again after the Phase 5 backend wiring pass: 70 tests passed, 4 PostgreSQL smoke tests remained ignored as expected, and the service/contract suite now builds against cached result summaries plus export commands.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - CI formatting drift was reproduced locally, corrected with `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the Rust workspace now passes the formatter check again.
+- `npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace.test.tsx` ✅
+  - The targeted frontend contract and workspace tests passed after the cached-result status contract switched from `isComplete` to explicit terminal states.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ❌
+  - The first Rust verification pass failed on a missing `QueryResultStatus` import in the foundation contract tests and a borrow-lifetime issue in the transactional `load_query_result_window` rewrite. Both are being corrected before retrying.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed after the contract-test import fix and the transactional window-read lifetime cleanup, with 72 tests green and 4 PostgreSQL smoke tests still ignored as expected.
+- `npm run verify` ✅
+  - Full verification passed after the CodeRabbit autofix pass: frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all stayed green with the new cached-result status contract and export/runtime fixes.
+- `fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ❌
+  - `fnm use` resolved `Using Node v24.13.0` with the same shell-path warning, `cargo fmt --check` passed, and `cargo clippy` failed on `clippy::let_and_return` in `src-tauri/src/persistence/repository.rs` within the cached-row decode path. Fixing that lint before rerunning the Rust CI steps.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - The Rust CI sequence now passes locally after removing the unnecessary `let`/return binding in the cached-row decode path. `clippy` is clean under `-D warnings`, and the locked Rust suite passed with 72 tests green plus the same 4 ignored PostgreSQL smoke tests.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ✅
+  - The frontend CI sequence passed under the repo-pinned Node `v24.13.0` and npm `11.6.2`, which matches the workflow expectations better than the machine-default Node `20.17.0`. Typecheck, ESLint, 76 Vitest tests, and the production Vite build all completed cleanly.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked persistence::repository::tests::preserves_requested_result_sets_when_clearing_a_tab_cache query::service::tests::records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ❌
+  - The targeted follow-up verification failed immediately on `cargo fmt --check` because the new repository/query-service edits needed Rust formatting. Running `cargo fmt --manifest-path src-tauri/Cargo.toml` before retrying the targeted checks.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked persistence::repository::tests::preserves_requested_result_sets_when_clearing_a_tab_cache query::service::tests::records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ❌
+  - Rust formatting succeeded, but the targeted command itself was invalid because `cargo test` only accepts a single name filter per invocation. Retrying with separate Rust test commands before treating this as an application failure.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked preserves_requested_result_sets_when_clearing_a_tab_cache && cargo test --manifest-path src-tauri/Cargo.toml --locked records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ✅
+  - The targeted regression checks passed after formatting: the new repository preservation test passed, the existing query-history service test stayed green, the frontend contract-fixture suite passed, and ESLint stayed clean. That run also exposed a now-unused `delete_query_result_set` helper, which is being removed before the next `clippy -D warnings` pass.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ❌
+  - The post-fix full CI rerun failed at `cargo clippy` on `dead_code`: `Repository::delete_query_result_set` is no longer used after the tab cleanup switched to one transactional delete. Removing that helper before rerunning the entire workflow.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ✅
+  - The full CI workflow now passes locally on the current tree under Node `v24.13.0`: Rust format, `clippy -D warnings`, and 74 Rust tests (plus 4 expected ignored PostgreSQL smoke tests) all passed; `npm ci`, typecheck, ESLint, 76 Vitest tests, and the production Vite build also completed successfully.

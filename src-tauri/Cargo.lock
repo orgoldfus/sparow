@@ -2540,8 +2540,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54b858f82211e84682fecd373f68e1ceae642d8d751a1ebd13f33de6257b3e20"
 dependencies = [
  "bytes",
+ "chrono",
  "fallible-iterator 0.2.0",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
  "uuid",
 ]
 
@@ -3371,7 +3374,9 @@ name = "sparow"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "deadpool-postgres",
+ "futures-util",
  "keyring",
  "native-tls",
  "percent-encoding",

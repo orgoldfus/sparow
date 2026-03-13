@@ -1,6 +1,7 @@
 mod repository;
 
-pub use repository::{
-    CachedSchemaScopeRecord, PersistedSecretRef, ReplaceSchemaScopeRecord, Repository,
-    SaveConnectionRecord, SavedConnectionRecord,
+pub(crate) use repository::{
+    AppendQueryResultRowsRecord, CachedSchemaScopeRecord, CreateQueryResultSetRecord,
+    FinalizeQueryResultSetRecord, PersistedSecretRef, QueryResultSetRecord, QueryResultSetStatus,
+    ReplaceSchemaScopeRecord, Repository, SaveConnectionRecord, SavedConnectionRecord,
 };

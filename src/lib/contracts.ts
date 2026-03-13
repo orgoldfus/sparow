@@ -1,6 +1,8 @@
 export const BACKGROUND_JOB_EVENT = 'foundation://job-progress';
 export const SCHEMA_REFRESH_EVENT = 'schema://refresh-progress';
 export const QUERY_EXECUTION_EVENT = 'query://execution-progress';
+export const QUERY_RESULT_STREAM_EVENT = 'query://result-stream';
+export const QUERY_RESULT_EXPORT_EVENT = 'query://result-export-progress';
 
 export type AppEnvironment = 'development' | 'production' | 'test';
 export type BackgroundJobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
@@ -13,6 +15,24 @@ export type SchemaCacheStatus = 'empty' | 'fresh' | 'stale';
 export type SchemaRefreshStatus = 'queued' | 'running' | 'completed' | 'failed';
 export type QueryExecutionOrigin = 'selection' | 'current-statement';
 export type QueryExecutionStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
+export type QueryResultStatus = 'running' | 'completed' | 'cancelled' | 'failed';
+export type QueryResultStreamStatus =
+  | 'metadata-ready'
+  | 'rows-buffered'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+export type QueryResultExportStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
+export type QueryResultColumnSemanticType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'json'
+  | 'binary'
+  | 'temporal'
+  | 'unknown';
+export type QueryResultSortDirection = 'asc' | 'desc';
+export type QueryResultFilterMode = 'contains';
 
 export type ConnectionSummary = {
   id: string;
@@ -215,14 +235,20 @@ export type SchemaSearchResult = {
 export type QueryResultColumn = {
   name: string;
   postgresType: string;
+  semanticType: QueryResultColumnSemanticType;
+  isNullable: boolean;
 };
 
-export type QueryRowsResult = {
-  kind: 'rows';
+export type QueryResultSetSummary = {
+  resultSetId: string;
   columns: QueryResultColumn[];
-  previewRows: (string | null)[][];
-  previewRowCount: number;
-  truncated: boolean;
+  bufferedRowCount: number;
+  totalRowCount: number | null;
+  status: QueryResultStatus;
+};
+
+export type QueryRowsResult = QueryResultSetSummary & {
+  kind: 'rows';
 };
 
 export type QueryCommandResult = {
@@ -264,6 +290,92 @@ export type QueryExecutionProgressEvent = {
 };
 
 export type CancelQueryExecutionResult = {
+  jobId: string;
+};
+
+export type QueryResultCell = string | number | boolean | null;
+
+export type QueryResultSort = {
+  columnIndex: number;
+  direction: QueryResultSortDirection;
+};
+
+export type QueryResultFilter = {
+  columnIndex: number;
+  mode: QueryResultFilterMode;
+  value: string;
+};
+
+export type QueryResultWindowRequest = {
+  resultSetId: string;
+  offset: number;
+  limit: number;
+  sort: QueryResultSort | null;
+  filters: QueryResultFilter[];
+  quickFilter: string;
+};
+
+export type QueryResultWindow = {
+  resultSetId: string;
+  offset: number;
+  limit: number;
+  rows: QueryResultCell[][];
+  visibleRowCount: number;
+  bufferedRowCount: number;
+  totalRowCount: number | null;
+  status: QueryResultStatus;
+  sort: QueryResultSort | null;
+  filters: QueryResultFilter[];
+  quickFilter: string;
+};
+
+export type QueryResultStreamEvent = {
+  jobId: string;
+  correlationId: string;
+  tabId: string;
+  connectionId: string;
+  resultSetId: string;
+  status: QueryResultStreamStatus;
+  bufferedRowCount: number;
+  totalRowCount: number | null;
+  chunkRowCount: number;
+  columns: QueryResultColumn[] | null;
+  message: string;
+  startedAt: string;
+  timestamp: string;
+  lastError: AppError | null;
+};
+
+export type QueryResultExportRequest = {
+  resultSetId: string;
+  outputPath: string;
+  sort: QueryResultSort | null;
+  filters: QueryResultFilter[];
+  quickFilter: string;
+};
+
+export type QueryResultExportAccepted = {
+  jobId: string;
+  correlationId: string;
+  resultSetId: string;
+  outputPath: string;
+  startedAt: string;
+};
+
+export type QueryResultExportProgressEvent = {
+  jobId: string;
+  correlationId: string;
+  resultSetId: string;
+  outputPath: string;
+  status: QueryResultExportStatus;
+  rowsWritten: number;
+  message: string;
+  startedAt: string;
+  finishedAt: string | null;
+  lastError: AppError | null;
+};
+
+export type CancelQueryResultExportResult = {
   jobId: string;
 };
 

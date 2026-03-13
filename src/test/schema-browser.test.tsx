@@ -78,6 +78,8 @@ vi.mock('../lib/ipc', () => ({
     }),
   ),
   cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  subscribeToQueryResultStreamEvent: vi.fn(() => Promise.resolve(() => {})),
+  subscribeToQueryResultExportEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToQueryExecutionEvent: vi.fn(() => Promise.resolve(() => {})),
   subscribeToSchemaRefreshEvent: vi.fn(
     (_eventName: string, handler: (payload: typeof schemaRefreshProgressFixture) => void) => {

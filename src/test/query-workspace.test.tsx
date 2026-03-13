@@ -6,7 +6,13 @@ import type {
   DatabaseSessionSnapshot,
   QueryExecutionProgressEvent,
 } from '../lib/contracts';
-import { cancelQueryExecution, startQueryExecution } from '../lib/ipc';
+import {
+  cancelQueryExecution,
+  cancelQueryResultExport,
+  getQueryResultWindow,
+  startQueryExecution,
+  startQueryResultExport,
+} from '../lib/ipc';
 import { useQueryWorkspace } from '../features/query/useQueryWorkspace';
 
 vi.mock('../lib/ipc', () => ({
@@ -20,6 +26,31 @@ vi.mock('../lib/ipc', () => ({
     }),
   ),
   cancelQueryExecution: vi.fn(() => Promise.resolve({ jobId: 'query-job-1' })),
+  getQueryResultWindow: vi.fn(() =>
+    Promise.resolve({
+      resultSetId: 'result-set-1',
+      offset: 0,
+      limit: 120,
+      rows: [],
+      visibleRowCount: 0,
+      bufferedRowCount: 0,
+      totalRowCount: 0,
+      status: 'completed',
+      sort: null,
+      filters: [],
+      quickFilter: '',
+    }),
+  ),
+  startQueryResultExport: vi.fn(() =>
+    Promise.resolve({
+      jobId: 'export-job-1',
+      correlationId: 'export-corr-1',
+      resultSetId: 'result-set-1',
+      outputPath: './sparow-result.csv',
+      startedAt: '2026-03-10T16:45:00.000Z',
+    }),
+  ),
+  cancelQueryResultExport: vi.fn(() => Promise.resolve({ jobId: 'export-job-1' })),
 }));
 
 const connections: ConnectionSummary[] = [
@@ -80,6 +111,8 @@ function Harness({
     activeSession,
     connections,
     queryEvents,
+    resultStreamEvents: [],
+    resultExportEvents: [],
     selectedConnectionId: activeSession.connectionId,
     onError,
   });
@@ -165,6 +198,9 @@ describe('useQueryWorkspace', () => {
   beforeEach(() => {
     vi.mocked(startQueryExecution).mockClear();
     vi.mocked(cancelQueryExecution).mockClear();
+    vi.mocked(getQueryResultWindow).mockClear();
+    vi.mocked(startQueryResultExport).mockClear();
+    vi.mocked(cancelQueryResultExport).mockClear();
   });
 
   it('creates tabs and derives titles from SQL edits', () => {

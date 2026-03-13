@@ -14,9 +14,16 @@ import type {
   ListSchemaChildrenRequest,
   ListSchemaChildrenResult,
   CancelQueryExecutionResult,
+  CancelQueryResultExportResult,
   QueryExecutionAccepted,
   QueryExecutionProgressEvent,
   QueryExecutionRequest,
+  QueryResultExportAccepted,
+  QueryResultExportProgressEvent,
+  QueryResultExportRequest,
+  QueryResultStreamEvent,
+  QueryResultWindow,
+  QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
   SchemaRefreshAccepted,
@@ -38,6 +45,12 @@ import {
   isListSchemaChildrenResult,
   isQueryExecutionAccepted,
   isQueryExecutionProgressEvent,
+  isQueryResultExportAccepted,
+  isQueryResultExportProgressEvent,
+  isQueryResultExportRequest,
+  isQueryResultStreamEvent,
+  isQueryResultWindow,
+  isQueryResultWindowRequest,
   isSchemaRefreshAccepted,
   isSchemaRefreshProgressEvent,
   isSchemaSearchResult,
@@ -140,12 +153,42 @@ export async function startQueryExecution(
 export async function cancelQueryExecution(jobId: string): Promise<CancelQueryExecutionResult> {
   const payload = await invoke<unknown>('cancel_query_execution', { jobId });
   return assertContract(
-    (value): value is CancelQueryExecutionResult =>
-      typeof value === 'object' &&
-      value !== null &&
-      typeof (value as { jobId?: unknown }).jobId === 'string',
+    isJobIdResult,
     payload,
     'cancel_query_execution',
+  );
+}
+
+export async function getQueryResultWindow(
+  request: QueryResultWindowRequest,
+): Promise<QueryResultWindow> {
+  if (!isQueryResultWindowRequest(request)) {
+    throw new Error('Invalid QueryResultWindowRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('get_query_result_window', { request });
+  return assertContract(isQueryResultWindow, payload, 'get_query_result_window');
+}
+
+export async function startQueryResultExport(
+  request: QueryResultExportRequest,
+): Promise<QueryResultExportAccepted> {
+  if (!isQueryResultExportRequest(request)) {
+    throw new Error('Invalid QueryResultExportRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('start_query_result_export', { request });
+  return assertContract(isQueryResultExportAccepted, payload, 'start_query_result_export');
+}
+
+export async function cancelQueryResultExport(
+  jobId: string,
+): Promise<CancelQueryResultExportResult> {
+  const payload = await invoke<unknown>('cancel_query_result_export', { jobId });
+  return assertContract(
+    isJobIdResult,
+    payload,
+    'cancel_query_result_export',
   );
 }
 
@@ -195,4 +238,40 @@ export async function subscribeToQueryExecutionEvent(
 
     handler(event.payload);
   });
+}
+
+export async function subscribeToQueryResultStreamEvent(
+  eventName: string,
+  handler: (payload: QueryResultStreamEvent) => void,
+): Promise<() => void> {
+  return listen<unknown>(eventName, (event) => {
+    if (!isQueryResultStreamEvent(event.payload)) {
+      throw new Error(`Invalid event payload for ${eventName}.`);
+    }
+
+    handler(event.payload);
+  });
+}
+
+export async function subscribeToQueryResultExportEvent(
+  eventName: string,
+  handler: (payload: QueryResultExportProgressEvent) => void,
+): Promise<() => void> {
+  return listen<unknown>(eventName, (event) => {
+    if (!isQueryResultExportProgressEvent(event.payload)) {
+      throw new Error(`Invalid event payload for ${eventName}.`);
+    }
+
+    handler(event.payload);
+  });
+}
+
+function isJobIdResult(
+  value: unknown,
+): value is CancelQueryExecutionResult | CancelQueryResultExportResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { jobId?: unknown }).jobId === 'string'
+  );
 }
