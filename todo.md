@@ -13,6 +13,7 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-13: Started a follow-up CodeRabbit autofix pass after one new CSV export review comment landed on `codex/phase-5`.
 - 2026-03-13: Started another CodeRabbit autofix pass on `codex/phase-5` to clear any newly unresolved review threads before the final commit/push.
 - 2026-03-12: Started a full local CI reproduction pass for the current branch to match `.github/workflows/ci.yml`, fix any failing step (currently suspected `cargo clippy`), and re-verify before handling remaining review feedback.
 - 2026-03-12: Started a second CodeRabbit unresolved-thread pass after CI stabilization so the branch ends with both CI and PR review state aligned.
@@ -27,6 +28,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-12: Rust command/state/service wiring now targets cached result windows and export jobs. The next gate is focused Rust verification to flush out compile errors and any SQLite/streaming regressions before the frontend result viewer is replaced.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The final follow-up verification passed under Node `v24.13.0`: `npm run verify` stayed green with typecheck, ESLint, 76 Vitest tests, both smoke suites, and the Rust workspace finishing with 75 passing tests plus 4 expected ignored PostgreSQL smoke tests.
+- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping` ✅
+  - The CSV export follow-up verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, and the updated CSV sanitization unit test confirmed formula hardening still applies to string cells without mutating negative numeric exports.
 - `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && npm run verify` ✅
   - The final autofix verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, `npm run verify` passed with 76 Vitest tests plus both smoke suites green, and the Rust workspace finished with 75 tests passed and 4 expected PostgreSQL smoke tests ignored.
 - `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ✅

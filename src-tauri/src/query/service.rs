@@ -831,17 +831,18 @@ where
 }
 
 fn csv_field_for_cell(cell: QueryResultCell) -> String {
-    let mut raw = match cell {
-        QueryResultCell::String(value) => value,
+    let raw = match cell {
+        QueryResultCell::String(mut value) => {
+            if matches!(value.chars().next(), Some('=' | '+' | '-' | '@')) {
+                value.insert(0, '\'');
+            }
+            value
+        }
         QueryResultCell::Integer(value) => value.to_string(),
         QueryResultCell::Float(value) => value.to_string(),
         QueryResultCell::Boolean(value) => value.to_string(),
         QueryResultCell::Null => String::new(),
     };
-
-    if matches!(raw.chars().next(), Some('=' | '+' | '-' | '@')) {
-        raw.insert(0, '\'');
-    }
 
     if raw.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", raw.replace('"', "\"\""))
@@ -1330,6 +1331,8 @@ mod tests {
             csv_field_for_cell(QueryResultCell::String("plain text".to_string())),
             "plain text"
         );
+        assert_eq!(csv_field_for_cell(QueryResultCell::Integer(-1)), "-1");
+        assert_eq!(csv_field_for_cell(QueryResultCell::Float(-1.5)), "-1.5");
     }
 
     async fn save_real_connection(
