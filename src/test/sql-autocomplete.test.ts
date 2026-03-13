@@ -29,6 +29,18 @@ const schemaNodes: SchemaNode[] = [
     hasChildren: true,
     refreshedAt: '2026-03-10T16:45:00.000Z',
   },
+  {
+    kind: 'table',
+    id: 'table-public-user',
+    connectionId: 'conn-local-postgres',
+    name: 'user',
+    path: 'table/public/user',
+    parentPath: 'schema/public',
+    schemaName: 'public',
+    relationName: 'user',
+    hasChildren: true,
+    refreshedAt: '2026-03-10T16:45:00.000Z',
+  },
 ];
 
 describe('sql autocomplete helpers', () => {
@@ -43,7 +55,18 @@ describe('sql autocomplete helpers', () => {
       { ...duplicateNode, id: 'table-public-users-duplicate' },
     ]);
     expect(schemaSuggestions.filter((entry) => entry.label === 'users')).toHaveLength(1);
+    expect(schemaSuggestions.find((entry) => entry.label === 'users')?.insertText).toBe(
+      '"public"."users"',
+    );
     expect(schemaSuggestions.find((entry) => entry.label === 'SELECT')).toBeUndefined();
+  });
+
+  it('quotes schema-derived identifiers before inserting them into SQL', () => {
+    const suggestions = mergeSqlAutocompleteSuggestions('user', schemaNodes);
+
+    expect(suggestions.find((entry) => entry.label === 'user')?.insertText).toBe(
+      '"public"."user"',
+    );
   });
 
   it('falls back to local keywords when schema search is unavailable', async () => {

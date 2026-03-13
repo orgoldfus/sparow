@@ -3,38 +3,42 @@
 
 :root {
   color-scheme: dark;
-  --surface-app: oklch(0.18 0.015 282);
-  --surface-panel: oklch(0.225 0.018 282);
-  --surface-panel-hover: oklch(0.255 0.02 282);
-  --surface-elevated: oklch(0.255 0.02 282);
-  --surface-highlight: oklch(0.29 0.024 282);
-  --surface-editor: oklch(0.16 0.014 279);
-  --surface-sidebar: oklch(0.205 0.017 282);
-  --text-primary: oklch(0.95 0.01 280);
-  --text-secondary: oklch(0.74 0.015 280);
-  --text-muted: oklch(0.58 0.014 280);
-  --border-subtle: oklch(0.32 0.018 282);
-  --border-strong: oklch(0.41 0.022 282);
-  --border-accent: oklch(0.63 0.14 292);
-  --accent-solid: oklch(0.57 0.16 292);
-  --accent-solid-hover: oklch(0.6 0.17 292);
-  --accent-foreground: oklch(0.97 0.01 290);
-  --accent-muted: oklch(0.34 0.06 292);
-  --accent-text: oklch(0.87 0.06 292);
-  --success-surface: oklch(0.3 0.06 160);
-  --success-text: oklch(0.84 0.08 160);
-  --warning-surface: oklch(0.33 0.07 88);
-  --warning-text: oklch(0.86 0.08 88);
-  --danger-surface: oklch(0.31 0.08 22);
-  --danger-surface-hover: oklch(0.35 0.09 22);
-  --danger-text: oklch(0.83 0.1 22);
-  --ring: oklch(0.7 0.12 292);
-  --ring-soft: color-mix(in oklch, var(--ring) 32%, transparent);
-  --shadow-shell: 0 32px 100px rgba(5, 6, 14, 0.48);
-  --shadow-elevated: 0 14px 38px rgba(3, 4, 11, 0.28);
-  --shadow-modal: 0 32px 80px rgba(2, 3, 9, 0.58);
+  --surface-app: oklch(0.15 0.018 271);
+  --surface-panel: oklch(0.19 0.018 271);
+  --surface-panel-hover: oklch(0.225 0.022 271);
+  --surface-elevated: oklch(0.215 0.02 271);
+  --surface-highlight: oklch(0.255 0.032 272);
+  --surface-editor: oklch(0.13 0.012 266);
+  --surface-sidebar: oklch(0.17 0.017 270);
+  --surface-overlay: oklch(0.2 0.018 272 / 0.96);
+  --text-primary: oklch(0.96 0.01 286);
+  --text-secondary: oklch(0.76 0.015 282);
+  --text-muted: oklch(0.58 0.013 279);
+  --border-subtle: oklch(0.3 0.018 274);
+  --border-strong: oklch(0.42 0.026 274);
+  --border-accent: oklch(0.67 0.17 303);
+  --accent-solid: oklch(0.6 0.19 303);
+  --accent-solid-hover: oklch(0.64 0.19 303);
+  --accent-foreground: oklch(0.98 0.008 305);
+  --accent-muted: oklch(0.31 0.08 302);
+  --accent-text: oklch(0.88 0.08 302);
+  --success-surface: oklch(0.31 0.09 154);
+  --success-text: oklch(0.86 0.08 154);
+  --warning-surface: oklch(0.34 0.09 93);
+  --warning-text: oklch(0.9 0.09 93);
+  --danger-surface: oklch(0.3 0.1 24);
+  --danger-surface-hover: oklch(0.34 0.11 24);
+  --danger-text: oklch(0.86 0.1 24);
+  --ring: oklch(0.72 0.14 303);
+  --ring-soft: color-mix(in oklch, var(--ring) 26%, transparent);
+  --shadow-shell: 0 34px 80px rgba(2, 4, 12, 0.42);
+  --shadow-elevated: 0 16px 36px rgba(2, 4, 12, 0.22);
+  --shadow-modal: 0 36px 90px rgba(0, 0, 0, 0.58);
   font-family: 'IBM Plex Sans', sans-serif;
-  background: var(--surface-app);
+  background:
+    radial-gradient(circle at top left, rgba(120, 84, 255, 0.08), transparent 26%),
+    radial-gradient(circle at top right, rgba(0, 194, 155, 0.06), transparent 24%),
+    linear-gradient(180deg, oklch(0.135 0.018 270), oklch(0.12 0.012 264));
   color: var(--text-primary);
 }
 
@@ -47,21 +51,28 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  overflow: hidden;
+  overscroll-behavior: none;
   background:
-    radial-gradient(circle at top, color-mix(in oklch, var(--accent-solid) 10%, transparent), transparent 32%),
-    linear-gradient(180deg, color-mix(in oklch, var(--surface-app) 94%, black 6%), var(--surface-app));
+    radial-gradient(circle at top left, rgba(120, 84, 255, 0.08), transparent 26%),
+    radial-gradient(circle at top right, rgba(0, 194, 155, 0.06), transparent 24%),
+    linear-gradient(180deg, oklch(0.135 0.018 270), oklch(0.12 0.012 264));
 }
 
-button {
+button,
+input,
+textarea,
+select {
   font: inherit;
-}
-
-#root {
-  min-height: 100vh;
 }
 
 pre {
@@ -69,19 +80,34 @@ pre {
   font-family: var(--font-mono), 'SFMono-Regular', Consolas, monospace;
 }
 
-input,
-textarea,
-select {
-  font: inherit;
-}
-
 ::selection {
   background: color-mix(in oklch, var(--accent-solid) 38%, transparent);
 }
 
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--border-strong) 82%, transparent);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--border-accent) 32%, var(--border-strong) 68%);
+  background-clip: padding-box;
+}
+
 .surface-grid {
   background-image:
-    linear-gradient(to right, color-mix(in oklch, var(--border-subtle) 24%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in oklch, var(--border-subtle) 22%, transparent) 1px, transparent 1px),
     linear-gradient(to bottom, color-mix(in oklch, var(--border-subtle) 14%, transparent) 1px, transparent 1px);
   background-size: 24px 24px;
 }

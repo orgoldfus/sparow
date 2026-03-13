@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { Bug, Dot, PencilLine } from 'lucide-react';
+import { Bug, ChevronDown, Database, Dot, PencilLine, Settings2, UserRound } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -14,7 +14,12 @@ import { TooltipProvider } from './components/ui/tooltip';
 import { DiagnosticsPanel } from './features/diagnostics/DiagnosticsPanel';
 import { ConnectionEditor, ConnectionsRail } from './features/connections/ConnectionWorkspace';
 import { useConnectionWorkspace } from './features/connections/useConnectionWorkspace';
-import { QueryResultsPanel, QueryWorkspace } from './features/query/QueryWorkspace';
+import {
+  QueryResultsPanel,
+  QueryTabStrip,
+  QueryWorkspace,
+  type QueryResultsView,
+} from './features/query/QueryWorkspace';
 import { useQueryWorkspace } from './features/query/useQueryWorkspace';
 import { SchemaSidebar } from './features/schema/SchemaWorkspace';
 import { useSchemaBrowser } from './features/schema/useSchemaBrowser';
@@ -55,7 +60,7 @@ export default function App() {
   const [isConnectionDialogOpen, setIsConnectionDialogOpen] = useState(false);
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [isDiagnosticsDialogOpen, setIsDiagnosticsDialogOpen] = useState(false);
-  const [activeResultsTab, setActiveResultsTab] = useState<'messages' | 'results'>('results');
+  const [activeResultsTab, setActiveResultsTab] = useState<QueryResultsView>('results');
 
   const deferredRecentEvents = useDeferredValue(recentEvents);
   const deferredSchemaEvents = useDeferredValue(schemaEvents);
@@ -283,6 +288,17 @@ export default function App() {
     }
     return 'No active database session.';
   }, [activeQueryError, error, workspace.activeSession]);
+  const activeResultSummary = queryWorkspace.activeTab?.result.summary ?? null;
+  const resultRowsLabel = activeResultSummary
+    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.totalRowCount !== null ? ` / ${activeResultSummary.totalRowCount}` : ''} rows`
+    : 'No result';
+  const elapsedLabel = queryWorkspace.activeTab?.execution.lastEvent
+    ? `${queryWorkspace.activeTab.execution.lastEvent.elapsedMs} ms`
+    : 'n/a';
+  const headerConnectionName =
+    workspace.activeSession?.name ??
+    workspace.connections.find((connection) => connection.id === workspace.selectedConnectionId)?.name ??
+    'No connection';
 
   function openNewConnectionDialog() {
     workspace.createConnection();
@@ -305,8 +321,6 @@ export default function App() {
     <ErrorBoundary>
       <TooltipProvider delayDuration={150}>
         <AppShell
-          bootstrapEnvironment={bootstrap?.environment ?? null}
-          bootstrapPlatform={bootstrap?.platform ?? null}
           connectionDialog={
             <Dialog
               onOpenChange={(open) => {
@@ -368,6 +382,91 @@ export default function App() {
               </DialogContent>
             </Dialog>
           }
+          headerBar={
+            <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-5">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-muted)] text-[var(--accent-text)]">
+                    <Database className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">Sparow</p>
+                  </div>
+                </div>
+
+                <div className="hidden items-center gap-1 text-sm text-[var(--text-secondary)] md:flex">
+                  {['File', 'Edit', 'View', 'Query', 'Tools'].map((label) => (
+                    <button
+                      className="rounded-lg px-3 py-2 transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-primary)]"
+                      key={label}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Badge data-testid="environment-value">{bootstrap?.environment ?? 'booting'}</Badge>
+                <Badge>{bootstrap?.platform ?? 'desktop'}</Badge>
+                <Button
+                  className="min-w-[210px] justify-between"
+                  onClick={() => {
+                    if (workspace.activeSession) {
+                      openEditConnectionDialog(workspace.activeSession.connectionId);
+                    } else if (workspace.selectedConnectionId) {
+                      openEditConnectionDialog(workspace.selectedConnectionId);
+                    }
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className={`h-2.5 w-2.5 rounded-full ${workspace.activeSession ? 'bg-[var(--success-text)]' : 'bg-[var(--border-subtle)]'}`}
+                    />
+                    <span className="text-left">
+                      <span className="block text-sm font-medium text-[var(--text-primary)]">
+                        {headerConnectionName}
+                      </span>
+                      <span className="block text-[11px] text-[var(--text-muted)]">
+                        {workspace.activeSession?.database ?? 'Select a target from the left rail'}
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                </Button>
+                <Button
+                  aria-label="Diagnostics"
+                  onClick={() => {
+                    setIsDiagnosticsDialogOpen(true);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Bug className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  aria-label="Connection settings"
+                  onClick={() => {
+                    openEditConnectionDialog();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[color-mix(in_oklch,_var(--accent-solid)_52%,_var(--surface-panel)_48%)] text-sm font-semibold text-[var(--accent-foreground)]">
+                  <UserRound className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          }
           editor={
             <QueryWorkspace
               activeSession={workspace.activeSession}
@@ -375,19 +474,19 @@ export default function App() {
               onError={(caught) => {
                 setError(logger.asAppError(caught, 'query_workspace'));
               }}
+              showTabStrip={false}
               workspace={queryWorkspace}
             />
           }
-          editorTabs={null}
+          editorTabs={<QueryTabStrip workspace={queryWorkspace} />}
           isLoading={loading}
           leftSidebar={
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
               <ConnectionsRail
                 activeSession={workspace.activeSession}
-                canConnect={workspace.canConnect}
                 canDisconnect={workspace.canDisconnect}
                 connections={workspace.connections}
-                onConnectSelected={workspace.connectSelectedConnection}
+                onActivateConnection={workspace.activateConnection}
                 onCreateConnection={openNewConnectionDialog}
                 onDisconnectSelected={workspace.disconnectSelectedConnection}
                 onEditSelected={() => {
@@ -409,31 +508,19 @@ export default function App() {
             />
           }
           statusBar={
-            <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
+            <div className="flex flex-col gap-2 px-4 py-2 text-sm text-[var(--text-secondary)] md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
                 <Badge variant={healthTone}>{isDegraded ? 'Degraded' : workspace.activeSession ? 'Ready' : 'Idle'}</Badge>
-                <span>{workspace.activeSession?.name ?? 'No active session'}</span>
+                <span>{workspace.activeSession ? `${workspace.activeSession.name} — ${workspace.activeSession.database}` : 'No active session'}</span>
+                <span className="hidden lg:inline">{workspace.activeSession?.serverVersion ?? latestStatusText}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-1">
                   <Dot className="h-4 w-4" />
                   {queryWorkspace.activeTab?.execution.status ?? 'idle'}
                 </span>
-                <span>{queryWorkspace.activeTab?.title ?? 'No tab selected'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="hidden max-w-[560px] truncate text-sm text-[var(--text-secondary)] lg:block">
-                  {latestStatusText}
-                </div>
-                <Button
-                  onClick={() => {
-                    setIsDiagnosticsDialogOpen(true);
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  <Bug className="h-3.5 w-3.5" />
-                  Diagnostics
-                </Button>
+                <span>{resultRowsLabel}</span>
+                <span>{elapsedLabel}</span>
                 <Button
                   onClick={() => {
                     openEditConnectionDialog();

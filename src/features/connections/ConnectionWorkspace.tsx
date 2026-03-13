@@ -1,5 +1,19 @@
-import { CheckCircle2, CircleSlash2, Database, Edit3, KeyRound, Plus, RefreshCcw, Shield, Trash2, Unplug, Wifi, Zap } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import {
+  CheckCircle2,
+  ChevronRight,
+  CircleSlash2,
+  Database,
+  Ellipsis,
+  KeyRound,
+  Plus,
+  RefreshCcw,
+  Shield,
+  Trash2,
+  Unplug,
+  Wifi,
+  Zap,
+} from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -27,10 +41,9 @@ type PendingState = {
 
 type ConnectionsRailProps = {
   activeSession: DatabaseSessionSnapshot | null;
-  canConnect: boolean;
   canDisconnect: boolean;
   connections: ConnectionSummary[];
-  onConnectSelected: () => Promise<void>;
+  onActivateConnection: (connectionId: string) => Promise<void>;
   onCreateConnection: () => void;
   onDisconnectSelected: () => Promise<void>;
   onEditSelected: () => void;
@@ -71,10 +84,9 @@ const SSL_OPTIONS: { value: SslMode; label: string; caption: string }[] = [
 
 export function ConnectionsRail({
   activeSession,
-  canConnect,
   canDisconnect,
   connections,
-  onConnectSelected,
+  onActivateConnection,
   onCreateConnection,
   onDisconnectSelected,
   onEditSelected,
@@ -82,84 +94,66 @@ export function ConnectionsRail({
   pending,
   selectedConnectionId,
 }: ConnectionsRailProps) {
+  const [menuState, setMenuState] = useState<{
+    connectionId: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const railRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuState) {
+      return;
+    }
+
+    function handleClose() {
+      setMenuState(null);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenuState(null);
+      }
+    }
+
+    window.addEventListener('click', handleClose);
+    window.addEventListener('blur', handleClose);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('blur', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuState]);
+
   const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null;
-  const selectedSession = activeSession?.connectionId === selectedConnectionId ? activeSession : null;
-
+  const activeConnectionId = activeSession?.connectionId ?? null;
   return (
-    <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
-      <div className="flex items-center justify-between px-4 pb-3 pt-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Connections</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-[0.01em] text-[var(--text-primary)]">Workspace graph</h2>
-        </div>
-        <Button
-          className="shrink-0"
-          data-testid="new-connection-button"
-          onClick={onCreateConnection}
-          size="sm"
-          type="button"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New
-        </Button>
-      </div>
-
-      <div className="grid gap-2 px-4 pb-4">
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-[var(--text-primary)]">Selected target</p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {selectedConnection?.name ?? 'None selected'}
-              </p>
-            </div>
-            {selectedSession ? <Badge variant="success">Live</Badge> : <Badge variant="warning">Idle</Badge>}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              disabled={!selectedConnection}
-              onClick={() => {
-                if (selectedConnection) {
-                  onEditSelected();
-                }
-              }}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-            <Button
-              disabled={!canConnect}
-              onClick={() => {
-                void onConnectSelected();
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Wifi className="h-3.5 w-3.5" />
-              {pending.connecting ? 'Connecting…' : 'Connect'}
-            </Button>
-            <Button
-              disabled={!canDisconnect}
-              onClick={() => {
-                void onDisconnectSelected();
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Unplug className="h-3.5 w-3.5" />
-              {pending.disconnecting ? 'Disconnecting…' : 'Disconnect'}
-            </Button>
-          </div>
+    <section className="relative grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]" ref={railRef}>
+      <div className="border-b border-[var(--border-subtle)] px-4 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Connections</p>
+          <Button
+            className="shrink-0"
+            data-testid="new-connection-button"
+            onClick={onCreateConnection}
+            size="sm"
+            type="button"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </Button>
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 px-2 pb-3">
-        <div className="grid gap-1 px-2">
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
+        <span>{connections.length} saved target{connections.length === 1 ? '' : 's'}</span>
+        <span className="truncate">{selectedConnection?.database ?? 'Select a target'}</span>
+      </div>
+
+      <ScrollArea className="min-h-0 px-2 py-3">
+        <div className="grid gap-2 px-2">
           {connections.length > 0 ? (
             connections.map((connection) => {
               const isActive = activeSession?.connectionId === connection.id;
@@ -168,42 +162,175 @@ export function ConnectionsRail({
               return (
                 <button
                   className={cn(
-                    'group grid gap-2 rounded-xl border px-3 py-3 text-left transition',
+                    'group grid gap-2 rounded-2xl border px-3 py-3 text-left transition',
                     isSelected
-                      ? 'border-[var(--border-accent)] bg-[var(--surface-highlight)] shadow-[var(--shadow-elevated)]'
-                      : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[var(--surface-panel)]',
+                      ? 'border-[var(--border-accent)] bg-[color-mix(in_oklch,_var(--surface-highlight)_86%,_black_14%)] shadow-[var(--shadow-elevated)]'
+                      : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]',
                   )}
                   data-testid={`connection-row-${connection.id}`}
                   key={connection.id}
                   onClick={() => {
                     onSelectConnection(connection.id);
+                    void onActivateConnection(connection.id);
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSelectConnection(connection.id);
+                    const bounds = railRef.current?.getBoundingClientRect();
+                    setMenuState({
+                      connectionId: connection.id,
+                      top: event.clientY - (bounds?.top ?? 0),
+                      left: event.clientX - (bounds?.left ?? 0),
+                    });
                   }}
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">{connection.name}</p>
-                      <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
-                        {connection.engine} • {connection.host}:{connection.port}
-                      </p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
+                          isActive ? 'bg-[var(--success-text)] shadow-[0_0_0_4px_rgba(34,197,94,0.12)]' : 'bg-[var(--border-subtle)]',
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-medium text-[var(--text-primary)]">{connection.name}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
+                          {connection.engine} • {connection.host}:{connection.port}
+                        </p>
+                      </div>
                     </div>
-                    {isActive ? <Badge variant="success">Active</Badge> : null}
+                    <div className="flex items-center gap-1">
+                      {isActive ? <Badge variant="success">Live</Badge> : null}
+                      <Ellipsis className="h-4 w-4 text-[var(--text-muted)] opacity-0 transition group-hover:opacity-100" />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                  <div className="grid gap-1 text-xs text-[var(--text-secondary)]">
                     <span className="truncate">{connection.database}</span>
                     <span className="truncate">{connection.username}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    <span>{connection.sslMode}</span>
+                    <span className="inline-flex items-center gap-1">
+                      Open
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
                   </div>
                 </button>
               );
             })
           ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
+            <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
               Create a local, staging, or production profile to start browsing schema and running queries.
             </div>
           )}
         </div>
       </ScrollArea>
+
+      {menuState ? (
+        <ConnectionContextMenu
+          canDisconnect={canDisconnect && menuState.connectionId === activeConnectionId}
+          connectionName={connections.find((connection) => connection.id === menuState.connectionId)?.name ?? 'Connection'}
+          left={Math.max(16, Math.min(menuState.left, 168))}
+          onClose={() => {
+            setMenuState(null);
+          }}
+          onConnect={() => {
+            onSelectConnection(menuState.connectionId);
+            void onActivateConnection(menuState.connectionId);
+          }}
+          onDisconnect={() => {
+            onSelectConnection(menuState.connectionId);
+            void onDisconnectSelected();
+          }}
+          onEdit={() => {
+            onSelectConnection(menuState.connectionId);
+            onEditSelected();
+          }}
+          top={Math.max(16, menuState.top)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function ConnectionContextMenu({
+  canDisconnect,
+  connectionName,
+  left,
+  onClose,
+  onConnect,
+  onDisconnect,
+  onEdit,
+  top,
+}: {
+  canDisconnect: boolean;
+  connectionName: string;
+  left: number;
+  onClose: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onEdit: () => void;
+  top: number;
+}) {
+  return (
+    <div
+      className="absolute z-40 min-w-[180px] rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-overlay)] p-1 shadow-[var(--shadow-modal)] backdrop-blur-xl"
+      data-testid="connection-context-menu"
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      role="menu"
+      style={{ left, top }}
+    >
+      <div className="border-b border-[var(--border-subtle)] px-3 py-2 text-xs text-[var(--text-muted)]">{connectionName}</div>
+      <MenuAction
+        label="Connect"
+        onClick={() => {
+          onConnect();
+          onClose();
+        }}
+      />
+      <MenuAction
+        label="Edit"
+        onClick={() => {
+          onEdit();
+          onClose();
+        }}
+      />
+      <MenuAction
+        disabled={!canDisconnect}
+        label="Disconnect"
+        onClick={() => {
+          onDisconnect();
+          onClose();
+        }}
+      />
+    </div>
+  );
+}
+
+function MenuAction({
+  disabled = false,
+  label,
+  onClick,
+}: {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-highlight)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+      disabled={disabled}
+      onClick={onClick}
+      role="menuitem"
+      type="button"
+    >
+      {label}
+    </button>
   );
 }
 

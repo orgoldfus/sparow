@@ -14,6 +14,7 @@
     "ui:harness": "node ./scripts/run-with-node-version.mjs vite --host 127.0.0.1 --port 4174",
     "smoke:foundation": "node ./scripts/run-with-node-version.mjs node ./scripts/smoke-foundation.mjs",
     "smoke:results-browser": "node ./scripts/run-with-node-version.mjs node ./scripts/smoke-results-browser.mjs",
+    "smoke:shell-browser": "node ./scripts/run-with-node-version.mjs node ./scripts/smoke-shell-browser.mjs",
     "smoke:postgres": "node ./scripts/run-with-node-version.mjs node ./scripts/smoke-postgres.mjs",
     "verify": "node ./scripts/run-with-node-version.mjs node ./scripts/verify.mjs",
     "tauri": "node ./scripts/run-with-node-version.mjs tauri"

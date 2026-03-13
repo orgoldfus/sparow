@@ -7,13 +7,18 @@ import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-se
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import schemaSearchResultFixture from '../../fixtures/contracts/schema-search-result.json';
 import type {
+  AppBootstrap,
+  ConnectionSummary,
   ConnectionDetails,
   DatabaseSessionSnapshot,
   ListSchemaChildrenResult,
   SaveConnectionRequest,
 } from '../lib/contracts';
-import { isConnectionDetails, isDatabaseSessionSnapshot } from '../lib/guards';
+import { isAppBootstrap, isConnectionDetails, isDatabaseSessionSnapshot } from '../lib/guards';
 import {
+  bootstrapApp,
+  connectSavedConnection,
+  disconnectActiveConnection,
   getSavedConnection,
   saveConnection,
   subscribeToQueryExecutionEvent,
@@ -21,6 +26,11 @@ import {
   subscribeToQueryResultStreamEvent,
   subscribeToSchemaRefreshEvent,
 } from '../lib/ipc';
+
+function expectAppBootstrap(value: unknown): AppBootstrap {
+  expect(isAppBootstrap(value)).toBe(true);
+  return value as AppBootstrap;
+}
 
 function expectConnectionDetails(value: unknown): ConnectionDetails {
   expect(isConnectionDetails(value)).toBe(true);
@@ -32,6 +42,7 @@ function expectDatabaseSessionSnapshot(value: unknown): DatabaseSessionSnapshot 
   return value as DatabaseSessionSnapshot;
 }
 
+const appBootstrap = expectAppBootstrap(appBootstrapFixture);
 const connectionDetails = expectConnectionDetails(connectionDetailsFixture);
 const databaseSession = expectDatabaseSessionSnapshot(databaseSessionSnapshotFixture);
 
@@ -59,8 +70,8 @@ const rootSchemaChildrenFixture = {
 } satisfies ListSchemaChildrenResult;
 
 vi.mock('../lib/ipc', () => ({
-  bootstrapApp: vi.fn(() => Promise.resolve(appBootstrapFixture)),
-  listSavedConnections: vi.fn(() => Promise.resolve(appBootstrapFixture.savedConnections)),
+  bootstrapApp: vi.fn(() => Promise.resolve(appBootstrap)),
+  listSavedConnections: vi.fn(() => Promise.resolve(appBootstrap.savedConnections)),
   getSavedConnection: vi.fn(() => Promise.resolve(connectionDetails)),
   saveConnection: vi.fn(() => Promise.resolve(connectionDetails)),
   testConnection: vi.fn(() => Promise.resolve(connectionTestResultFixture)),
@@ -90,6 +101,9 @@ vi.mock('../lib/ipc', () => ({
 }));
 
 const saveConnectionMock = vi.mocked(saveConnection);
+const bootstrapAppMock = vi.mocked(bootstrapApp);
+const connectSavedConnectionMock = vi.mocked(connectSavedConnection);
+const disconnectActiveConnectionMock = vi.mocked(disconnectActiveConnection);
 const getSavedConnectionMock = vi.mocked(getSavedConnection);
 const subscribeToQueryExecutionEventMock = vi.mocked(subscribeToQueryExecutionEvent);
 const subscribeToQueryResultStreamEventMock = vi.mocked(subscribeToQueryResultStreamEvent);
@@ -98,12 +112,18 @@ const subscribeToSchemaRefreshEventMock = vi.mocked(subscribeToSchemaRefreshEven
 
 describe('App shell', () => {
   beforeEach(() => {
+    bootstrapAppMock.mockReset();
+    connectSavedConnectionMock.mockReset();
+    disconnectActiveConnectionMock.mockReset();
     saveConnectionMock.mockClear();
     getSavedConnectionMock.mockReset();
     subscribeToQueryExecutionEventMock.mockReset();
     subscribeToQueryResultStreamEventMock.mockReset();
     subscribeToQueryResultExportEventMock.mockReset();
     subscribeToSchemaRefreshEventMock.mockReset();
+    bootstrapAppMock.mockResolvedValue(appBootstrap);
+    connectSavedConnectionMock.mockResolvedValue(databaseSession);
+    disconnectActiveConnectionMock.mockResolvedValue({ connectionId: databaseSession.connectionId });
     getSavedConnectionMock.mockResolvedValue(connectionDetails);
     saveConnectionMock.mockResolvedValue(connectionDetails);
     subscribeToQueryExecutionEventMock.mockResolvedValue(() => {});
@@ -124,9 +144,29 @@ describe('App shell', () => {
     expect(screen.getByTestId('status-region')).toBeInTheDocument();
   });
 
+  it('keeps a widened responsive column for the connections rail', async () => {
+    render(<App />);
+
+    const connectionsRegion = await screen.findByTestId('connections-region');
+
+    expect(connectionsRegion.parentElement?.className).toContain(
+      'lg:grid-cols-[clamp(360px,34vw,460px)_minmax(0,1fr)]',
+    );
+  });
+
+  it('does not render the redundant connection rail title and live-target summary', async () => {
+    render(<App />);
+
+    await screen.findByTestId('connections-region');
+
+    expect(screen.queryByText(/Workspace graph/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Live target/i)).not.toBeInTheDocument();
+  });
+
   it('opens the selected connection in the modal editor with saved profile details', async () => {
     render(<App />);
 
+    await screen.findByTestId('connection-row-conn-local-postgres');
     fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
 
     expect(await screen.findByDisplayValue(connectionDetails.name)).toBeInTheDocument();
@@ -144,9 +184,61 @@ describe('App shell', () => {
     expect(screen.getByTestId('connection-host-input')).toHaveValue('');
   });
 
+  it('connects a clicked connection row directly from the rail', async () => {
+    const stagingConnection: ConnectionSummary = {
+      id: 'conn-staging',
+      engine: 'postgresql',
+      name: 'Staging',
+      host: '10.0.0.10',
+      port: 5432,
+      database: 'app_staging',
+      username: 'sparow',
+      sslMode: 'prefer',
+      hasStoredSecret: true,
+      secretProvider: 'os-keychain',
+      lastTestedAt: null,
+      lastConnectedAt: null,
+      updatedAt: '2026-03-10T16:45:00.000Z',
+    };
+    const bootstrapWithStaging: AppBootstrap = {
+      ...appBootstrap,
+      savedConnections: [...appBootstrap.savedConnections, stagingConnection],
+    };
+    bootstrapAppMock.mockResolvedValue(bootstrapWithStaging);
+    connectSavedConnectionMock.mockResolvedValue({
+      ...databaseSession,
+      connectionId: 'conn-staging',
+      name: 'Staging',
+      database: 'app_staging',
+      host: '10.0.0.10',
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByTestId('connection-row-conn-staging'));
+
+    await waitFor(() => {
+      expect(connectSavedConnectionMock).toHaveBeenCalledWith('conn-staging');
+    });
+  });
+
+  it('opens a connection context menu and disconnects the active session', async () => {
+    render(<App />);
+
+    fireEvent.contextMenu(await screen.findByTestId('connection-row-conn-local-postgres'));
+    expect(await screen.findByTestId('connection-context-menu')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /disconnect/i }));
+
+    await waitFor(() => {
+      expect(disconnectActiveConnectionMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('disables connect when the selected profile has unsaved changes', async () => {
     render(<App />);
 
+    await screen.findByTestId('connection-row-conn-local-postgres');
     fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     const hostInput = await screen.findByDisplayValue(connectionDetails.host);
     const connectButton = screen.getByTestId('connect-connection-button');
@@ -167,6 +259,7 @@ describe('App shell', () => {
   it('switches into replacement-password mode for stored secrets', async () => {
     render(<App />);
 
+    await screen.findByTestId('connection-row-conn-local-postgres');
     fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     const replaceButton = await screen.findByText(/Replace password/i);
     fireEvent.click(replaceButton);
@@ -190,6 +283,7 @@ describe('App shell', () => {
 
     render(<App />);
 
+    await screen.findByTestId('connection-row-conn-local-postgres');
     fireEvent.click(await screen.findByRole('button', { name: /edit connection/i }));
     await screen.findByDisplayValue(connectionWithoutSecret.name);
     fireEvent.change(screen.getByTestId('connection-password-input'), {

@@ -150,6 +150,23 @@ export function useQueryWorkspace({
   }, [activeSession?.connectionId, connections, selectedConnectionId, tabs.length]);
 
   useEffect(() => {
+    if (!activeSession?.connectionId || !activeTabId) {
+      return;
+    }
+
+    commitTabs((currentTabs) =>
+      currentTabs.map((tab) =>
+        tab.id === activeTabId && !tab.execution.jobId
+          ? {
+              ...tab,
+              targetConnectionId: activeSession.connectionId,
+            }
+          : tab,
+      ),
+    );
+  }, [activeSession?.connectionId, activeTabId]);
+
+  useEffect(() => {
     const unseenEvents = queryEvents
       .toReversed()
       .filter((event) => markEventIfUnseen(seenQueryEventsRef.current, eventSignatureForQueryEvent(event)));
@@ -689,7 +706,7 @@ function resetResultState(): QueryTabResultState {
     quickFilter: '',
     filters: [],
     sort: null,
-    exportOutputPath: '',
+    exportOutputPath: './sparow-result.csv',
     exportJobId: null,
     exportStatus: 'idle',
     exportLastEvent: null,

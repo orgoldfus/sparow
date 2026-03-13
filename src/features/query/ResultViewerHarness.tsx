@@ -1,5 +1,5 @@
 import { startTransition, useMemo, useState } from 'react';
-import { QueryResultsPanel } from './QueryWorkspace';
+import { QueryResultsPanel, type QueryResultsView } from './QueryWorkspace';
 import type {
   AppError,
   QueryExecutionAccepted,
@@ -63,7 +63,7 @@ const baseRows: QueryResultCell[][] = Array.from({ length: 1_200 }, (_, index) =
 export function ResultViewerHarness() {
   const scenarios = useMemo(() => buildScenarios(), []);
   const initialScenario = scenarios['large-complete'];
-  const [activeView, setActiveView] = useState<'messages' | 'results'>('results');
+  const [activeView, setActiveView] = useState<QueryResultsView>('results');
   const [scenarioId, setScenarioId] = useState<HarnessScenarioId>('large-complete');
   const [tab, setTab] = useState<QueryTabState>(() => initialScenario.tab);
   const [rows, setRows] = useState<QueryResultCell[][]>(() => initialScenario.rows);

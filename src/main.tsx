@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ResultViewerHarness } from './features/query/ResultViewerHarness';
+import { ShellHarness } from './features/shell/ShellHarness';
 import './styles.css';
 
 const container = document.getElementById('root');
@@ -12,9 +13,16 @@ if (!container) {
 
 const params = new URL(window.location.href).searchParams;
 const isResultViewerHarness = params.get('harness') === 'results';
+const isShellHarness = params.get('harness') === 'shell';
 
 createRoot(container).render(
-  <StrictMode>
-    {isResultViewerHarness ? <ResultViewerHarness /> : <App />}
-  </StrictMode>,
+  isResultViewerHarness ? (
+    <ResultViewerHarness />
+  ) : isShellHarness ? (
+    <ShellHarness />
+  ) : (
+    <StrictMode>
+      <App />
+    </StrictMode>
+  ),
 );

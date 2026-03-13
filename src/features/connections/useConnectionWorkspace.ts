@@ -63,6 +63,7 @@ export type ConnectionWorkspaceState = {
   canDisconnect: boolean;
   canDelete: boolean;
   selectConnection: (connectionId: string | null) => void;
+  activateConnection: (connectionId: string) => Promise<void>;
   createConnection: () => void;
   updateDraft: <Key extends keyof ConnectionDraft>(key: Key, value: ConnectionDraft[Key]) => void;
   setReplacePassword: (enabled: boolean) => void;
@@ -250,12 +251,18 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
       return;
     }
 
+    await connectConnection(selectedConnectionId);
+  }
+
+  async function connectConnection(connectionId: string) {
     setPending((current) => ({ ...current, connecting: true }));
 
     try {
-      const session = await connectSavedConnection(selectedConnectionId);
+      setSelectedConnectionId(connectionId);
+      const session =
+        activeSession?.connectionId === connectionId ? activeSession : await connectSavedConnection(connectionId);
       setActiveSession(session);
-      await refreshConnections(selectedConnectionId);
+      await refreshConnections(connectionId);
     } catch (caught) {
       onError(logger.asAppError(caught, 'connect_saved_connection'));
     } finally {
@@ -317,6 +324,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     canDisconnect: Boolean(activeSession) && !isBusy,
     canDelete: Boolean(selectedConnectionId) && !isBusy,
     selectConnection,
+    activateConnection: connectConnection,
     createConnection,
     updateDraft,
     setReplacePassword,
