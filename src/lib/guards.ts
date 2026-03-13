@@ -617,8 +617,8 @@ export function isQueryResultSetSummary(value: unknown): value is QueryResultSet
     typeof value.resultSetId === 'string' &&
     Array.isArray(value.columns) &&
     value.columns.every(isQueryResultColumn) &&
-    typeof value.bufferedRowCount === 'number' &&
-    isNullableNumber(value.totalRowCount) &&
+    isNonNegativeInteger(value.bufferedRowCount) &&
+    isNullableNonNegativeInteger(value.totalRowCount) &&
     isQueryResultStatus(value.status)
   );
 }
@@ -690,9 +690,9 @@ export function isQueryResultStreamEvent(value: unknown): value is QueryResultSt
     typeof value.connectionId === 'string' &&
     typeof value.resultSetId === 'string' &&
     isQueryResultStreamStatus(value.status) &&
-    typeof value.bufferedRowCount === 'number' &&
-    isNullableNumber(value.totalRowCount) &&
-    typeof value.chunkRowCount === 'number' &&
+    isNonNegativeInteger(value.bufferedRowCount) &&
+    isNullableNonNegativeInteger(value.totalRowCount) &&
+    isNonNegativeInteger(value.chunkRowCount) &&
     (value.columns === null || (Array.isArray(value.columns) && value.columns.every(isQueryResultColumn))) &&
     typeof value.message === 'string' &&
     typeof value.startedAt === 'string' &&
@@ -734,7 +734,7 @@ export function isQueryResultExportProgressEvent(
     typeof value.resultSetId === 'string' &&
     typeof value.outputPath === 'string' &&
     isQueryResultExportStatus(value.status) &&
-    typeof value.rowsWritten === 'number' &&
+    isNonNegativeInteger(value.rowsWritten) &&
     typeof value.message === 'string' &&
     typeof value.startedAt === 'string' &&
     isNullableString(value.finishedAt) &&

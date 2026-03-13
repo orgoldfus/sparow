@@ -831,13 +831,17 @@ where
 }
 
 fn csv_field_for_cell(cell: QueryResultCell) -> String {
-    let raw = match cell {
+    let mut raw = match cell {
         QueryResultCell::String(value) => value,
         QueryResultCell::Integer(value) => value.to_string(),
         QueryResultCell::Float(value) => value.to_string(),
         QueryResultCell::Boolean(value) => value.to_string(),
         QueryResultCell::Null => String::new(),
     };
+
+    if matches!(raw.chars().next(), Some('=' | '+' | '-' | '@')) {
+        raw.insert(0, '\'');
+    }
 
     if raw.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", raw.replace('"', "\"\""))
@@ -906,8 +910,8 @@ mod tests {
         foundation::{
             iso_timestamp, AppError, ConnectionSessionStatus, DatabaseEngine,
             DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
-            QueryExecutionResult, QueryResultColumn, QueryResultColumnSemanticType,
-            QueryResultSetSummary, SslMode,
+            QueryExecutionResult, QueryResultCell, QueryResultColumn,
+            QueryResultColumnSemanticType, QueryResultSetSummary, SslMode,
         },
         persistence::Repository,
     };
@@ -1310,6 +1314,22 @@ mod tests {
         })
         .await
         .expect("query should clear after cancellation");
+    }
+
+    #[test]
+    fn csv_field_for_cell_sanitizes_formula_prefixes_before_escaping() {
+        assert_eq!(
+            csv_field_for_cell(QueryResultCell::String("=SUM(A1:A2)".to_string())),
+            "'=SUM(A1:A2)"
+        );
+        assert_eq!(
+            csv_field_for_cell(QueryResultCell::String("+cmd,calc".to_string())),
+            "\"'+cmd,calc\""
+        );
+        assert_eq!(
+            csv_field_for_cell(QueryResultCell::String("plain text".to_string())),
+            "plain text"
+        );
     }
 
     async fn save_real_connection(

@@ -128,10 +128,30 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
             },
         )?;
 
-        let row_stream = client
-            .query_raw(&statement, std::iter::empty::<&str>())
-            .await
-            .map_err(normalize_query_error)?;
+        let row_stream = tokio::select! {
+            result = client.query_raw(&statement, std::iter::empty::<&str>()) => {
+                result.map_err(normalize_query_error)
+            }
+            _ = cancellation.cancelled() => {
+                cancel_active_query(&cancel_token, session.ssl_mode).await?;
+                let cancelled = cancelled_query_error();
+                finalize_result_set(
+                    &stream_context,
+                    FinalizeQueryResultSetRecord {
+                        result_set_id: stream_context.result_set_id.clone(),
+                        buffered_row_count: 0,
+                        total_row_count: None,
+                        status: QueryResultSetStatus::Cancelled,
+                        completed_at: Some(iso_timestamp()),
+                        last_error: Some(cancelled.clone()),
+                    },
+                    QueryResultStreamStatus::Cancelled,
+                    0,
+                    "Query result streaming was cancelled.".to_string(),
+                ).await?;
+                return Err(cancelled);
+            }
+        }?;
         tokio::pin!(row_stream);
         let mut buffered_row_count = 0_usize;
         let mut batch = Vec::with_capacity(RESULT_BATCH_SIZE);

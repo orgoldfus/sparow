@@ -379,6 +379,27 @@ describe('contract fixtures', () => {
         totalRowCount: -2,
       }),
     ).toBe(false);
+
+    expect(
+      isQueryResultSetSummary({
+        ...queryExecutionProgressFixture.result,
+        bufferedRowCount: Number.NaN,
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultStreamEvent({
+        ...queryResultStreamFixture,
+        chunkRowCount: 1.5,
+      }),
+    ).toBe(false);
+
+    expect(
+      isQueryResultExportProgressEvent({
+        ...queryResultExportProgressFixture,
+        rowsWritten: -1,
+      }),
+    ).toBe(false);
   });
 
   it('rejects schema nodes with impossible path invariants', () => {
