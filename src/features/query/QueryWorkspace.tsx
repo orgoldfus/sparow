@@ -1,16 +1,7 @@
 import { Editor } from '@monaco-editor/react';
-import {
-  ArrowDownWideNarrow,
-  ArrowUpWideNarrow,
-  FileCode2,
-  Play,
-  Plus,
-  Search,
-  Square,
-  X,
-} from 'lucide-react';
+import { FileCode2, Play, Plus, Search, Square, X } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { ScrollArea } from '../../components/ui/scroll-area';
@@ -20,12 +11,14 @@ import type {
   AppError,
   ConnectionSummary,
   DatabaseSessionSnapshot,
-  QueryResultCell,
+  QueryResultSetSummary,
   QueryResultStatus,
+  QueryResultWindow,
 } from '../../lib/contracts';
 import { resolveExecutionSlice } from './executionSlice';
+import { EmptyPanel, QueryResultsTable } from './QueryResultsTable';
 import { formatResultColumns, registerSqlCompletionProvider } from './sqlAutocomplete';
-import type { QueryTabState, QueryWorkspaceState } from './useQueryWorkspace';
+import type { QueryWorkspaceState } from './useQueryWorkspace';
 
 type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
@@ -43,10 +36,6 @@ type QueryResultsPanelProps = {
   onActiveViewChange: (view: QueryResultsView) => void;
   workspace: QueryWorkspaceState;
 };
-
-const GRID_ROW_HEIGHT = 34;
-const GRID_OVERSCAN = 12;
-const GRID_MIN_FETCH = 120;
 
 export function QueryTabStrip({ workspace }: { workspace: QueryWorkspaceState }) {
   const activeTab = workspace.activeTab;
@@ -300,75 +289,8 @@ export function QueryResultsPanel({
   const tab = workspace.activeTab;
   const result = tab?.execution.lastResult ?? null;
   const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
-  const loadWindowRef = useRef(workspace.loadTabResultWindow);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const scrollTopRef = useRef(0);
-  const [scrollRevision, setScrollRevision] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(480);
-  const totalRows = tab?.result.window?.visibleRowCount ?? summary?.bufferedRowCount ?? 0;
-  const visibleRowCount = Math.max(
-    GRID_MIN_FETCH,
-    Math.ceil(viewportHeight / GRID_ROW_HEIGHT) + GRID_OVERSCAN * 2,
-  );
-  const tabId = tab?.id ?? null;
+  const totalRows = resolveVisibleResultRowCount(summary, tab?.result.window ?? null);
   const resultKind = result?.kind ?? null;
-  const summaryResultSetId = summary?.resultSetId ?? null;
-  const gridTemplateColumns = useMemo(() => {
-    const columnCount = summary?.columns.length ?? 0;
-    return `72px repeat(${Math.max(columnCount, 1)}, minmax(180px, 1fr))`;
-  }, [summary?.columns.length]);
-
-  useEffect(() => {
-    loadWindowRef.current = workspace.loadTabResultWindow;
-  }, [workspace.loadTabResultWindow]);
-
-  useEffect(() => {
-    const element = scrollContainerRef.current;
-    scrollTopRef.current = 0;
-    if (!element) {
-      return;
-    }
-
-    element.scrollTop = 0;
-    element.dispatchEvent(new Event('scroll', { bubbles: true }));
-  }, [summaryResultSetId, tabId, tab?.result.filters, tab?.result.quickFilter, tab?.result.sort]);
-
-  useEffect(() => {
-    const element = scrollContainerRef.current;
-    if (!element) {
-      return;
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        setViewportHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(element);
-    setViewportHeight(element.clientHeight);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeView, tabId]);
-
-  useEffect(() => {
-    if (activeView !== 'results' || !tabId || !summaryResultSetId || resultKind === 'command') {
-      return;
-    }
-
-    const currentScrollTop = scrollContainerRef.current?.scrollTop ?? scrollTopRef.current;
-    const firstVisibleIndex = Math.max(0, Math.floor(currentScrollTop / GRID_ROW_HEIGHT) - GRID_OVERSCAN);
-    void loadWindowRef.current(tabId, firstVisibleIndex, visibleRowCount);
-  }, [
-    activeView,
-    resultKind,
-    scrollRevision,
-    summaryResultSetId,
-    tabId,
-    visibleRowCount,
-  ]);
 
   return (
     <Tabs
@@ -417,7 +339,7 @@ export function QueryResultsPanel({
                   className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   data-testid="result-quick-filter"
                   disabled={!summary}
-                  placeholder="Filter visible columns"
+                  placeholder="Filter result rows"
                   value={tab?.result.quickFilter ?? ''}
                   onChange={(event) => {
                     if (tab) {
@@ -444,14 +366,10 @@ export function QueryResultsPanel({
               <div className="p-4">
                 <CommandResultCard commandTag={result.commandTag} rowsAffected={result.rowsAffected} />
               </div>
-            ) : summary ? (
-              <ResultGrid
-                gridTemplateColumns={gridTemplateColumns}
-                scrollContainerRef={scrollContainerRef}
-                setScrollTop={(value) => {
-                  scrollTopRef.current = value;
-                  setScrollRevision((current) => current + 1);
-                }}
+            ) : summary && tab ? (
+              <QueryResultsTable
+                active={activeView === 'results' && resultKind !== 'command' && tab !== null}
+                summary={summary}
                 tab={tab}
                 totalRows={totalRows}
                 workspace={workspace}
@@ -516,140 +434,6 @@ export function QueryResultsPanel({
   );
 }
 
-function ResultGrid({
-  gridTemplateColumns,
-  scrollContainerRef,
-  setScrollTop,
-  tab,
-  totalRows,
-  workspace,
-}: {
-  gridTemplateColumns: string;
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  setScrollTop: (value: number) => void;
-  tab: QueryTabState | null;
-  totalRows: number;
-  workspace: QueryWorkspaceState;
-}) {
-  const summary = tab?.result.summary;
-  const window = tab?.result.window;
-  const topSpacer = window ? window.offset * GRID_ROW_HEIGHT : 0;
-  const bottomSpacer = window
-    ? Math.max(0, (totalRows - window.offset - window.rows.length) * GRID_ROW_HEIGHT)
-    : 0;
-  const sort = tab?.result.sort ?? null;
-
-  if (!summary || !tab) {
-    return <EmptyPanel message="No cached result set is available for this tab." />;
-  }
-
-  return (
-    <div className="grid h-full min-h-0 overflow-hidden bg-[color-mix(in_oklch,_var(--surface-editor)_82%,_var(--surface-panel)_18%)]">
-      <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_84%,_black_16%)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-        {formatResultColumns(summary.columns)}
-      </div>
-
-      <div
-        className="min-h-0 overflow-auto"
-        aria-colcount={summary.columns.length + 1}
-        aria-rowcount={totalRows}
-        data-testid="query-result-grid-scroll"
-        ref={scrollContainerRef}
-        role="grid"
-        onScroll={(event) => {
-          setScrollTop(event.currentTarget.scrollTop);
-        }}
-      >
-        <div className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)] backdrop-blur-sm" role="rowgroup">
-          <div className="grid min-w-max" role="row" style={{ gridTemplateColumns }}>
-            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]" role="columnheader">
-              Row
-            </div>
-            {summary.columns.map((column, index) => {
-              const isSorted = sort?.columnIndex === index;
-              return (
-                <button
-                  className="flex items-center justify-between gap-2 border-r border-[var(--border-subtle)] px-3 py-2 text-left text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)] last:border-r-0"
-                  data-testid={`result-column-${index}`}
-                  key={`${column.name}-${index}`}
-                  onClick={() => {
-                    workspace.toggleTabSort(tab.id, index);
-                  }}
-                  role="columnheader"
-                  type="button"
-                >
-                  <span className="truncate">{column.name}</span>
-                  {isSorted ? (
-                    sort.direction === 'asc' ? (
-                      <ArrowUpWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
-                    ) : (
-                      <ArrowDownWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
-                    )
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="grid min-w-max border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-elevated)_94%,_black_6%)]" role="row" style={{ gridTemplateColumns }}>
-            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] text-[var(--text-muted)]" role="gridcell">contains</div>
-            {summary.columns.map((column, index) => (
-              <label className="border-r border-[var(--border-subtle)] px-2 py-1.5 last:border-r-0" key={`filter-${column.name}-${index}`} role="gridcell">
-                <input
-                  className="w-full rounded-lg border border-transparent bg-[var(--surface-panel)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-accent)]"
-                  data-testid={`result-filter-${index}`}
-                  placeholder={column.name}
-                  value={filterValueForColumn(tab, index)}
-                  onChange={(event) => {
-                    workspace.setTabColumnFilter(tab.id, index, event.target.value);
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {tab.result.windowStatus === 'failed' ? (
-          <div className="px-4 py-6">
-            <EmptyPanel message={tab.result.windowError?.message ?? 'Failed to load the cached result window.'} />
-          </div>
-        ) : (
-          <div className="min-w-max" role="rowgroup">
-            <div style={{ height: topSpacer }} />
-            {window?.rows.map((row, rowIndex) => {
-              const absoluteIndex = window.offset + rowIndex;
-              return (
-                <div
-                  aria-rowindex={absoluteIndex + 1}
-                  className="grid border-b border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]"
-                  data-testid={`result-row-${absoluteIndex}`}
-                  key={`row-${absoluteIndex}`}
-                  role="row"
-                  style={{ gridTemplateColumns, minHeight: GRID_ROW_HEIGHT }}
-                >
-                  <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {absoluteIndex + 1}
-                  </div>
-                  {row.map((cell, cellIndex) => (
-                    <div
-                      className="truncate border-r border-[var(--border-subtle)] px-3 py-2 font-mono text-[13px] last:border-r-0"
-                      key={`cell-${absoluteIndex}-${cellIndex}`}
-                      role="gridcell"
-                      title={cellTitle(cell)}
-                    >
-                      {renderCell(cell)}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-            <div style={{ height: bottomSpacer }} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function CommandResultCard({
   commandTag,
   rowsAffected,
@@ -665,14 +449,6 @@ function CommandResultCard({
   );
 }
 
-function EmptyPanel({ message }: { message: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-sm text-[var(--text-secondary)]">
-      {message}
-    </div>
-  );
-}
-
 function connectionNameFor(connectionId: string | null, connections: ConnectionSummary[]): string {
   if (!connectionId) {
     return 'none';
@@ -681,20 +457,24 @@ function connectionNameFor(connectionId: string | null, connections: ConnectionS
   return connections.find((connection) => connection.id === connectionId)?.name ?? connectionId;
 }
 
-function filterValueForColumn(tab: QueryTabState, columnIndex: number): string {
-  return tab.result.filters.find((filter) => filter.columnIndex === columnIndex)?.value ?? '';
-}
-
-function renderCell(cell: QueryResultCell): string {
-  if (cell === null) {
-    return 'null';
+function resolveVisibleResultRowCount(
+  summary: QueryResultSetSummary | null,
+  window: QueryResultWindow | null,
+): number {
+  if (!summary) {
+    return 0;
   }
 
-  return String(cell);
-}
+  if (!window || window.resultSetId !== summary.resultSetId) {
+    return summary.bufferedRowCount;
+  }
 
-function cellTitle(cell: QueryResultCell): string {
-  return renderCell(cell);
+  const loadedRowCount = window.offset + window.rows.length;
+  if (window.visibleRowCount === 0 && window.rows.length > 0) {
+    return Math.max(summary.bufferedRowCount, loadedRowCount);
+  }
+
+  return Math.max(window.visibleRowCount, loadedRowCount);
 }
 
 function resultStatusBadgeVariant(status: QueryResultStatus): 'accent' | 'success' | 'warning' | 'danger' {

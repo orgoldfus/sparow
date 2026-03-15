@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 
 const SHELL_COLUMNS_CLASS = 'lg:grid-cols-[clamp(360px,34vw,460px)_minmax(0,1fr)]';
+const SHELL_ROWS_WITH_TABS = 'auto minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
+const SHELL_ROWS_WITHOUT_TABS = 'minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
 
 type AppShellProps = {
   connectionDialog: ReactNode;
@@ -50,7 +52,7 @@ export function AppShell({
 
           <section
             className="grid min-h-0 overflow-hidden bg-[var(--border-subtle)]"
-            style={{ gridTemplateRows: editorTabs ? 'auto minmax(300px, 1.18fr) minmax(250px, 0.92fr)' : 'minmax(300px, 1.18fr) minmax(250px, 0.92fr)' }}
+            style={{ gridTemplateRows: editorTabs ? SHELL_ROWS_WITH_TABS : SHELL_ROWS_WITHOUT_TABS }}
           >
             {editorTabs ? (
               <div className="min-h-0 overflow-hidden bg-[var(--surface-panel)]" data-testid="editor-tabs-region">

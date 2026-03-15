@@ -48,12 +48,12 @@ try {
       element.scrollTop = 2_400;
       element.dispatchEvent(new Event('scroll'));
     });
-    await page.getByTestId('result-quick-filter').fill('customer-011');
+    await page.getByTestId('result-quick-filter').fill('customer-0110');
+    await page.getByRole('gridcell', { name: 'customer-0110', exact: true }).waitFor();
     await page.getByTestId('result-column-0').click();
-    await page.getByTestId('result-export-path').fill('./smoke-results.csv');
-    await page.getByTestId('result-export-button').click();
-    await page.getByTestId('cancel-result-export-button').waitFor({ state: 'visible' });
-    await page.waitForTimeout(300);
+    await page.getByRole('tab', { name: 'Messages' }).click();
+    await page.getByText('Window state: ready').waitFor();
+    await page.getByRole('tab', { name: 'Results' }).click();
     await page.screenshot({
       path: screenshotPath,
       fullPage: true,

@@ -743,10 +743,15 @@ function getRunDisabledReason(
 
 function applyQueryEvent(tab: QueryTabState, event: QueryExecutionProgressEvent): QueryTabState {
   const nextSummary = event.result?.kind === 'rows' ? event.result : tab.result.summary;
+  const shouldResetWindow =
+    event.result?.kind === 'rows' &&
+    nextSummary !== null &&
+    nextSummary.resultSetId !== (tab.result.summary?.resultSetId ?? tab.result.window?.resultSetId ?? null);
   const nextExportPath =
     nextSummary && tab.result.exportOutputPath.length === 0
       ? defaultExportPath(nextSummary.resultSetId)
       : tab.result.exportOutputPath;
+  const nextResult = shouldResetWindow ? resetViewerDescriptors(invalidateWindow(tab.result)) : tab.result;
 
   return {
     ...tab,
@@ -760,10 +765,10 @@ function applyQueryEvent(tab: QueryTabState, event: QueryExecutionProgressEvent)
       lastError: event.lastError,
     },
     result: {
-      ...tab.result,
+      ...nextResult,
       summary: nextSummary,
       exportOutputPath: nextExportPath,
-      exportLastError: event.lastError ?? tab.result.exportLastError,
+      exportLastError: event.lastError ?? nextResult.exportLastError,
     },
   };
 }
@@ -786,22 +791,24 @@ function applyResultStreamEvent(tab: QueryTabState, event: QueryResultStreamEven
     event.bufferedRowCount > (previousSummary?.bufferedRowCount ?? 0) ||
     (event.totalRowCount !== null && event.totalRowCount > (previousSummary?.totalRowCount ?? 0));
   const shouldResetWindow = countsAdvanced || !shouldKeepWindow(tab.result.window, event.resultSetId);
+  const shouldResetViewerDescriptors = previousSummary?.resultSetId !== event.resultSetId;
+  const nextResult = shouldResetViewerDescriptors ? resetViewerDescriptors(tab.result) : tab.result;
 
   return {
     ...tab,
     lastExecutionSummary: event.message,
     result: {
-      ...tab.result,
+      ...nextResult,
       summary: nextSummary,
       latestStreamEvent: event,
       exportOutputPath:
-        nextSummary && tab.result.exportOutputPath.length === 0
+        nextSummary && nextResult.exportOutputPath.length === 0
           ? defaultExportPath(nextSummary.resultSetId)
-          : tab.result.exportOutputPath,
-      window: shouldResetWindow ? null : tab.result.window,
-      windowStatus: shouldResetWindow ? 'idle' : tab.result.windowStatus,
-      requestedWindowSignature: shouldResetWindow ? null : tab.result.requestedWindowSignature,
-      windowError: shouldResetWindow ? null : tab.result.windowError,
+          : nextResult.exportOutputPath,
+      window: shouldResetWindow ? null : nextResult.window,
+      windowStatus: shouldResetWindow ? 'idle' : nextResult.windowStatus,
+      requestedWindowSignature: shouldResetWindow ? null : nextResult.requestedWindowSignature,
+      windowError: shouldResetWindow ? null : nextResult.windowError,
     },
   };
 }
@@ -868,6 +875,15 @@ function invalidateWindow(result: QueryTabResultState): QueryTabResultState {
     windowStatus: 'idle',
     windowError: null,
     requestedWindowSignature: null,
+  };
+}
+
+function resetViewerDescriptors(result: QueryTabResultState): QueryTabResultState {
+  return {
+    ...result,
+    filters: [],
+    quickFilter: '',
+    sort: null,
   };
 }
 

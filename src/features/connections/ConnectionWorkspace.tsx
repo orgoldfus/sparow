@@ -48,7 +48,6 @@ type ConnectionsRailProps = {
   onDisconnectSelected: () => Promise<void>;
   onEditSelected: () => void;
   onSelectConnection: (connectionId: string) => void;
-  pending: PendingState;
   selectedConnectionId: string | null;
 };
 
@@ -91,7 +90,6 @@ export function ConnectionsRail({
   onDisconnectSelected,
   onEditSelected,
   onSelectConnection,
-  pending,
   selectedConnectionId,
 }: ConnectionsRailProps) {
   const [menuState, setMenuState] = useState<{
@@ -147,7 +145,7 @@ export function ConnectionsRail({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
         <span>{connections.length} saved target{connections.length === 1 ? '' : 's'}</span>
         <span className="truncate">{selectedConnection?.database ?? 'Select a target'}</span>
       </div>
@@ -162,7 +160,7 @@ export function ConnectionsRail({
               return (
                 <button
                   className={cn(
-                    'group grid gap-2 rounded-2xl border px-3 py-3 text-left transition',
+                    'group grid w-full gap-2 rounded-2xl border px-3 py-3 text-left transition',
                     isSelected
                       ? 'border-[var(--border-accent)] bg-[color-mix(in_oklch,_var(--surface-highlight)_86%,_black_14%)] shadow-[var(--shadow-elevated)]'
                       : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]',
@@ -197,7 +195,7 @@ export function ConnectionsRail({
                       />
                       <div className="min-w-0">
                         <p className="truncate text-[15px] font-medium text-[var(--text-primary)]">{connection.name}</p>
-                        <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
+                        <p className="mt-1 break-all text-xs text-[var(--text-muted)]">
                           {connection.engine} • {connection.host}:{connection.port}
                         </p>
                       </div>
@@ -207,9 +205,9 @@ export function ConnectionsRail({
                       <Ellipsis className="h-4 w-4 text-[var(--text-muted)] opacity-0 transition group-hover:opacity-100" />
                     </div>
                   </div>
-                  <div className="grid gap-1 text-xs text-[var(--text-secondary)]">
-                    <span className="truncate">{connection.database}</span>
-                    <span className="truncate">{connection.username}</span>
+                  <div className="grid gap-1 text-xs text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+                    <span>{connection.database}</span>
+                    <span>{connection.username}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
                     <span>{connection.sslMode}</span>

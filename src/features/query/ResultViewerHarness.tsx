@@ -49,15 +49,29 @@ const baseColumns = [
   { name: 'name', postgresType: 'text', semanticType: 'text', isNullable: false },
   { name: 'city', postgresType: 'text', semanticType: 'text', isNullable: false },
   { name: 'active', postgresType: 'bool', semanticType: 'boolean', isNullable: false },
+  { name: 'email', postgresType: 'text', semanticType: 'text', isNullable: false },
+  { name: 'team', postgresType: 'text', semanticType: 'text', isNullable: false },
+  { name: 'plan', postgresType: 'text', semanticType: 'text', isNullable: false },
+  { name: 'order_count', postgresType: 'int4', semanticType: 'number', isNullable: false },
+  { name: 'lifetime_value', postgresType: 'numeric', semanticType: 'number', isNullable: false },
+  { name: 'last_seen_at', postgresType: 'timestamp', semanticType: 'temporal', isNullable: false },
 ] as const;
 
 const cities = ['Jerusalem', 'Tel Aviv', 'Haifa', 'Beer Sheva'] as const;
+const teams = ['Growth', 'Platform', 'Finance', 'Support'] as const;
+const plans = ['starter', 'pro', 'enterprise'] as const;
 
 const baseRows: QueryResultCell[][] = Array.from({ length: 1_200 }, (_, index) => [
   index + 1,
   `customer-${String(index + 1).padStart(4, '0')}`,
   cities[index % cities.length] ?? 'Jerusalem',
   index % 3 !== 0,
+  `customer-${String(index + 1).padStart(4, '0')}@sparow.test`,
+  teams[index % teams.length] ?? 'Growth',
+  plans[index % plans.length] ?? 'starter',
+  12 + (index % 41),
+  `$${(4200 + index * 18.75).toFixed(2)}`,
+  `2026-03-${String(1 + (index % 9)).padStart(2, '0')} 1${index % 10}:2${index % 6}:0${index % 5}`,
 ]);
 
 export function ResultViewerHarness() {

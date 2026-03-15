@@ -44,10 +44,10 @@ const connections: ConnectionSummary[] = [
     id: 'conn-staging',
     engine: 'postgresql',
     name: 'Staging',
-    host: 'staging.internal',
+    host: 'c9srcab37moub2.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com',
     port: 5432,
-    database: 'acme_staging',
-    username: 'acme_staging',
+    database: 'd5l1u89pljf0v',
+    username: 'ufteshubblio40h',
     sslMode: 'prefer',
     hasStoredSecret: true,
     secretProvider: 'os-keychain',
@@ -436,14 +436,6 @@ export function ShellHarness() {
               }}
               onEditSelected={() => {}}
               onSelectConnection={setSelectedConnectionId}
-              pending={{
-                loadingDetails: false,
-                saving: false,
-                testing: false,
-                connecting: false,
-                disconnecting: false,
-                deleting: false,
-              }}
               selectedConnectionId={selectedConnectionId}
             />
             <SchemaSidebar

@@ -371,4 +371,193 @@ describe('QueryWorkspace', () => {
     expect(dispatchEventSpy).toHaveBeenCalled();
     dispatchEventSpy.mockRestore();
   });
+
+  it('removes the redundant column-summary strip and labels the row filter correctly', () => {
+    const onActiveViewChange = vi.fn();
+    const summary = {
+      kind: 'rows' as const,
+      resultSetId: 'result-set-columns',
+      columns: [
+        { name: 'id', postgresType: 'int4', semanticType: 'number' as const, isNullable: false },
+        { name: 'email', postgresType: 'varchar', semanticType: 'text' as const, isNullable: false },
+      ],
+      bufferedRowCount: 2,
+      totalRowCount: 2,
+      status: 'completed' as const,
+    };
+    const tab: QueryTabState = {
+      ...createTab('tab-results', 'select * from users', 'select * from users'),
+      execution: {
+        ...baseExecution,
+        status: 'completed',
+        lastResult: summary,
+      },
+      result: {
+        summary,
+        latestStreamEvent: null,
+        window: {
+          resultSetId: 'result-set-columns',
+          offset: 0,
+          limit: 120,
+          rows: [
+            [1, 'first@example.com'],
+            [2, 'second@example.com'],
+          ],
+          visibleRowCount: 2,
+          bufferedRowCount: 2,
+          totalRowCount: 2,
+          status: 'completed',
+          sort: null,
+          filters: [],
+          quickFilter: '',
+        },
+        windowStatus: 'ready',
+        windowError: null,
+        requestedWindowSignature: null,
+        quickFilter: '',
+        filters: [],
+        sort: null,
+        exportOutputPath: './sparow-result.csv',
+        exportJobId: null,
+        exportStatus: 'idle',
+        exportLastEvent: null,
+        exportLastError: null,
+      },
+    };
+    const workspace: QueryWorkspaceState = {
+      activeTab: tab,
+      activeTabId: tab.id,
+      runDisabledReason: null,
+      tabs: [tab],
+      createTab: vi.fn(),
+      createNewTab: vi.fn(),
+      closeTab: vi.fn(),
+      selectTab: vi.fn(),
+      setTabSql: vi.fn(),
+      updateTabSql: vi.fn(),
+      setTabTargetConnection: vi.fn(),
+      updateTabTargetConnection: vi.fn(),
+      startTabQuery: vi.fn(() => Promise.resolve()),
+      runActiveTab: vi.fn(() => Promise.resolve()),
+      cancelTabQuery: vi.fn(() => Promise.resolve()),
+      cancelActiveTab: vi.fn(() => Promise.resolve()),
+      loadTabResultWindow: vi.fn(() => Promise.resolve()),
+      setTabQuickFilter: vi.fn(),
+      setTabColumnFilter: vi.fn(),
+      toggleTabSort: vi.fn(),
+      setTabExportOutputPath: vi.fn(),
+      startTabResultExport: vi.fn(() => Promise.resolve()),
+      cancelTabResultExport: vi.fn(() => Promise.resolve()),
+    };
+
+    render(
+      <TooltipProvider>
+        <QueryResultsPanel
+          activeSession={activeSession}
+          activeView="results"
+          onActiveViewChange={onActiveViewChange}
+          workspace={workspace}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByPlaceholderText('Filter result rows')).toBeInTheDocument();
+    expect(screen.queryByText('id (int4), email (varchar)')).not.toBeInTheDocument();
+    expect(screen.getByTestId('result-row-0').className).toContain('min-w-max');
+    expect(screen.getByTestId('result-row-0').className).toContain('w-max');
+  });
+
+  it('keeps rendering loaded rows when a fetched window reports zero visible rows', () => {
+    const onActiveViewChange = vi.fn();
+    const summary = {
+      kind: 'rows' as const,
+      resultSetId: 'result-set-stale-visible-count',
+      columns: [
+        { name: 'id', postgresType: 'int4', semanticType: 'number' as const, isNullable: false },
+        { name: 'email', postgresType: 'varchar', semanticType: 'text' as const, isNullable: false },
+      ],
+      bufferedRowCount: 10,
+      totalRowCount: 10,
+      status: 'completed' as const,
+    };
+    const tab: QueryTabState = {
+      ...createTab('tab-results', 'select * from "user"', 'select * from "user"'),
+      execution: {
+        ...baseExecution,
+        status: 'completed',
+        lastResult: summary,
+      },
+      result: {
+        summary,
+        latestStreamEvent: null,
+        window: {
+          resultSetId: 'result-set-stale-visible-count',
+          offset: 0,
+          limit: 120,
+          rows: [
+            [1, 'first@example.com'],
+            [2, 'second@example.com'],
+          ],
+          visibleRowCount: 0,
+          bufferedRowCount: 10,
+          totalRowCount: 10,
+          status: 'completed',
+          sort: null,
+          filters: [],
+          quickFilter: '',
+        },
+        windowStatus: 'ready',
+        windowError: null,
+        requestedWindowSignature: null,
+        quickFilter: '',
+        filters: [],
+        sort: null,
+        exportOutputPath: './sparow-result.csv',
+        exportJobId: null,
+        exportStatus: 'idle',
+        exportLastEvent: null,
+        exportLastError: null,
+      },
+    };
+    const workspace: QueryWorkspaceState = {
+      activeTab: tab,
+      activeTabId: tab.id,
+      runDisabledReason: null,
+      tabs: [tab],
+      createTab: vi.fn(),
+      createNewTab: vi.fn(),
+      closeTab: vi.fn(),
+      selectTab: vi.fn(),
+      setTabSql: vi.fn(),
+      updateTabSql: vi.fn(),
+      setTabTargetConnection: vi.fn(),
+      updateTabTargetConnection: vi.fn(),
+      startTabQuery: vi.fn(() => Promise.resolve()),
+      runActiveTab: vi.fn(() => Promise.resolve()),
+      cancelTabQuery: vi.fn(() => Promise.resolve()),
+      cancelActiveTab: vi.fn(() => Promise.resolve()),
+      loadTabResultWindow: vi.fn(() => Promise.resolve()),
+      setTabQuickFilter: vi.fn(),
+      setTabColumnFilter: vi.fn(),
+      toggleTabSort: vi.fn(),
+      setTabExportOutputPath: vi.fn(),
+      startTabResultExport: vi.fn(() => Promise.resolve()),
+      cancelTabResultExport: vi.fn(() => Promise.resolve()),
+    };
+
+    render(
+      <TooltipProvider>
+        <QueryResultsPanel
+          activeSession={activeSession}
+          activeView="results"
+          onActiveViewChange={onActiveViewChange}
+          workspace={workspace}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('result-row-0')).toBeInTheDocument();
+    expect(screen.getByText('first@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('The cached result contains no visible rows.')).not.toBeInTheDocument();
+  });
 });

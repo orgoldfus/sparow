@@ -154,6 +154,16 @@ describe('App shell', () => {
     );
   });
 
+  it('biases more default height to the results pane than the previous shell split', async () => {
+    render(<App />);
+
+    const resultsRegion = await screen.findByTestId('results-region');
+
+    expect(resultsRegion.parentElement).toHaveStyle({
+      gridTemplateRows: 'auto minmax(260px, 0.94fr) minmax(340px, 1.06fr)',
+    });
+  });
+
   it('does not render the redundant connection rail title and live-target summary', async () => {
     render(<App />);
 

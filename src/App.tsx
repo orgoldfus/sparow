@@ -493,7 +493,6 @@ export default function App() {
                   openEditConnectionDialog();
                 }}
                 onSelectConnection={workspace.selectConnection}
-                pending={workspace.pending}
                 selectedConnectionId={workspace.selectedConnectionId}
               />
               <SchemaSidebar activeSession={workspace.activeSession} schema={schemaBrowser} />
