@@ -13,12 +13,35 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-15: Completed the empty-results follow-up by deriving the viewer row count from the fetched window contents when `visibleRowCount` comes back as zero, so loaded rows now stay visible instead of falling through to the empty-state panel.
+- 2026-03-15: Started a follow-up fix for a TanStack results regression where the UI could show buffered row counts in the header while the new table body rendered an empty-state panel because it treated `window.visibleRowCount = 0` as authoritative even when the fetched window already contained rows.
+- 2026-03-15: Completed the query-results foundation migration to TanStack Table + TanStack Virtual while preserving the Rust-backed cached window contract, existing viewer-side sort/filter semantics, and the query workspace’s current diagnostics/messages surfaces.
+- 2026-03-15: Started replacing the hand-rolled query results grid with a TanStack Table + TanStack Virtual foundation while preserving the Rust-owned cached window contract, existing sort/filter semantics, and query-workspace diagnostics.
+- 2026-03-13: Refined the `SELECT *` fix after inspecting the real app cache database and confirming the cached row JSON already contained every column. The remaining bug was a frontend width mismatch: result headers used max-content sizing while body rows did not, so wide result sets could collapse body cells and visually leave only the first column visible.
+- 2026-03-13: Completed the post-screenshot query-workspace bug pass by wrapping long connection metadata in the rail, removing the redundant result-column summary strip, invalidating stale cached windows when a new result set lands, biasing the default shell split toward taller results, and correcting the quick-filter copy to describe row filtering accurately.
+- 2026-03-13: Started a post-screenshot query-workspace bug pass focused on the clipped connection rail, redundant table-definition output, incomplete `SELECT *` result columns, undersized results pane, and any additional regressions uncovered during validation.
+- 2026-03-13: Completed the cached-result follow-up by resetting the result viewer's internal virtualization offset independently of DOM scroll events, so new smaller result sets no longer request an out-of-range cached window and render a blank body.
+- 2026-03-13: Started a follow-up cached-result investigation after the desktop shell still reported `9 / 9 rows` without visible body rows; the active focus is whether the Rust-owned cache is correct and the frontend window/render state is dropping hydrated rows.
+- 2026-03-13: Completed a browser-validated connection-rail fit fix by widening the desktop shell clamp again and stacking connection metadata within each saved-target card, so the rail no longer cuts off list content under the shell harness viewport.
+- 2026-03-13: Started a browser-validated connection-rail fit fix after the saved-target list still felt cramped in the rendered shell even after the first sidebar-width pass; validation for this pass uses the `agent-browser` shell harness.
+- 2026-03-13: Completed a redundant connection-rail header cleanup by removing the large rail title and live-target summary card, leaving the saved-target list as the primary source of connection context.
+- 2026-03-13: Started a redundant connection-rail header cleanup after the latest shell pass left both a large `Workspace graph` title and a duplicate live-target card above the saved-target list.
+- 2026-03-13: Completed the non-functional UI cleanup by removing placeholder query actions and the unused explain/export surfaces from the query workspace, leaving only controls that map to live behavior.
+- 2026-03-13: Started a non-functional UI cleanup pass to remove placeholder query controls and result sub-panels that are visible but not ready for use, including toolbar affordances like Format, Explain, History, and the unused export surface.
+- 2026-03-13: Completed the connection-rail width fix by widening the left shell pane to a responsive desktop clamp, so saved-target details no longer get squeezed against the query workspace.
+- 2026-03-13: Completed the cached-result viewport fix by resetting the result-grid scroll position when a new result set or viewer descriptor set lands, preventing empty grids caused by stale window offsets after smaller result loads.
+- 2026-03-13: Started a connection-rail width fix after the saved-target list proved too narrow to show profile details in the redesigned shell; the focus is widening the left shell pane without breaking the editor/results split.
+- 2026-03-13: Started a cached-result viewport fix after the viewer reported `8 / 8 rows` for `SELECT * FROM "user" u` while rendering an empty grid; the active investigation is focused on stale scroll/window offsets surviving result-set changes.
+- 2026-03-13: Completed the reserved-identifier editor fix by quoting schema-derived autocomplete insertions, so PostgreSQL names like `user` no longer get emitted as ambiguous bare identifiers from the query editor.
+- 2026-03-13: Started a reserved-identifier query fix after staging cached `SELECT * FROM user u` as the current database username instead of table rows; the active investigation is focused on quoting schema-derived SQL identifiers safely in the editor flow.
+- 2026-03-13: Started a desktop-shell UI overhaul pass to match the new target design, with priority on fixed-height layout containment, independent panel scrolling, tighter connection interactions, and UI regression coverage.
 - 2026-03-13: Started a follow-up CodeRabbit autofix pass after one new CSV export review comment landed on `codex/phase-5`.
 - 2026-03-13: Started another CodeRabbit autofix pass on `codex/phase-5` to clear any newly unresolved review threads before the final commit/push.
 - 2026-03-12: Started a full local CI reproduction pass for the current branch to match `.github/workflows/ci.yml`, fix any failing step (currently suspected `cargo clippy`), and re-verify before handling remaining review feedback.
 - 2026-03-12: Started a second CodeRabbit unresolved-thread pass after CI stabilization so the branch ends with both CI and PR review state aligned.
 - 2026-03-12: Started a CodeRabbit autofix pass on `codex/phase-5` to resolve unresolved PR review threads against the current branch state.
 - 2026-03-12: Started a CI follow-up to fix a failing `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` run and verify the Rust workspace formatting state locally.
+- 2026-03-13: Started the desktop shell UI refinement pass against the provided target screenshots, with focus on fixed-height layout containment, isolated scrolling, and direct connection-target interactions.
 - 2026-03-12: Started Phase 5 implementation. `docs/MVP/PHASE5_PLAN.md` is present as an untracked file; it is being left untouched because it is not part of the current tracked baseline.
 - 2026-03-12: Phase 5 keeps the current shell layout and upgrades the results region instead of starting the broader shell redesign.
 - 2026-03-12: Phase 5 uses a Rust/SQLite cached result store rather than a React-held full-row buffer so large-result behavior stays inspectable and bounded.
@@ -26,8 +49,81 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-12: CSV export will use the cached result set plus the current viewer descriptors rather than rerunning the SQL.
 - 2026-03-12: Prefer repo-local scripts and docs for AI/browser automation in this phase. Add a new skill only if the existing `agent-browser` workflow proves insufficient during implementation.
 - 2026-03-12: Rust command/state/service wiring now targets cached result windows and export jobs. The next gate is focused Rust verification to flush out compile errors and any SQLite/streaming regressions before the frontend result viewer is replaced.
+- 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full repo verification passes again after the wide-grid body-width fix: frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
+  - The widened results-browser harness now renders a wide cached grid with visible body values across multiple columns and wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png), validating the actual `SELECT *` layout failure mode instead of the old narrow-grid scenario.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
+  - The focused query-results component suite stays green after the wide-grid width fix, including the regression that now checks result rows keep `min-w-max`/`w-max` sizing instead of collapsing under wide column sets.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/ResultViewerHarness.tsx src/test/query-workspace-component.test.tsx` ✅
+  - ESLint stayed clean on the touched query-grid files after the width-synchronization patch and the wider harness data.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
+  - The widened results-browser harness reached the new wide-grid scenario, but the smoke assertion matched both the `name` and `email` cells for `customer-0110`; the validation needs an exact grid-cell selector instead of a broad text match.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full repo verification now passes under Node `v24.13.0`: frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and Rust tests all completed successfully.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
+  - The refreshed results-viewer smoke now validates the current viewer flow by filtering to `customer-0110`, toggling the messages tab, and capturing [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png) without relying on removed export controls.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
+  - The shell smoke passed against the long-host harness scenario and wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png), confirming the wrapped connection metadata, taller results split, and multi-column grid rendering in the rendered shell.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
+  - The refreshed results-browser smoke reached the current harness and exercised the new controls, but the interim assertion for `Cached result` was too broad under Playwright strict mode; the smoke needs a unique messages-tab assertion before it can serve as a stable verifier.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The second full verify run cleared typecheck, lint, tests, and `smoke:foundation`, then failed in `smoke:results-browser` because that script still waits for the removed `result-export-path` control instead of validating the current cached-results UI.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The first full verify run failed at TypeScript strict-null checks: `ResultGrid` was reading `tab.result.window` before the local null guard, and the new `applyQueryEvent` invalidation branch needed to prove `nextSummary` was non-null before comparing `resultSetId`.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
+  - The focused shell and query suites now pass with 25 tests green, including the new stale-window regression that proves a completed query clears the previous cached window before a new result window is fetched.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/useQueryWorkspace.ts src/features/connections/ConnectionWorkspace.tsx src/features/shell/AppShell.tsx src/features/shell/ShellHarness.tsx src/App.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
+  - The touched shell/query files now pass ESLint after removing the dead `ConnectionsRail.pending` prop and tightening the new regression coverage.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
+  - The focused frontend suite failed on the new stale-window regression because the test reused the same query-event signature with a different `tabId`; `useQueryWorkspace` intentionally dedupes by job/status/timestamps/message, so the test setup is being rewritten to avoid masking the state transition.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/useQueryWorkspace.ts src/features/connections/ConnectionWorkspace.tsx src/features/shell/AppShell.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
+  - ESLint failed on an unused `pending` prop in `ConnectionsRail`; that prop is not read anywhere in the rail, so the fix is to remove the dead API surface instead of suppressing the warning.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace component suite passed under Node `v24.13.0`: 1 Vitest file and 3 tests green after the viewer reset stopped depending on a synthetic scroll event to clear stale cached-window offsets.
+- `eval "$(fnm env --shell zsh)" && fnm use && npx eslint src/features/query/QueryWorkspace.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The touched query viewer files pass ESLint after the virtualization reset switched from an effect-driven state write to a ref-backed scroll offset plus revision tick.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
+  - The existing smoke script timed out waiting for `result-export-path`, which is expected on the current tree because the placeholder export controls were removed in the shell cleanup pass. That script needs a separate update and was not used as the gate for this cached-result fix.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 13 tests green after widening the desktop rail clamp again.
+- `agent-browser set viewport 1280 900` + `agent-browser open 'http://127.0.0.1:4175/?harness=shell'` + `agent-browser screenshot /Users/orgoldfus/Workspace/personal/sparow/artifacts/connection-rail-desktop-after-fix.png` ✅
+  - Browser validation under the shell harness confirmed the desktop rail widened to roughly `435px` at `1280px` viewport width and the saved-target cards no longer squeeze database/username metadata into a side-by-side row.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 13 tests green, including the new assertion that the redundant `Workspace graph` title and live-target summary no longer render in the connection rail.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace component suite passed under Node `v24.13.0`: 1 Vitest file and 3 tests green, including the new assertion that placeholder query actions and the explain/export affordances are absent from the rendered UI.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compiled cleanly under Node `v24.13.0` after narrowing the result-view union and removing the dead query-workspace controls.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 12 tests green, including the new assertion that keeps the widened responsive connection-rail column in the shell grid.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx src/test/sql-autocomplete.test.ts` ✅
+  - The focused query-viewer regression suite passed under Node `v24.13.0`: 2 Vitest files and 6 tests green, including the new scroll-reset coverage for replacing a large cached result with a smaller one in the same tab.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compiled cleanly under Node `v24.13.0` after the result-grid scroll reset and viewer regression test were added.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint passed cleanly under Node `v24.13.0` after the result-grid viewport reset switched to a DOM-driven scroll event and the test ResizeObserver mock was tightened.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/sql-autocomplete.test.ts` ✅
+  - The focused autocomplete regression suite passed under Node `v24.13.0`: 1 Vitest file and 4 tests green, including the new quoted-identifier coverage for schema-derived `user` suggestions.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compiled cleanly under Node `v24.13.0` after the autocomplete insert-text change.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint passed cleanly under Node `v24.13.0` after the query-editor autocomplete update and test additions.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
+  - The shell harness smoke passed under Node `v24.13.0` and wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png), confirming the redesigned shell renders with contained panes and the updated connection rail.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The final post-refactor verification passed under Node `v24.13.0`: typecheck, ESLint, 78 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed, with 75 Rust tests green and 4 expected PostgreSQL smoke tests ignored.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - The UI overhaul tree compiles under Node `v24.13.0` after the shell/layout refactor, the new results-view union, and the connection-rail interaction changes were wired through the React surface.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - Re-ran after adding the full shell harness, browser smoke route, and app-shell interaction tests; the React/Tauri frontend still compiles cleanly under Node `v24.13.0`.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint && npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused UI regression pass is green under Node `v24.13.0`: ESLint passed, the new connection-rail interaction tests passed, and the query-tab keyboard regression test stayed green after the shell redesign.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint && npm run test` ✅
+  - The full frontend suite is green under Node `v24.13.0`: ESLint passed with no remaining hook/ref warnings, and all 78 Vitest checks passed after the app-shell timing fixes and the results-panel effect cleanup.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The final follow-up verification passed under Node `v24.13.0`: `npm run verify` stayed green with typecheck, ESLint, 76 Vitest tests, both smoke suites, and the Rust workspace finishing with 75 passing tests plus 4 expected ignored PostgreSQL smoke tests.
 - `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping` ✅
@@ -90,3 +186,13 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
   - The post-fix full CI rerun failed at `cargo clippy` on `dead_code`: `Repository::delete_query_result_set` is no longer used after the tab cleanup switched to one transactional delete. Removing that helper before rerunning the entire workflow.
 - `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ✅
   - The full CI workflow now passes locally on the current tree under Node `v24.13.0`: Rust format, `clippy -D warnings`, and 74 Rust tests (plus 4 expected ignored PostgreSQL smoke tests) all passed; `npm ci`, typecheck, ESLint, 76 Vitest tests, and the production Vite build also completed successfully.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ❌
+  - The first TanStack grid migration pass failed on strict TypeScript cell typing in `QueryResultsTable.tsx`, a missing hook dependency warning promoted by ESLint review, and two query-results component regressions in tests: the virtualized window request was not advancing after scroll and the fallback render path produced no visible rows in the jsdom test environment.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ✅
+  - The focused frontend migration checks now pass: strict TypeScript is clean, ESLint reports only the expected TanStack React Compiler compatibility warning around `useReactTable`, and the query workspace plus results-panel suites are green with the TanStack table/virtualized renderer in place.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed after the TanStack migration. Frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully. The only remaining frontend note is the expected React Compiler compatibility warning from `useReactTable`, plus jsdom-only `flushSync` noise emitted by TanStack Virtual during component tests.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ✅
+  - The empty-results follow-up fix passes focused verification. The query workspace keeps rendering loaded rows when a fetched window reports `visibleRowCount = 0`, strict TypeScript is clean, and ESLint still reports only the expected TanStack React Compiler warning around `useReactTable`.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed after the empty-results follow-up. Frontend typecheck, ESLint, 87 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully, with the same expected TanStack React Compiler warning and jsdom-only `flushSync` noise from TanStack Virtual tests.

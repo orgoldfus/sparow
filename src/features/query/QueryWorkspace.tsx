@@ -1,55 +1,105 @@
 import { Editor } from '@monaco-editor/react';
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, Command, Download, Play, Plus, Search, Square, X } from 'lucide-react';
+import { FileCode2, Play, Plus, Search, Square, X } from 'lucide-react';
 import type * as Monaco from 'monaco-editor';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { TooltipLabel } from '../../components/ui/tooltip';
 import { cn } from '../../lib/utils';
 import type {
   AppError,
   ConnectionSummary,
   DatabaseSessionSnapshot,
-  QueryResultCell,
+  QueryResultSetSummary,
   QueryResultStatus,
+  QueryResultWindow,
 } from '../../lib/contracts';
-import { formatLongTime } from '../../lib/format';
 import { resolveExecutionSlice } from './executionSlice';
+import { EmptyPanel, QueryResultsTable } from './QueryResultsTable';
 import { formatResultColumns, registerSqlCompletionProvider } from './sqlAutocomplete';
-import type { QueryTabState, QueryWorkspaceState } from './useQueryWorkspace';
+import type { QueryWorkspaceState } from './useQueryWorkspace';
 
 type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
   connections: ConnectionSummary[];
   onError: (error: AppError | Error) => void;
+  showTabStrip?: boolean;
   workspace: QueryWorkspaceState;
 };
+
+export type QueryResultsView = 'messages' | 'results';
 
 type QueryResultsPanelProps = {
   activeSession: DatabaseSessionSnapshot | null;
-  activeView: 'messages' | 'results';
-  onActiveViewChange: (view: 'messages' | 'results') => void;
+  activeView: QueryResultsView;
+  onActiveViewChange: (view: QueryResultsView) => void;
   workspace: QueryWorkspaceState;
 };
 
-const NO_TARGET_CONNECTION = '__none__';
-const GRID_ROW_HEIGHT = 34;
-const GRID_OVERSCAN = 12;
-const GRID_MIN_FETCH = 120;
+export function QueryTabStrip({ workspace }: { workspace: QueryWorkspaceState }) {
+  const activeTab = workspace.activeTab;
+
+  return (
+    <div className="flex h-full min-h-[56px] items-stretch border-b border-[var(--border-subtle)] bg-[linear-gradient(180deg,_color-mix(in_oklch,_var(--surface-panel)_84%,_black_16%),_color-mix(in_oklch,_var(--surface-panel)_94%,_black_6%))]">
+      <ScrollArea className="min-w-0 flex-1">
+        <div className="flex min-h-[56px] items-end gap-1 px-3 pt-3">
+          {workspace.tabs.map((tab) => {
+            const isActive = tab.id === activeTab?.id;
+
+            return (
+              <div
+                className={cn(
+                  'flex min-w-[190px] max-w-[280px] items-center gap-2 rounded-t-2xl border border-b-0 px-3 py-2',
+                  isActive
+                    ? 'border-[var(--border-strong)] bg-[color-mix(in_oklch,_var(--surface-editor)_92%,_white_8%)]'
+                    : 'border-transparent bg-transparent text-[var(--text-secondary)] hover:bg-[color-mix(in_oklch,_var(--surface-panel)_84%,_black_16%)]',
+                )}
+                key={tab.id}
+              >
+                <button
+                  className="min-w-0 flex-1 text-left"
+                  data-testid={`query-tab-${tab.id}`}
+                  onClick={() => {
+                    workspace.selectTab(tab.id);
+                  }}
+                  type="button"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileCode2 className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
+                    <p className="truncate text-sm font-medium text-[var(--text-primary)]">{tab.title}</p>
+                    {tab.dirty ? <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--accent-solid)]" /> : null}
+                  </div>
+                </button>
+                <button
+                  aria-label={`Close ${tab.title || tab.id}`}
+                  className="rounded-lg p-1 text-[var(--text-muted)] transition hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]"
+                  onClick={() => {
+                    workspace.closeTab(tab.id);
+                  }}
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+      <div className="flex items-center pr-3">
+        <Button data-testid="new-query-tab-button" onClick={workspace.createTab} size="sm" type="button" variant="ghost">
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function QueryWorkspace({
   activeSession,
   connections,
   onError,
+  showTabStrip = true,
   workspace,
 }: QueryWorkspaceProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -92,21 +142,21 @@ export function QueryWorkspace({
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '6f7692' },
-        { token: 'keyword', foreground: 'c58b54' },
-        { token: 'number', foreground: 'e1c15a' },
-        { token: 'string', foreground: '82d5c0' },
-        { token: 'identifier', foreground: 'd9ddf4' },
+        { token: 'comment', foreground: '60667c' },
+        { token: 'keyword', foreground: '9164ff' },
+        { token: 'number', foreground: 'b28fff' },
+        { token: 'string', foreground: '89d7c5' },
+        { token: 'identifier', foreground: 'd8def9' },
       ],
       colors: {
-        'editor.background': '#17181d',
-        'editorLineNumber.foreground': '#666b7e',
-        'editorLineNumber.activeForeground': '#f6f3eb',
-        'editor.selectionBackground': '#4a3521',
-        'editor.inactiveSelectionBackground': '#2e2520',
-        'editorCursor.foreground': '#f6d7ab',
-        'editorIndentGuide.background1': '#262931',
-        'editorIndentGuide.activeBackground1': '#3a3e49',
+        'editor.background': '#0d111c',
+        'editorLineNumber.foreground': '#535a71',
+        'editorLineNumber.activeForeground': '#f3f4fb',
+        'editor.selectionBackground': '#2f214d',
+        'editor.inactiveSelectionBackground': '#221835',
+        'editorCursor.foreground': '#9b74ff',
+        'editorIndentGuide.background1': '#1a1f30',
+        'editorIndentGuide.activeBackground1': '#313853',
       },
     });
 
@@ -146,20 +196,17 @@ export function QueryWorkspace({
   }
 
   return (
-    <div className="grid h-full min-h-[320px] grid-rows-[auto_minmax(0,1fr)]">
-      <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_78%,_black_22%)] px-4 py-3">
+    <div
+      className={cn(
+        'grid h-full min-h-[320px]',
+        showTabStrip ? 'grid-rows-[auto_auto_minmax(0,1fr)]' : 'grid-rows-[auto_minmax(0,1fr)]',
+      )}
+    >
+      {showTabStrip ? <QueryTabStrip workspace={workspace} /> : null}
+
+      <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_82%,_black_18%)] px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Query editor</p>
-            <h2 className="mt-1 text-base font-semibold text-[var(--text-primary)]">
-              {activeTab?.title ?? 'Workspace'}
-            </h2>
-          </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button data-testid="new-query-tab-button" onClick={workspace.createTab} size="sm" type="button">
-              <Plus className="h-3.5 w-3.5" />
-              New tab
-            </Button>
             <Button
               data-testid="run-query-button"
               disabled={workspace.runDisabledReason !== null}
@@ -187,69 +234,9 @@ export function QueryWorkspace({
               <Square className="h-3.5 w-3.5" />
               Cancel
             </Button>
-            <TooltipLabel content="Command palette is planned, not implemented, in this pass.">
-              <Button size="sm" type="button" variant="ghost">
-                <Command className="h-3.5 w-3.5" />
-                Soon
-              </Button>
-            </TooltipLabel>
           </div>
-        </div>
-        <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          {workspace.runDisabledReason ??
-            'Run the current statement with Cmd/Ctrl+Enter. A non-empty selection always wins.'}
-        </p>
-      </div>
 
-      <div className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
-        <div className="border-b border-[var(--border-subtle)] bg-[var(--surface-panel)]">
-          <ScrollArea className="w-full">
-            <div className="flex min-h-[56px] items-stretch gap-1 px-3 py-2">
-              {workspace.tabs.map((tab) => {
-                const isActive = tab.id === activeTab?.id;
-                return (
-                  <div
-                    className={cn(
-                      'flex min-w-[190px] items-center justify-between gap-2 rounded-xl border px-3 py-2',
-                      isActive
-                        ? 'border-[var(--border-accent)] bg-[var(--surface-highlight)]'
-                        : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[var(--surface-elevated)]',
-                    )}
-                    key={tab.id}
-                  >
-                    <button
-                      className="min-w-0 flex-1 text-left"
-                      data-testid={`query-tab-${tab.id}`}
-                      onClick={() => {
-                        workspace.selectTab(tab.id);
-                      }}
-                      type="button"
-                    >
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{tab.title}</p>
-                        {tab.dirty ? <span className="inline-flex h-2 w-2 rounded-full bg-[var(--accent-solid)]" /> : null}
-                      </div>
-                      <p className="mt-1 text-xs text-[var(--text-muted)]">{tab.execution.status}</p>
-                    </button>
-                    <button
-                      aria-label={`Close ${tab.title || tab.id}`}
-                      className="rounded-md p-1 text-[var(--text-muted)] transition hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]"
-                      onClick={() => {
-                        workspace.closeTab(tab.id);
-                      }}
-                      type="button"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </div>
-
-        <div className="grid gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-panel)] px-4 py-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
             <Badge
               variant={
                 activeTab?.execution.status === 'failed'
@@ -263,57 +250,31 @@ export function QueryWorkspace({
             >
               {activeTab?.execution.status ?? 'idle'}
             </Badge>
-            <span>Active connection: {activeSession?.name ?? 'none'}</span>
-            <span>Tab target: {connectionNameFor(activeTab?.targetConnectionId ?? null, connections)}</span>
-            <span>
-              {activeTab?.execution.lastEvent?.finishedAt
-                ? `Last run ${formatLongTime(activeTab.execution.lastEvent.finishedAt)}`
-                : 'Not executed yet'}
-            </span>
-          </div>
-          <div>
-            <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Target connection</p>
-            <Select
-              onValueChange={(value) => {
-                if (activeTab) {
-                  workspace.setTabTargetConnection(
-                    activeTab.id,
-                    value === NO_TARGET_CONNECTION ? null : value,
-                  );
-                }
-              }}
-              value={activeTab?.targetConnectionId ?? NO_TARGET_CONNECTION}
-            >
-              <SelectTrigger data-testid="query-target-select">
-                <SelectValue placeholder="Select saved target" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_TARGET_CONNECTION}>Select saved target</SelectItem>
-                {connections.map((connection) => (
-                  <SelectItem key={connection.id} value={connection.id}>
-                    {connection.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <span>{connectionNameFor(activeTab?.targetConnectionId ?? null, connections)}</span>
+            <span className="hidden lg:inline">{activeSession?.database ?? 'No active database'}</span>
+            <span className="hidden xl:inline">{activeTab?.title ?? 'Untitled query'}</span>
           </div>
         </div>
+        <p className="mt-3 text-sm text-[var(--text-secondary)]">
+          {workspace.runDisabledReason ??
+            'Run the current statement with Cmd/Ctrl+Enter. A non-empty selection always wins.'}
+        </p>
+      </div>
 
-        <div className="surface-grid min-h-0">
-          <Editor
-            defaultLanguage="sql"
-            height="100%"
-            onMount={handleMount}
-            path={activeTab?.id ?? 'query-tab'}
-            theme="sparow-dark"
-            value={activeTab?.sql ?? ''}
-            onChange={(value) => {
-              if (activeTab) {
-                workspace.setTabSql(activeTab.id, value ?? '');
-              }
-            }}
-          />
-        </div>
+      <div className="surface-grid min-h-0">
+        <Editor
+          defaultLanguage="sql"
+          height="100%"
+          onMount={handleMount}
+          path={activeTab?.id ?? 'query-tab'}
+          theme="sparow-dark"
+          value={activeTab?.sql ?? ''}
+          onChange={(value) => {
+            if (activeTab) {
+              workspace.setTabSql(activeTab.id, value ?? '');
+            }
+          }}
+        />
       </div>
     </div>
   );
@@ -328,120 +289,57 @@ export function QueryResultsPanel({
   const tab = workspace.activeTab;
   const result = tab?.execution.lastResult ?? null;
   const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(480);
-  const totalRows = tab?.result.window?.visibleRowCount ?? summary?.bufferedRowCount ?? 0;
-  const firstVisibleIndex = Math.max(0, Math.floor(scrollTop / GRID_ROW_HEIGHT) - GRID_OVERSCAN);
-  const visibleRowCount = Math.max(
-    GRID_MIN_FETCH,
-    Math.ceil(viewportHeight / GRID_ROW_HEIGHT) + GRID_OVERSCAN * 2,
-  );
-  const gridTemplateColumns = useMemo(() => {
-    const columnCount = summary?.columns.length ?? 0;
-    return `72px repeat(${Math.max(columnCount, 1)}, minmax(180px, 1fr))`;
-  }, [summary?.columns.length]);
-
-  useEffect(() => {
-    const element = scrollContainerRef.current;
-    if (!element) {
-      return;
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        setViewportHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(element);
-    setViewportHeight(element.clientHeight);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeView, tab?.id]);
-
-  useEffect(() => {
-    if (activeView !== 'results' || !tab || !summary || result?.kind === 'command') {
-      return;
-    }
-
-    void workspace.loadTabResultWindow(tab.id, firstVisibleIndex, visibleRowCount);
-  }, [
-    activeView,
-    firstVisibleIndex,
-    result?.kind,
-    summary,
-    tab,
-    visibleRowCount,
-    workspace,
-  ]);
+  const totalRows = resolveVisibleResultRowCount(summary, tab?.result.window ?? null);
+  const resultKind = result?.kind ?? null;
 
   return (
     <Tabs
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]"
       onValueChange={(value) => {
-        onActiveViewChange(value as 'messages' | 'results');
+        onActiveViewChange(value as QueryResultsView);
       }}
       value={activeView}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Results</p>
-          <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-            {tab?.title ?? 'Cached result viewer'}
-          </h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Results</p>
+            <h3 className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
+              {tab?.title ?? 'Cached result viewer'}
+            </h3>
+          </div>
+          {summary ? (
+            <Badge variant={resultStatusBadgeVariant(summary.status)}>{resultStatusLabel(summary.status)}</Badge>
+          ) : null}
         </div>
-        <TabsList>
-          <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-        </TabsList>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList>
+            <TabsTrigger value="results">Results</TabsTrigger>
+            <TabsTrigger value="messages">Messages</TabsTrigger>
+          </TabsList>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <span>
+              {summary
+                ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''} rows`
+                : 'No rows'}
+            </span>
+            <span>{tab?.execution.lastEvent ? `${tab.execution.lastEvent.elapsedMs} ms` : 'n/a'}</span>
+          </div>
+        </div>
       </div>
 
       <TabsContent className="min-h-0" value="results">
-        <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]">
-          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-secondary)]">
-            <Badge
-              variant={
-                summary
-                  ? resultStatusBadgeVariant(summary.status)
-                  : result
-                    ? 'accent'
-                    : 'default'
-              }
-            >
-              {summary
-                ? resultStatusLabel(summary.status)
-                : result?.kind === 'command'
-                  ? result.commandTag
-                  : 'No result'}
-            </Badge>
-            <span>
-              Rows:{' '}
-              {summary
-                ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}`
-                : 'n/a'}
-            </span>
-            <span>Connection: {activeSession?.name ?? 'none'}</span>
-            <span>Elapsed: {tab?.execution.lastEvent ? `${tab.execution.lastEvent.elapsedMs} ms` : 'n/a'}</span>
-            {tab?.result.latestStreamEvent && summary?.status === 'running' ? (
-              <span data-testid="result-streaming-note">
-                Viewer reflects cached rows only while streaming continues.
-              </span>
-            ) : null}
-          </div>
-
-          <div className="grid gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-panel)] px-4 py-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <label className="grid gap-1">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Quick filter</span>
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2">
+        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+          <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_86%,_black_14%)] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex min-w-[240px] max-w-[420px] flex-1 items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2">
                 <Search className="h-4 w-4 text-[var(--text-muted)]" />
                 <input
                   className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   data-testid="result-quick-filter"
                   disabled={!summary}
-                  placeholder="Filter visible columns"
+                  placeholder="Filter result rows"
                   value={tab?.result.quickFilter ?? ''}
                   onChange={(event) => {
                     if (tab) {
@@ -449,96 +347,45 @@ export function QueryResultsPanel({
                     }
                   }}
                 />
-              </div>
-            </label>
-
-            <div className="grid gap-2">
-              <label className="grid gap-1">
-                <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">CSV export path</span>
-                <input
-                  className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
-                  data-testid="result-export-path"
-                  disabled={!summary}
-                  placeholder="./sparow-result.csv"
-                  value={tab?.result.exportOutputPath ?? ''}
-                  onChange={(event) => {
-                    if (tab) {
-                      workspace.setTabExportOutputPath(tab.id, event.target.value);
-                    }
-                  }}
-                />
               </label>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  data-testid="result-export-button"
-                  disabled={!summary || summary.status !== 'completed' || tab?.result.exportJobId !== null}
-                  onClick={() => {
-                    if (tab) {
-                      void workspace.startTabResultExport(tab.id);
-                    }
-                  }}
-                  size="sm"
-                  type="button"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export CSV
-                </Button>
-                <Button
-                  data-testid="cancel-result-export-button"
-                  disabled={!tab?.result.exportJobId}
-                  onClick={() => {
-                    if (tab) {
-                      void workspace.cancelTabResultExport(tab.id);
-                    }
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Square className="h-3.5 w-3.5" />
-                  Cancel export
-                </Button>
-                {tab?.result.exportStatus && tab.result.exportStatus !== 'idle' ? (
-                  <Badge
-                    variant={
-                      tab.result.exportStatus === 'failed'
-                        ? 'danger'
-                        : tab.result.exportStatus === 'completed'
-                          ? 'success'
-                          : tab.result.exportStatus === 'cancelled'
-                            ? 'warning'
-                            : 'accent'
-                    }
-                  >
-                    {tab.result.exportStatus}
-                  </Badge>
-                ) : null}
-              </div>
+
+              {tab?.result.latestStreamEvent && summary?.status === 'running' ? (
+                <span className="text-xs text-[var(--text-secondary)]" data-testid="result-streaming-note">
+                  Viewer reflects cached rows only while streaming continues.
+                </span>
+              ) : (
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {activeSession ? `Connected to ${activeSession.name}` : 'Connect a saved target to run queries.'}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="min-h-0 px-4 py-4">
+          <div className="min-h-0 overflow-hidden">
             {result?.kind === 'command' ? (
-              <CommandResultCard commandTag={result.commandTag} rowsAffected={result.rowsAffected} />
-            ) : summary ? (
-              <ResultGrid
-                gridTemplateColumns={gridTemplateColumns}
-                scrollContainerRef={scrollContainerRef}
-                setScrollTop={setScrollTop}
+              <div className="p-4">
+                <CommandResultCard commandTag={result.commandTag} rowsAffected={result.rowsAffected} />
+              </div>
+            ) : summary && tab ? (
+              <QueryResultsTable
+                active={activeView === 'results' && resultKind !== 'command' && tab !== null}
+                summary={summary}
                 tab={tab}
                 totalRows={totalRows}
                 workspace={workspace}
               />
             ) : (
-              <EmptyPanel
-                message={
-                  tab?.execution.status === 'failed'
-                    ? tab.execution.lastError?.message ?? 'The last query failed before rows were cached.'
-                    : tab?.execution.status === 'running'
-                      ? 'Waiting for result metadata from the running query.'
-                      : 'Run a query to populate the cached result grid.'
-                }
-              />
+              <div className="p-4">
+                <EmptyPanel
+                  message={
+                    tab?.execution.status === 'failed'
+                      ? tab.execution.lastError?.message ?? 'The last query failed before rows were cached.'
+                      : tab?.execution.status === 'running'
+                        ? 'Waiting for result metadata from the running query.'
+                        : 'Run a query to populate the cached result grid.'
+                  }
+                />
+              </div>
             )}
           </div>
         </div>
@@ -567,7 +414,6 @@ export function QueryResultsPanel({
                   {summary ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}` : 'n/a'}
                 </p>
                 <p>Window state: {tab?.result.windowStatus ?? 'idle'}</p>
-                <p>Export state: {tab?.result.exportStatus ?? 'idle'}</p>
               </div>
             </article>
 
@@ -583,141 +429,8 @@ export function QueryResultsPanel({
           </div>
         </ScrollArea>
       </TabsContent>
+
     </Tabs>
-  );
-}
-
-function ResultGrid({
-  gridTemplateColumns,
-  scrollContainerRef,
-  setScrollTop,
-  tab,
-  totalRows,
-  workspace,
-}: {
-  gridTemplateColumns: string;
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  setScrollTop: (value: number) => void;
-  tab: QueryTabState | null;
-  totalRows: number;
-  workspace: QueryWorkspaceState;
-}) {
-  const summary = tab?.result.summary;
-  const window = tab?.result.window;
-  const topSpacer = window ? window.offset * GRID_ROW_HEIGHT : 0;
-  const bottomSpacer = window
-    ? Math.max(0, (totalRows - window.offset - window.rows.length) * GRID_ROW_HEIGHT)
-    : 0;
-  const sort = tab?.result.sort ?? null;
-
-  if (!summary || !tab) {
-    return <EmptyPanel message="No cached result set is available for this tab." />;
-  }
-
-  return (
-    <div className="grid h-full min-h-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
-      <div className="border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_84%,_black_16%)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-        {formatResultColumns(summary.columns)}
-      </div>
-
-      <div
-        className="min-h-0 overflow-auto"
-        aria-colcount={summary.columns.length + 1}
-        aria-rowcount={totalRows}
-        data-testid="query-result-grid-scroll"
-        ref={scrollContainerRef}
-        role="grid"
-        onScroll={(event) => {
-          setScrollTop(event.currentTarget.scrollTop);
-        }}
-      >
-        <div className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)] backdrop-blur-sm" role="rowgroup">
-          <div className="grid min-w-max" role="row" style={{ gridTemplateColumns }}>
-            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]" role="columnheader">
-              Row
-            </div>
-            {summary.columns.map((column, index) => {
-              const isSorted = sort?.columnIndex === index;
-              return (
-                <button
-                  className="flex items-center justify-between gap-2 border-r border-[var(--border-subtle)] px-3 py-2 text-left text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)] last:border-r-0"
-                  data-testid={`result-column-${index}`}
-                  key={`${column.name}-${index}`}
-                  onClick={() => {
-                    workspace.toggleTabSort(tab.id, index);
-                  }}
-                  role="columnheader"
-                  type="button"
-                >
-                  <span className="truncate">{column.name}</span>
-                  {isSorted ? (
-                    sort.direction === 'asc' ? (
-                      <ArrowUpWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
-                    ) : (
-                      <ArrowDownWideNarrow className="h-3.5 w-3.5 text-[var(--accent-text)]" />
-                    )
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="grid min-w-max border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-elevated)_94%,_black_6%)]" role="row" style={{ gridTemplateColumns }}>
-            <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] text-[var(--text-muted)]" role="gridcell">contains</div>
-            {summary.columns.map((column, index) => (
-              <label className="border-r border-[var(--border-subtle)] px-2 py-1.5 last:border-r-0" key={`filter-${column.name}-${index}`} role="gridcell">
-                <input
-                  className="w-full rounded-lg border border-transparent bg-[var(--surface-panel)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-accent)]"
-                  data-testid={`result-filter-${index}`}
-                  placeholder={column.name}
-                  value={filterValueForColumn(tab, index)}
-                  onChange={(event) => {
-                    workspace.setTabColumnFilter(tab.id, index, event.target.value);
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {tab.result.windowStatus === 'failed' ? (
-          <div className="px-4 py-6">
-            <EmptyPanel message={tab.result.windowError?.message ?? 'Failed to load the cached result window.'} />
-          </div>
-        ) : (
-          <div className="min-w-max" role="rowgroup">
-            <div style={{ height: topSpacer }} />
-            {window?.rows.map((row, rowIndex) => {
-              const absoluteIndex = window.offset + rowIndex;
-              return (
-                <div
-                  aria-rowindex={absoluteIndex + 1}
-                  className="grid border-b border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]"
-                  data-testid={`result-row-${absoluteIndex}`}
-                  key={`row-${absoluteIndex}`}
-                  role="row"
-                  style={{ gridTemplateColumns, minHeight: GRID_ROW_HEIGHT }}
-                >
-                  <div className="border-r border-[var(--border-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {absoluteIndex + 1}
-                  </div>
-                  {row.map((cell, cellIndex) => (
-                    <div
-                      className="truncate border-r border-[var(--border-subtle)] px-3 py-2 font-mono text-[13px] last:border-r-0"
-                      key={`cell-${absoluteIndex}-${cellIndex}`}
-                      role="gridcell"
-                      title={cellTitle(cell)}
-                    >
-                      {renderCell(cell)}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-            <div style={{ height: bottomSpacer }} />
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -736,14 +449,6 @@ function CommandResultCard({
   );
 }
 
-function EmptyPanel({ message }: { message: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 text-sm text-[var(--text-secondary)]">
-      {message}
-    </div>
-  );
-}
-
 function connectionNameFor(connectionId: string | null, connections: ConnectionSummary[]): string {
   if (!connectionId) {
     return 'none';
@@ -752,20 +457,24 @@ function connectionNameFor(connectionId: string | null, connections: ConnectionS
   return connections.find((connection) => connection.id === connectionId)?.name ?? connectionId;
 }
 
-function filterValueForColumn(tab: QueryTabState, columnIndex: number): string {
-  return tab.result.filters.find((filter) => filter.columnIndex === columnIndex)?.value ?? '';
-}
-
-function renderCell(cell: QueryResultCell): string {
-  if (cell === null) {
-    return 'null';
+function resolveVisibleResultRowCount(
+  summary: QueryResultSetSummary | null,
+  window: QueryResultWindow | null,
+): number {
+  if (!summary) {
+    return 0;
   }
 
-  return String(cell);
-}
+  if (!window || window.resultSetId !== summary.resultSetId) {
+    return summary.bufferedRowCount;
+  }
 
-function cellTitle(cell: QueryResultCell): string {
-  return renderCell(cell);
+  const loadedRowCount = window.offset + window.rows.length;
+  if (window.visibleRowCount === 0 && window.rows.length > 0) {
+    return Math.max(summary.bufferedRowCount, loadedRowCount);
+  }
+
+  return Math.max(window.visibleRowCount, loadedRowCount);
 }
 
 function resultStatusBadgeVariant(status: QueryResultStatus): 'accent' | 'success' | 'warning' | 'danger' {

@@ -5,6 +5,7 @@ import type {
   ConnectionSummary,
   DatabaseSessionSnapshot,
   QueryExecutionProgressEvent,
+  QueryResultStreamEvent,
 } from '../lib/contracts';
 import {
   cancelQueryExecution,
@@ -102,16 +103,18 @@ const activeSession: DatabaseSessionSnapshot = {
 
 function Harness({
   queryEvents,
+  resultStreamEvents = [],
   onError,
 }: {
   queryEvents: QueryExecutionProgressEvent[];
+  resultStreamEvents?: QueryResultStreamEvent[];
   onError: (error: AppError) => void;
 }) {
   const workspace = useQueryWorkspace({
     activeSession,
     connections,
     queryEvents,
-    resultStreamEvents: [],
+    resultStreamEvents,
     resultExportEvents: [],
     selectedConnectionId: activeSession.connectionId,
     onError,
@@ -176,6 +179,46 @@ function Harness({
       >
         close
       </button>
+      <button
+        onClick={() => {
+          if (workspace.activeTabId) {
+            workspace.setTabQuickFilter(workspace.activeTabId, 'hidden-filter');
+          }
+        }}
+        type="button"
+      >
+        set-quick-filter
+      </button>
+      <button
+        onClick={() => {
+          if (workspace.activeTabId) {
+            workspace.setTabColumnFilter(workspace.activeTabId, 0, 'hidden-column-filter');
+          }
+        }}
+        type="button"
+      >
+        set-column-filter
+      </button>
+      <button
+        onClick={() => {
+          if (workspace.activeTabId) {
+            workspace.toggleTabSort(workspace.activeTabId, 0);
+          }
+        }}
+        type="button"
+      >
+        toggle-sort
+      </button>
+      <button
+        onClick={() => {
+          if (workspace.activeTabId) {
+            void workspace.loadTabResultWindow(workspace.activeTabId, 0, 120);
+          }
+        }}
+        type="button"
+      >
+        load-window
+      </button>
 
       <div data-testid="tab-count">{workspace.tabs.length}</div>
       <div data-testid="active-tab-id">{workspace.activeTab?.id ?? 'none'}</div>
@@ -185,6 +228,12 @@ function Harness({
       <div data-testid="active-tab-dirty">{workspace.activeTab?.dirty ? 'dirty' : 'clean'}</div>
       <div data-testid="active-run-disabled">{workspace.runDisabledReason ?? 'enabled'}</div>
       <div data-testid="active-summary">{workspace.activeTab?.lastExecutionSummary ?? 'none'}</div>
+      <div data-testid="active-summary-result-set">{workspace.activeTab?.result.summary?.resultSetId ?? 'none'}</div>
+      <div data-testid="active-window-result-set">{workspace.activeTab?.result.window?.resultSetId ?? 'none'}</div>
+      <div data-testid="active-window-row-width">{workspace.activeTab?.result.window?.rows[0]?.length ?? 0}</div>
+      <div data-testid="active-quick-filter">{workspace.activeTab?.result.quickFilter ?? ''}</div>
+      <div data-testid="active-filter-count">{workspace.activeTab?.result.filters.length ?? 0}</div>
+      <div data-testid="active-sort-column">{workspace.activeTab?.result.sort?.columnIndex ?? 'none'}</div>
       {workspace.tabs.map((tab) => (
         <div data-testid={`tab-status-${tab.id}`} key={tab.id}>
           {tab.execution.status}
@@ -368,6 +417,176 @@ describe('useQueryWorkspace', () => {
     await waitFor(() => {
       expect(screen.getByTestId(`tab-status-${firstTabId}`)).toHaveTextContent('completed');
       expect(screen.getByTestId(`tab-status-${secondTabId}`)).toHaveTextContent('running');
+    });
+  });
+
+  it('clears a stale cached window when a completed query swaps in a new result set', async () => {
+    const onError = vi.fn();
+    vi.mocked(getQueryResultWindow).mockResolvedValueOnce({
+      resultSetId: 'result-set-old',
+      offset: 0,
+      limit: 120,
+      rows: [[1]],
+      visibleRowCount: 1,
+      bufferedRowCount: 1,
+      totalRowCount: 1,
+      status: 'completed',
+      sort: null,
+      filters: [],
+      quickFilter: '',
+    });
+
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+
+    const tabId = await screen.findByTestId('active-tab-id').then((element) => element.textContent ?? 'none');
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-old',
+            correlationId: 'query-corr-old',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 12,
+            message: 'Old query completed.',
+            startedAt: '2026-03-10T16:45:00.000Z',
+            finishedAt: '2026-03-10T16:45:00.012Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-old',
+              columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+              bufferedRowCount: 1,
+              totalRowCount: 1,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-summary-result-set')).toHaveTextContent('result-set-old');
+    });
+
+    fireEvent.click(screen.getByText('load-window'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-window-result-set')).toHaveTextContent('result-set-old');
+      expect(screen.getByTestId('active-window-row-width')).toHaveTextContent('1');
+    });
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-old',
+            correlationId: 'query-corr-old',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 12,
+            message: 'Old query completed.',
+            startedAt: '2026-03-10T16:45:00.000Z',
+            finishedAt: '2026-03-10T16:45:00.012Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-old',
+              columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+              bufferedRowCount: 1,
+              totalRowCount: 1,
+              status: 'completed',
+            },
+          },
+          {
+            jobId: 'query-job-new',
+            correlationId: 'query-corr-new',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 18,
+            message: 'New query completed.',
+            startedAt: '2026-03-10T16:46:00.000Z',
+            finishedAt: '2026-03-10T16:46:00.018Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-new',
+              columns: [
+                { name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false },
+                { name: 'name', postgresType: 'text', semanticType: 'text', isNullable: false },
+              ],
+              bufferedRowCount: 2,
+              totalRowCount: 2,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-summary-result-set')).toHaveTextContent('result-set-new');
+      expect(screen.getByTestId('active-window-result-set')).toHaveTextContent('none');
+      expect(screen.getByTestId('active-window-row-width')).toHaveTextContent('0');
+    });
+  });
+
+  it('clears viewer sort and filters when a completed query swaps in a new result set', async () => {
+    const onError = vi.fn();
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+
+    const tabId = await screen.findByTestId('active-tab-id').then((element) => element.textContent ?? 'none');
+
+    fireEvent.click(screen.getByText('set-quick-filter'));
+    fireEvent.click(screen.getByText('set-column-filter'));
+    fireEvent.click(screen.getByText('toggle-sort'));
+
+    expect(screen.getByTestId('active-quick-filter')).toHaveTextContent('hidden-filter');
+    expect(screen.getByTestId('active-filter-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('active-sort-column')).toHaveTextContent('0');
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-new',
+            correlationId: 'query-corr-new',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 18,
+            message: 'New query completed.',
+            startedAt: '2026-03-10T16:46:00.000Z',
+            finishedAt: '2026-03-10T16:46:00.018Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-new',
+              columns: [
+                { name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false },
+                { name: 'name', postgresType: 'text', semanticType: 'text', isNullable: false },
+              ],
+              bufferedRowCount: 10,
+              totalRowCount: 10,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-summary-result-set')).toHaveTextContent('result-set-new');
+      expect(screen.getByTestId('active-quick-filter')).toHaveTextContent('');
+      expect(screen.getByTestId('active-filter-count')).toHaveTextContent('0');
+      expect(screen.getByTestId('active-sort-column')).toHaveTextContent('none');
     });
   });
 });
