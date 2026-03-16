@@ -508,7 +508,7 @@ function buildTab(id: string, title: string, connectionId: string | null): Query
     sql: `select current_database(), current_user, now();`,
     targetConnectionId: connectionId,
     dirty: false,
-    lastExecutionSummary: 'Query completed with cached rows ready.',
+    lastExecutionSummary: 'Query completed with rows ready.',
     lastRunSql: 'select current_database(), current_user, now();',
     execution: {
       status: 'completed',
@@ -538,7 +538,6 @@ function buildTab(id: string, title: string, connectionId: string | null): Query
     },
     result: {
       summary: buildSummary(id, baseRows.length),
-      latestStreamEvent: null,
       window: null,
       windowStatus: 'idle',
       windowError: null,

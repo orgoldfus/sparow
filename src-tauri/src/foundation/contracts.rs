@@ -15,8 +15,6 @@ pub const BACKGROUND_JOB_EVENT: &str = "foundation://job-progress";
 pub const SCHEMA_REFRESH_EVENT: &str = "schema://refresh-progress";
 /// Query execution progress event channel.
 pub const QUERY_EXECUTION_EVENT: &str = "query://execution-progress";
-/// Cached query-result streaming event channel.
-pub const QUERY_RESULT_STREAM_EVENT: &str = "query://result-stream";
 /// Query result export progress event channel.
 pub const QUERY_RESULT_EXPORT_EVENT: &str = "query://result-export-progress";
 
@@ -91,18 +89,7 @@ pub enum QueryExecutionStatus {
     Failed,
 }
 
-/// Streaming status for a cached query result set.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum QueryResultStreamStatus {
-    MetadataReady,
-    RowsBuffered,
-    Completed,
-    Cancelled,
-    Failed,
-}
-
-/// Lifecycle status for a cached query result set.
+/// Lifecycle status for a query result.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryResultStatus {
@@ -112,7 +99,7 @@ pub enum QueryResultStatus {
     Failed,
 }
 
-/// Background export status for writing cached query results to CSV.
+/// Background export status for writing query results to CSV.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryResultExportStatus {
@@ -136,7 +123,7 @@ pub enum QueryResultColumnSemanticType {
     Unknown,
 }
 
-/// Supported sort direction for cached result windows.
+/// Supported sort direction for query-result windows.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryResultSortDirection {
@@ -144,7 +131,7 @@ pub enum QueryResultSortDirection {
     Desc,
 }
 
-/// Supported filter modes for cached result windows.
+/// Supported filter modes for query-result windows.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryResultFilterMode {
@@ -458,7 +445,7 @@ pub struct SchemaSearchResult {
     pub nodes: Vec<SchemaNode>,
 }
 
-/// Column metadata for a cached query result set.
+/// Column metadata for a query result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultColumn {
@@ -468,7 +455,7 @@ pub struct QueryResultColumn {
     pub is_nullable: bool,
 }
 
-/// Summary metadata for a row-returning query result set cached in SQLite.
+/// Summary metadata for a row-returning query result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultSetSummary {
@@ -511,7 +498,7 @@ impl Serialize for QueryResultCell {
     }
 }
 
-/// Sorting descriptor for cached result windows.
+/// Sorting descriptor for query-result windows.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultSort {
@@ -519,7 +506,7 @@ pub struct QueryResultSort {
     pub direction: QueryResultSortDirection,
 }
 
-/// Filter descriptor for cached result windows.
+/// Filter descriptor for query-result windows.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultFilter {
@@ -528,7 +515,7 @@ pub struct QueryResultFilter {
     pub value: String,
 }
 
-/// Response payload for a cached result window request.
+/// Response payload for a query-result window request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultWindow {
@@ -545,7 +532,7 @@ pub struct QueryResultWindow {
     pub quick_filter: String,
 }
 
-/// Request payload for a cached result window.
+/// Request payload for a query-result window.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultWindowRequest {
@@ -557,27 +544,7 @@ pub struct QueryResultWindowRequest {
     pub quick_filter: String,
 }
 
-/// Progress payload for cached result streaming.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryResultStreamEvent {
-    pub job_id: String,
-    pub correlation_id: String,
-    pub tab_id: String,
-    pub connection_id: String,
-    pub result_set_id: String,
-    pub status: QueryResultStreamStatus,
-    pub buffered_row_count: usize,
-    pub total_row_count: Option<usize>,
-    pub chunk_row_count: usize,
-    pub columns: Option<Vec<QueryResultColumn>>,
-    pub message: String,
-    pub started_at: String,
-    pub timestamp: String,
-    pub last_error: Option<AppError>,
-}
-
-/// Request payload for exporting a cached result set.
+/// Request payload for exporting a query result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultExportRequest {
@@ -868,10 +835,9 @@ mod tests {
         QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
         QueryExecutionResult, QueryResultCell, QueryResultExportAccepted,
         QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
-        QueryResultStreamEvent, QueryResultWindow, QueryResultWindowRequest,
-        RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
-        SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
-        TestConnectionRequest,
+        QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
+        SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
+        SchemaSearchRequest, SchemaSearchResult, SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -924,8 +890,6 @@ mod tests {
         include_str!("../../../fixtures/contracts/query-result-window-request.json");
     const QUERY_RESULT_WINDOW_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/query-result-window.json");
-    const QUERY_RESULT_STREAM_FIXTURE: &str =
-        include_str!("../../../fixtures/contracts/query-result-stream.json");
     const QUERY_RESULT_EXPORT_REQUEST_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/query-result-export-request.json");
     const QUERY_RESULT_EXPORT_ACCEPTED_FIXTURE: &str =
@@ -1151,14 +1115,6 @@ mod tests {
             .expect("query result window fixture should deserialize");
         assert_eq!(fixture.rows.len(), 2);
         assert_eq!(fixture.status, QueryResultStatus::Completed);
-    }
-
-    #[test]
-    fn deserializes_query_result_stream_fixture() {
-        let fixture: QueryResultStreamEvent = serde_json::from_str(QUERY_RESULT_STREAM_FIXTURE)
-            .expect("query result stream fixture should deserialize");
-        assert_eq!(fixture.chunk_row_count, 250);
-        assert_eq!(fixture.buffered_row_count, 250);
     }
 
     #[test]

@@ -28,14 +28,12 @@ import {
   BACKGROUND_JOB_EVENT,
   QUERY_EXECUTION_EVENT,
   QUERY_RESULT_EXPORT_EVENT,
-  QUERY_RESULT_STREAM_EVENT,
   SCHEMA_REFRESH_EVENT,
   type AppBootstrap,
   type AppError,
   type BackgroundJobProgressEvent,
   type QueryExecutionProgressEvent,
   type QueryResultExportProgressEvent,
-  type QueryResultStreamEvent,
   type SchemaRefreshProgressEvent,
 } from './lib/contracts';
 import {
@@ -43,7 +41,6 @@ import {
   subscribeToEvent,
   subscribeToQueryExecutionEvent,
   subscribeToQueryResultExportEvent,
-  subscribeToQueryResultStreamEvent,
   subscribeToSchemaRefreshEvent,
 } from './lib/ipc';
 import { logger } from './lib/logger';
@@ -55,7 +52,6 @@ export default function App() {
   const [recentEvents, setRecentEvents] = useState<BackgroundJobProgressEvent[]>([]);
   const [schemaEvents, setSchemaEvents] = useState<SchemaRefreshProgressEvent[]>([]);
   const [queryEvents, setQueryEvents] = useState<QueryExecutionProgressEvent[]>([]);
-  const [resultStreamEvents, setResultStreamEvents] = useState<QueryResultStreamEvent[]>([]);
   const [resultExportEvents, setResultExportEvents] = useState<QueryResultExportProgressEvent[]>([]);
   const [isConnectionDialogOpen, setIsConnectionDialogOpen] = useState(false);
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
@@ -65,7 +61,6 @@ export default function App() {
   const deferredRecentEvents = useDeferredValue(recentEvents);
   const deferredSchemaEvents = useDeferredValue(schemaEvents);
   const deferredQueryEvents = useDeferredValue(queryEvents);
-  const deferredResultStreamEvents = useDeferredValue(resultStreamEvents);
   const deferredResultExportEvents = useDeferredValue(resultExportEvents);
 
   const workspace = useConnectionWorkspace({
@@ -81,7 +76,6 @@ export default function App() {
     activeSession: workspace.activeSession,
     connections: workspace.connections,
     queryEvents: deferredQueryEvents,
-    resultStreamEvents: deferredResultStreamEvents,
     resultExportEvents: deferredResultExportEvents,
     selectedConnectionId: workspace.selectedConnectionId,
     onError: setError,
@@ -109,10 +103,6 @@ export default function App() {
 
   const handleQueryEvent = useEffectEvent((event: QueryExecutionProgressEvent) => {
     setQueryEvents((current) => [event, ...current].slice(0, 12));
-  });
-
-  const handleResultStreamEvent = useEffectEvent((event: QueryResultStreamEvent) => {
-    setResultStreamEvents((current) => [event, ...current].slice(0, 12));
   });
 
   const handleResultExportEvent = useEffectEvent((event: QueryResultExportProgressEvent) => {
@@ -161,32 +151,6 @@ export default function App() {
       })
       .catch((caught) => {
         setError(logger.asAppError(caught, 'listen_background_job_event'));
-      });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    let unsubscribe = () => {};
-
-    subscribeToQueryResultStreamEvent(QUERY_RESULT_STREAM_EVENT, (event) => {
-      if (active) {
-        handleResultStreamEvent(event);
-      }
-    })
-      .then((cleanup) => {
-        if (active) {
-          unsubscribe = cleanup;
-        } else {
-          cleanup();
-        }
-      })
-      .catch((caught) => {
-        setError(logger.asAppError(caught, 'listen_query_result_stream_event'));
       });
 
     return () => {
@@ -376,7 +340,6 @@ export default function App() {
                   recentEvents={deferredRecentEvents}
                   recentQueryEvents={deferredQueryEvents}
                   recentResultExportEvents={deferredResultExportEvents}
-                  recentResultStreamEvents={deferredResultStreamEvents}
                   recentSchemaEvents={deferredSchemaEvents}
                   selectedSchemaNode={schemaBrowser.selectedNode}
                 />

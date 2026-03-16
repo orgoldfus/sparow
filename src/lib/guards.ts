@@ -31,8 +31,6 @@ import type {
   QueryResultSortDirection,
   QueryResultColumn,
   QueryResultColumnSemanticType,
-  QueryResultStreamEvent,
-  QueryResultStreamStatus,
   QueryResultWindow,
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
@@ -88,16 +86,6 @@ function isQueryExecutionStatus(value: unknown): value is QueryExecutionStatus {
   return (
     value === 'queued' ||
     value === 'running' ||
-    value === 'completed' ||
-    value === 'cancelled' ||
-    value === 'failed'
-  );
-}
-
-function isQueryResultStreamStatus(value: unknown): value is QueryResultStreamStatus {
-  return (
-    value === 'metadata-ready' ||
-    value === 'rows-buffered' ||
     value === 'completed' ||
     value === 'cancelled' ||
     value === 'failed'
@@ -678,26 +666,6 @@ export function isQueryResultWindow(value: unknown): value is QueryResultWindow 
     Array.isArray(value.filters) &&
     value.filters.every(isQueryResultFilter) &&
     typeof value.quickFilter === 'string'
-  );
-}
-
-export function isQueryResultStreamEvent(value: unknown): value is QueryResultStreamEvent {
-  return (
-    isRecord(value) &&
-    typeof value.jobId === 'string' &&
-    typeof value.correlationId === 'string' &&
-    typeof value.tabId === 'string' &&
-    typeof value.connectionId === 'string' &&
-    typeof value.resultSetId === 'string' &&
-    isQueryResultStreamStatus(value.status) &&
-    isNonNegativeInteger(value.bufferedRowCount) &&
-    isNullableNonNegativeInteger(value.totalRowCount) &&
-    isNonNegativeInteger(value.chunkRowCount) &&
-    (value.columns === null || (Array.isArray(value.columns) && value.columns.every(isQueryResultColumn))) &&
-    typeof value.message === 'string' &&
-    typeof value.startedAt === 'string' &&
-    typeof value.timestamp === 'string' &&
-    (value.lastError === null || isAppError(value.lastError))
   );
 }
 

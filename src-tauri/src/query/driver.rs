@@ -1,59 +1,66 @@
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use deadpool_postgres::Client;
 use futures_util::StreamExt;
 use postgres_native_tls::MakeTlsConnector;
-use tauri::AppHandle;
-use tokio::task;
-use tokio_postgres::{NoTls, Row};
+use tokio_postgres::{types::ToSql, NoTls, Row};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    commands::emit_query_result_stream_event,
     connections::{build_tls_connector, ActiveSessionRuntime},
     foundation::{
-        iso_timestamp, AppError, QueryExecutionResult, QueryResultCell, QueryResultColumn,
-        QueryResultColumnSemanticType, QueryResultSetSummary, QueryResultStatus,
-        QueryResultStreamEvent, QueryResultStreamStatus, SslMode,
-    },
-    persistence::{
-        AppendQueryResultRowsRecord, CreateQueryResultSetRecord, FinalizeQueryResultSetRecord,
-        QueryResultSetStatus, Repository,
+        AppError, QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
+        QueryResultFilter, QueryResultFilterMode, QueryResultSort, QueryResultSortDirection,
+        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest, SslMode,
     },
 };
 
-const RESULT_BATCH_SIZE: usize = 250;
+use super::result_store::ReplayableQueryResultHandle;
+
 const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
 
-/// Context shared between the query driver and the query service while streaming rows.
-#[derive(Clone)]
-pub(crate) struct QueryResultStreamContext {
-    pub repository: Arc<Repository>,
-    pub app: Option<AppHandle>,
-    pub result_set_id: String,
-    pub job_id: String,
-    pub correlation_id: String,
-    pub tab_id: String,
-    pub connection_id: String,
-    pub sql: String,
-    pub started_at: String,
+enum ReplayQueryParam {
+    Text(String),
+    Integer(i64),
 }
 
-/// Executes SQL against the active PostgreSQL session and returns typed results/events.
+impl ReplayQueryParam {
+    fn as_tosql(&self) -> &(dyn ToSql + Sync) {
+        match self {
+            Self::Text(value) => value,
+            Self::Integer(value) => value,
+        }
+    }
+}
+
+pub(crate) enum ExecutedQueryResult {
+    Command {
+        command_tag: String,
+        rows_affected: Option<u64>,
+    },
+    ReplayableRows {
+        columns: Vec<QueryResultColumn>,
+        initial_total_row_count: usize,
+    },
+    BufferedRows {
+        columns: Vec<QueryResultColumn>,
+        rows: Vec<Vec<QueryResultCell>>,
+    },
+}
+
 #[async_trait]
 pub(crate) trait QueryExecutionDriver: Send + Sync {
     async fn run_query(
         &self,
         session: ActiveSessionRuntime,
         sql: String,
-        stream_context: QueryResultStreamContext,
         cancellation: CancellationToken,
-    ) -> Result<(QueryExecutionResult, u64), AppError>;
+    ) -> Result<(ExecutedQueryResult, u64), AppError>;
 }
 
-/// Production PostgreSQL-backed query driver.
 pub(crate) struct RuntimeQueryExecutionDriver;
 
 #[async_trait]
@@ -62,9 +69,8 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
         &self,
         session: ActiveSessionRuntime,
         sql: String,
-        stream_context: QueryResultStreamContext,
         cancellation: CancellationToken,
-    ) -> Result<(QueryExecutionResult, u64), AppError> {
+    ) -> Result<(ExecutedQueryResult, u64), AppError> {
         let pool = session.pool.ok_or_else(|| {
             AppError::internal(
                 "query_missing_active_pool",
@@ -99,7 +105,7 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
             }?;
 
             return Ok((
-                QueryExecutionResult::Command {
+                ExecutedQueryResult::Command {
                     command_tag: command_tag_for(&sql),
                     rows_affected: Some(rows_affected),
                 },
@@ -107,262 +113,349 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
             ));
         }
 
-        create_result_set(&stream_context, &result_columns).await?;
-        emit_stream_event(
-            &stream_context,
-            QueryResultStreamEvent {
-                job_id: stream_context.job_id.clone(),
-                correlation_id: stream_context.correlation_id.clone(),
-                tab_id: stream_context.tab_id.clone(),
-                connection_id: stream_context.connection_id.clone(),
-                result_set_id: stream_context.result_set_id.clone(),
-                status: QueryResultStreamStatus::MetadataReady,
-                buffered_row_count: 0,
-                total_row_count: None,
-                chunk_row_count: 0,
-                columns: Some(result_columns.clone()),
-                message: "Query result metadata is ready.".to_string(),
-                started_at: stream_context.started_at.clone(),
-                timestamp: iso_timestamp(),
-                last_error: None,
-            },
-        )?;
-
-        let row_stream = tokio::select! {
-            result = client.query_raw(&statement, std::iter::empty::<&str>()) => {
-                result.map_err(normalize_query_error)
-            }
-            _ = cancellation.cancelled() => {
-                cancel_active_query(&cancel_token, session.ssl_mode).await?;
-                let cancelled = cancelled_query_error();
-                finalize_result_set(
-                    &stream_context,
-                    FinalizeQueryResultSetRecord {
-                        result_set_id: stream_context.result_set_id.clone(),
-                        buffered_row_count: 0,
-                        total_row_count: None,
-                        status: QueryResultSetStatus::Cancelled,
-                        completed_at: Some(iso_timestamp()),
-                        last_error: Some(cancelled.clone()),
-                    },
-                    QueryResultStreamStatus::Cancelled,
-                    0,
-                    "Query result streaming was cancelled.".to_string(),
-                ).await?;
-                return Err(cancelled);
-            }
-        }?;
-        tokio::pin!(row_stream);
-        let mut buffered_row_count = 0_usize;
-        let mut batch = Vec::with_capacity(RESULT_BATCH_SIZE);
-
-        loop {
-            let next_row = tokio::select! {
-                next = row_stream.next() => match next {
-                    Some(Ok(row)) => Ok(Some(row)),
-                    Some(Err(error)) => Err(normalize_query_error(error)),
-                    None => Ok(None),
-                },
+        let result = if is_replayable_sql(&sql) {
+            let initial_total_row_count = tokio::select! {
+                result = count_replayable_query_rows(&client, &sql, &result_columns, "", &[]) => result,
                 _ = cancellation.cancelled() => {
                     cancel_active_query(&cancel_token, session.ssl_mode).await?;
-                    let cancelled = cancelled_query_error();
-                    finalize_result_set(
-                        &stream_context,
-                        FinalizeQueryResultSetRecord {
-                            result_set_id: stream_context.result_set_id.clone(),
-                            buffered_row_count,
-                            total_row_count: None,
-                            status: QueryResultSetStatus::Cancelled,
-                            completed_at: Some(iso_timestamp()),
-                            last_error: Some(cancelled.clone()),
-                        },
-                        QueryResultStreamStatus::Cancelled,
-                        0,
-                        "Query result streaming was cancelled.".to_string(),
-                    ).await?;
-                    return Err(cancelled);
+                    Err(cancelled_query_error())
                 }
             }?;
 
-            let Some(row) = next_row else {
-                break;
-            };
-
-            batch.push(read_query_result_row(&row, &result_columns));
-            if batch.len() >= RESULT_BATCH_SIZE {
-                buffered_row_count =
-                    flush_result_batch(&stream_context, &mut batch, buffered_row_count).await?;
+            ExecutedQueryResult::ReplayableRows {
+                columns: result_columns,
+                initial_total_row_count,
             }
-        }
+        } else {
+            let row_stream = tokio::select! {
+                result = client.query_raw(&statement, std::iter::empty::<&str>()) => {
+                    result.map_err(normalize_query_error)
+                }
+                _ = cancellation.cancelled() => {
+                    cancel_active_query(&cancel_token, session.ssl_mode).await?;
+                    Err(cancelled_query_error())
+                }
+            }?;
+            tokio::pin!(row_stream);
 
-        if !batch.is_empty() {
-            buffered_row_count =
-                flush_result_batch(&stream_context, &mut batch, buffered_row_count).await?;
-        }
+            let mut rows = Vec::new();
+            loop {
+                let next_row = tokio::select! {
+                    next = row_stream.next() => match next {
+                        Some(Ok(row)) => Ok(Some(row)),
+                        Some(Err(error)) => Err(normalize_query_error(error)),
+                        None => Ok(None),
+                    },
+                    _ = cancellation.cancelled() => {
+                        cancel_active_query(&cancel_token, session.ssl_mode).await?;
+                        Err(cancelled_query_error())
+                    }
+                }?;
 
-        let completed_at = iso_timestamp();
-        finalize_result_set(
-            &stream_context,
-            FinalizeQueryResultSetRecord {
-                result_set_id: stream_context.result_set_id.clone(),
-                buffered_row_count,
-                total_row_count: Some(buffered_row_count),
-                status: QueryResultSetStatus::Completed,
-                completed_at: Some(completed_at),
-                last_error: None,
-            },
-            QueryResultStreamStatus::Completed,
-            0,
-            format!("Cached {buffered_row_count} query result rows."),
+                let Some(row) = next_row else {
+                    break;
+                };
+                rows.push(read_query_result_row(&row, &result_columns));
+            }
+
+            ExecutedQueryResult::BufferedRows {
+                columns: result_columns,
+                rows,
+            }
+        };
+
+        Ok((result, start.elapsed().as_millis() as u64))
+    }
+}
+
+pub(crate) async fn load_replayable_query_result_window(
+    session: ActiveSessionRuntime,
+    handle: &ReplayableQueryResultHandle,
+    request: &QueryResultWindowRequest,
+) -> Result<QueryResultWindow, AppError> {
+    let pool = session.pool.ok_or_else(|| {
+        AppError::internal(
+            "query_missing_active_pool",
+            "The active PostgreSQL session does not have a live runtime pool.",
+            Some(session.snapshot.connection_id.clone()),
         )
-        .await?;
+    })?;
+    let client = pool.get().await.map_err(|error| {
+        AppError::internal(
+            "query_client_checkout_failed",
+            "Failed to borrow a PostgreSQL client for query execution.",
+            Some(error.to_string()),
+        )
+    })?;
 
-        Ok((
-            QueryExecutionResult::Rows {
-                summary: QueryResultSetSummary {
-                    result_set_id: stream_context.result_set_id,
-                    columns: result_columns,
-                    buffered_row_count,
-                    total_row_count: Some(buffered_row_count),
-                    status: QueryResultStatus::Completed,
-                },
-            },
-            start.elapsed().as_millis() as u64,
-        ))
-    }
+    let total_row_count =
+        count_replayable_query_rows(&client, &handle.sql, &handle.columns, "", &[]).await?;
+    let visible_row_count = if request.quick_filter.trim().is_empty() && request.filters.is_empty()
+    {
+        total_row_count
+    } else {
+        count_replayable_query_rows(
+            &client,
+            &handle.sql,
+            &handle.columns,
+            &request.quick_filter,
+            &request.filters,
+        )
+        .await?
+    };
+
+    let rows = query_replayable_rows(&client, handle, request).await?;
+
+    Ok(QueryResultWindow {
+        result_set_id: handle.result_set_id.clone(),
+        offset: request.offset,
+        limit: request.limit,
+        rows,
+        visible_row_count,
+        buffered_row_count: total_row_count,
+        total_row_count: Some(total_row_count),
+        status: QueryResultStatus::Completed,
+        sort: request.sort.clone(),
+        filters: request.filters.clone(),
+        quick_filter: request.quick_filter.clone(),
+    })
 }
 
-async fn create_result_set(
-    context: &QueryResultStreamContext,
+async fn count_replayable_query_rows(
+    client: &Client,
+    sql: &str,
     columns: &[QueryResultColumn],
-) -> Result<(), AppError> {
-    let repository = context.repository.clone();
-    let record = CreateQueryResultSetRecord {
-        result_set_id: context.result_set_id.clone(),
-        job_id: context.job_id.clone(),
-        tab_id: context.tab_id.clone(),
-        connection_id: context.connection_id.clone(),
-        sql: context.sql.clone(),
-        columns: columns.to_vec(),
-        created_at: context.started_at.clone(),
-    };
-
-    task::spawn_blocking(move || repository.create_query_result_set(record))
-        .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_result_set_create_join_failed",
-                "Failed to join query result cache creation.",
-                Some(error.to_string()),
-            )
-        })??;
-
-    Ok(())
-}
-
-async fn flush_result_batch(
-    context: &QueryResultStreamContext,
-    batch: &mut Vec<Vec<QueryResultCell>>,
-    buffered_row_count: usize,
+    quick_filter: &str,
+    filters: &[QueryResultFilter],
 ) -> Result<usize, AppError> {
-    let chunk_row_count = batch.len();
-    let next_rows = std::mem::take(batch);
-    let updated_row_count = buffered_row_count + chunk_row_count;
-    let repository = context.repository.clone();
-    let record = AppendQueryResultRowsRecord {
-        result_set_id: context.result_set_id.clone(),
-        starting_row_index: buffered_row_count,
-        rows: next_rows,
-        buffered_row_count: updated_row_count,
-    };
-
-    task::spawn_blocking(move || repository.append_query_result_rows(record))
+    let mut params = Vec::new();
+    let where_clause = build_replayable_where_clause(columns, quick_filter, filters, &mut params);
+    let query = format!(
+        "select count(*) from ({}) as sparow_source{where_clause}",
+        trimmed_statement(sql)
+    );
+    let count = query_single_i64(client, &query, &params)
         .await
         .map_err(|error| {
             AppError::internal(
-                "query_result_batch_join_failed",
-                "Failed to join cached query result persistence.",
+                "query_result_count_failed",
+                "Failed to count PostgreSQL query result rows.",
                 Some(error.to_string()),
             )
-        })??;
+        })?;
 
-    emit_stream_event(
-        context,
-        QueryResultStreamEvent {
-            job_id: context.job_id.clone(),
-            correlation_id: context.correlation_id.clone(),
-            tab_id: context.tab_id.clone(),
-            connection_id: context.connection_id.clone(),
-            result_set_id: context.result_set_id.clone(),
-            status: QueryResultStreamStatus::RowsBuffered,
-            buffered_row_count: updated_row_count,
-            total_row_count: None,
-            chunk_row_count,
-            columns: None,
-            message: format!("Buffered {updated_row_count} rows into the cached result set."),
-            started_at: context.started_at.clone(),
-            timestamp: iso_timestamp(),
-            last_error: None,
-        },
-    )?;
-
-    Ok(updated_row_count)
+    Ok(count.max(0) as usize)
 }
 
-async fn finalize_result_set(
-    context: &QueryResultStreamContext,
-    record: FinalizeQueryResultSetRecord,
-    stream_status: QueryResultStreamStatus,
-    chunk_row_count: usize,
-    message: String,
-) -> Result<(), AppError> {
-    let repository = context.repository.clone();
-    let buffered_row_count = record.buffered_row_count;
-    let total_row_count = record.total_row_count;
-    let last_error = record.last_error.clone();
+async fn query_replayable_rows(
+    client: &Client,
+    handle: &ReplayableQueryResultHandle,
+    request: &QueryResultWindowRequest,
+) -> Result<Vec<Vec<QueryResultCell>>, AppError> {
+    let mut params = Vec::new();
+    let where_clause = build_replayable_where_clause(
+        &handle.columns,
+        &request.quick_filter,
+        &request.filters,
+        &mut params,
+    );
+    let order_clause = build_replayable_order_clause(&handle.columns, request.sort.as_ref());
+    let limit_placeholder = push_integer_param(&mut params, request.limit as i64);
+    let offset_placeholder = push_integer_param(&mut params, request.offset as i64);
+    let query = format!(
+        "select * from ({}) as sparow_source{where_clause}{order_clause} limit {limit_placeholder} offset {offset_placeholder}",
+        trimmed_statement(&handle.sql)
+    );
 
-    task::spawn_blocking(move || repository.finalize_query_result_set(record))
+    let rows = query_rows(client, &query, &params).await.map_err(|error| {
+        AppError::internal(
+            "query_result_window_query_failed",
+            "Failed to read PostgreSQL query result rows.",
+            Some(error.to_string()),
+        )
+    })?;
+
+    Ok(rows
+        .iter()
+        .map(|row| read_query_result_row(row, &handle.columns))
+        .collect())
+}
+
+async fn query_single_i64(
+    client: &Client,
+    query: &str,
+    params: &[ReplayQueryParam],
+) -> Result<i64, tokio_postgres::Error> {
+    let param_refs = params
+        .iter()
+        .map(ReplayQueryParam::as_tosql)
+        .collect::<Vec<_>>();
+
+    client
+        .query_one(query, &param_refs)
         .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_result_finalize_join_failed",
-                "Failed to join cached query result finalization.",
-                Some(error.to_string()),
-            )
-        })??;
-
-    emit_stream_event(
-        context,
-        QueryResultStreamEvent {
-            job_id: context.job_id.clone(),
-            correlation_id: context.correlation_id.clone(),
-            tab_id: context.tab_id.clone(),
-            connection_id: context.connection_id.clone(),
-            result_set_id: context.result_set_id.clone(),
-            status: stream_status,
-            buffered_row_count,
-            total_row_count,
-            chunk_row_count,
-            columns: None,
-            message,
-            started_at: context.started_at.clone(),
-            timestamp: iso_timestamp(),
-            last_error,
-        },
-    )?;
-
-    Ok(())
+        .map(|row| row.get(0))
 }
 
-fn emit_stream_event(
-    context: &QueryResultStreamContext,
-    event: QueryResultStreamEvent,
-) -> Result<(), AppError> {
-    if let Some(app) = context.app.as_ref() {
-        emit_query_result_stream_event(app, &event)?;
+async fn query_rows(
+    client: &Client,
+    query: &str,
+    params: &[ReplayQueryParam],
+) -> Result<Vec<Row>, tokio_postgres::Error> {
+    let param_refs = params
+        .iter()
+        .map(ReplayQueryParam::as_tosql)
+        .collect::<Vec<_>>();
+
+    client.query(query, &param_refs).await
+}
+
+fn build_replayable_where_clause(
+    columns: &[QueryResultColumn],
+    quick_filter: &str,
+    filters: &[QueryResultFilter],
+    params: &mut Vec<ReplayQueryParam>,
+) -> String {
+    let mut clauses = Vec::new();
+    let normalized_quick_filter = quick_filter.trim().to_lowercase();
+
+    if !normalized_quick_filter.is_empty() && !columns.is_empty() {
+        let quick_filter_pattern = format!("%{normalized_quick_filter}%");
+        let expressions = columns
+            .iter()
+            .map(|column| {
+                let placeholder = push_text_param(params, quick_filter_pattern.clone());
+                format!(
+                    "lower(coalesce({}, '')) like {placeholder}",
+                    replayable_text_expression(&column.name)
+                )
+            })
+            .collect::<Vec<_>>();
+        clauses.push(format!("({})", expressions.join(" or ")));
     }
 
-    Ok(())
+    for filter in filters {
+        if filter.value.trim().is_empty() {
+            continue;
+        }
+
+        let Some(column) = columns.get(filter.column_index) else {
+            continue;
+        };
+        let placeholder =
+            push_text_param(params, format!("%{}%", filter.value.trim().to_lowercase()));
+        match filter.mode {
+            QueryResultFilterMode::Contains => clauses.push(format!(
+                "lower(coalesce({}, '')) like {placeholder}",
+                replayable_text_expression(&column.name)
+            )),
+        }
+    }
+
+    if clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" where {}", clauses.join(" and "))
+    }
+}
+
+fn build_replayable_order_clause(
+    columns: &[QueryResultColumn],
+    sort: Option<&QueryResultSort>,
+) -> String {
+    let Some(sort) = sort else {
+        return String::new();
+    };
+    let Some(column) = columns.get(sort.column_index) else {
+        return String::new();
+    };
+
+    let direction = match sort.direction {
+        QueryResultSortDirection::Asc => "asc",
+        QueryResultSortDirection::Desc => "desc",
+    };
+    let expression = match column.semantic_type {
+        QueryResultColumnSemanticType::Number => {
+            format!(
+                "cast(nullif({}, '') as double precision)",
+                replayable_text_expression(&column.name)
+            )
+        }
+        QueryResultColumnSemanticType::Boolean => {
+            format!(
+                "cast(nullif({}, '') as boolean)",
+                replayable_text_expression(&column.name)
+            )
+        }
+        _ => format!(
+            "lower(coalesce({}, ''))",
+            replayable_text_expression(&column.name)
+        ),
+    };
+
+    format!(" order by {expression} {direction} nulls last, to_jsonb(sparow_source)::text asc")
+}
+
+fn replayable_text_expression(column_name: &str) -> String {
+    format!(
+        "to_jsonb(sparow_source) ->> {}",
+        sql_string_literal(column_name)
+    )
+}
+
+fn push_text_param(params: &mut Vec<ReplayQueryParam>, value: String) -> String {
+    params.push(ReplayQueryParam::Text(value));
+    format!("${}", params.len())
+}
+
+fn push_integer_param(params: &mut Vec<ReplayQueryParam>, value: i64) -> String {
+    params.push(ReplayQueryParam::Integer(value));
+    format!("${}", params.len())
+}
+
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+fn trimmed_statement(sql: &str) -> String {
+    sql.trim().trim_end_matches(';').trim().to_string()
+}
+
+fn is_replayable_sql(sql: &str) -> bool {
+    matches!(
+        leading_sql_keyword(sql).as_deref(),
+        Some("SELECT" | "WITH" | "VALUES" | "TABLE")
+    )
+}
+
+fn leading_sql_keyword(sql: &str) -> Option<String> {
+    let mut remaining = sql.trim_start();
+    loop {
+        if let Some(stripped) = remaining.strip_prefix("--") {
+            remaining = stripped
+                .split_once('\n')
+                .map(|(_, rest)| rest)
+                .unwrap_or("");
+            remaining = remaining.trim_start();
+            continue;
+        }
+
+        if let Some(stripped) = remaining.strip_prefix("/*") {
+            remaining = stripped
+                .split_once("*/")
+                .map(|(_, rest)| rest)
+                .unwrap_or("");
+            remaining = remaining.trim_start();
+            continue;
+        }
+
+        break;
+    }
+
+    remaining
+        .split_whitespace()
+        .next()
+        .map(|keyword| keyword.to_ascii_uppercase())
 }
 
 fn build_query_result_column(column: &tokio_postgres::Column) -> QueryResultColumn {
@@ -375,7 +468,10 @@ fn build_query_result_column(column: &tokio_postgres::Column) -> QueryResultColu
     }
 }
 
-fn read_query_result_row(row: &Row, columns: &[QueryResultColumn]) -> Vec<QueryResultCell> {
+pub(crate) fn read_query_result_row(
+    row: &Row,
+    columns: &[QueryResultColumn],
+) -> Vec<QueryResultCell> {
     columns
         .iter()
         .enumerate()
@@ -539,11 +635,7 @@ fn semantic_type_for_postgres_type(postgres_type: &str) -> QueryResultColumnSema
 }
 
 fn command_tag_for(sql: &str) -> String {
-    sql.split_whitespace()
-        .next()
-        .map(|keyword| keyword.to_ascii_uppercase())
-        .filter(|keyword| !keyword.is_empty())
-        .unwrap_or_else(|| "QUERY".to_string())
+    leading_sql_keyword(sql).unwrap_or_else(|| "QUERY".to_string())
 }
 
 async fn cancel_active_query(

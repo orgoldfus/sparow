@@ -1,6 +1,6 @@
 # Result Viewer Harness
 
-Use the browser harness when you need to inspect or iterate on the Phase 5 cached result viewer without launching Tauri or a live database session.
+Use the browser harness when you need to inspect or iterate on the Phase 5 result viewer without launching Tauri or a live database session.
 
 ## Commands
 - `npm run ui:harness`
@@ -12,17 +12,17 @@ Use the browser harness when you need to inspect or iterate on the Phase 5 cache
 
 ## Harness Scenarios
 - `Command result`
-  - Command-only query with no cached row set
+  - Command-only query with no row result
 - `Small completed rows`
   - Finished compact result set for density and empty-state checks
-- `Large streaming rows`
-  - Partial cached result with streaming copy and buffered-row counters
+- `Query running`
+  - A running query before a result set is available
 - `Large completed rows`
-  - Full cached result for scrolling, sort, filter, and export interactions
+  - Large completed result for scrolling, sort, filter, and export interactions
 - `Query failed`
   - Failed execution state before a usable row grid exists
 - `Query cancelled`
-  - Cancelled execution with partial cache metadata
+  - Cancelled execution before a result grid was available
 - `Export running`
   - Completed result set with an active export
 - `Export failed`

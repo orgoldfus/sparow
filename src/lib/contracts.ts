@@ -1,7 +1,6 @@
 export const BACKGROUND_JOB_EVENT = 'foundation://job-progress';
 export const SCHEMA_REFRESH_EVENT = 'schema://refresh-progress';
 export const QUERY_EXECUTION_EVENT = 'query://execution-progress';
-export const QUERY_RESULT_STREAM_EVENT = 'query://result-stream';
 export const QUERY_RESULT_EXPORT_EVENT = 'query://result-export-progress';
 
 export type AppEnvironment = 'development' | 'production' | 'test';
@@ -16,12 +15,6 @@ export type SchemaRefreshStatus = 'queued' | 'running' | 'completed' | 'failed';
 export type QueryExecutionOrigin = 'selection' | 'current-statement';
 export type QueryExecutionStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
 export type QueryResultStatus = 'running' | 'completed' | 'cancelled' | 'failed';
-export type QueryResultStreamStatus =
-  | 'metadata-ready'
-  | 'rows-buffered'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
 export type QueryResultExportStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
 export type QueryResultColumnSemanticType =
   | 'text'
@@ -327,23 +320,6 @@ export type QueryResultWindow = {
   sort: QueryResultSort | null;
   filters: QueryResultFilter[];
   quickFilter: string;
-};
-
-export type QueryResultStreamEvent = {
-  jobId: string;
-  correlationId: string;
-  tabId: string;
-  connectionId: string;
-  resultSetId: string;
-  status: QueryResultStreamStatus;
-  bufferedRowCount: number;
-  totalRowCount: number | null;
-  chunkRowCount: number;
-  columns: QueryResultColumn[] | null;
-  message: string;
-  startedAt: string;
-  timestamp: string;
-  lastError: AppError | null;
 };
 
 export type QueryResultExportRequest = {

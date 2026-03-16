@@ -10,10 +10,8 @@ import type {
   QueryResultExportProgressEvent,
   QueryResultExportStatus,
   QueryResultFilter,
-  QueryResultStatus,
   QueryResultSetSummary,
   QueryResultSort,
-  QueryResultStreamEvent,
   QueryResultWindow,
 } from '../../lib/contracts';
 import {
@@ -46,7 +44,6 @@ export type QueryTabExecutionState = {
 
 export type QueryTabResultState = {
   summary: QueryResultSetSummary | null;
-  latestStreamEvent: QueryResultStreamEvent | null;
   window: QueryResultWindow | null;
   windowStatus: QueryResultWindowStatus;
   windowError: AppError | null;
@@ -77,7 +74,6 @@ type UseQueryWorkspaceArgs = {
   activeSession: DatabaseSessionSnapshot | null;
   connections: ConnectionSummary[];
   queryEvents: QueryExecutionProgressEvent[];
-  resultStreamEvents: QueryResultStreamEvent[];
   resultExportEvents: QueryResultExportProgressEvent[];
   selectedConnectionId: string | null;
   onError: (error: AppError) => void;
@@ -113,7 +109,6 @@ export function useQueryWorkspace({
   activeSession,
   connections,
   queryEvents,
-  resultStreamEvents,
   resultExportEvents,
   selectedConnectionId,
   onError,
@@ -121,7 +116,6 @@ export function useQueryWorkspace({
   const [tabs, setTabs] = useState<QueryTabState[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const seenQueryEventsRef = useRef<Set<string>>(new Set());
-  const seenResultStreamEventsRef = useRef<Set<string>>(new Set());
   const seenResultExportEventsRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<QueryTabState[]>(tabs);
   const activeTabExecutionJobId = tabs.find((tab) => tab.id === activeTabId)?.execution.jobId ?? null;
@@ -190,28 +184,6 @@ export function useQueryWorkspace({
       });
     });
   }, [queryEvents]);
-
-  useEffect(() => {
-    const unseenEvents = resultStreamEvents
-      .toReversed()
-      .filter((event) =>
-        markEventIfUnseen(seenResultStreamEventsRef.current, eventSignatureForResultStreamEvent(event)),
-      );
-
-    if (unseenEvents.length === 0) {
-      return;
-    }
-
-    startTransition(() => {
-      commitTabs((currentTabs) => {
-        let nextTabs = currentTabs;
-        for (const event of unseenEvents) {
-          nextTabs = nextTabs.map((tab) => (tab.id === event.tabId ? applyResultStreamEvent(tab, event) : tab));
-        }
-        return nextTabs;
-      });
-    });
-  }, [resultStreamEvents]);
 
   useEffect(() => {
     const unseenEvents = resultExportEvents
@@ -703,7 +675,6 @@ function createTabState(targetConnectionId: string | null): QueryTabState {
 function resetResultState(): QueryTabResultState {
   return {
     summary: null,
-    latestStreamEvent: null,
     window: null,
     windowStatus: 'idle',
     windowError: null,
@@ -778,46 +749,6 @@ function applyQueryEvent(tab: QueryTabState, event: QueryExecutionProgressEvent)
   };
 }
 
-function applyResultStreamEvent(tab: QueryTabState, event: QueryResultStreamEvent): QueryTabState {
-  const previousSummary = tab.result.summary;
-  const columns = event.columns ?? previousSummary?.columns ?? [];
-  const nextStatus = resultStatusForStreamEvent(event, previousSummary?.status);
-  const nextSummary =
-    columns.length > 0 || previousSummary?.resultSetId === event.resultSetId
-      ? {
-          resultSetId: event.resultSetId,
-          columns,
-          bufferedRowCount: event.bufferedRowCount,
-          totalRowCount: event.totalRowCount ?? previousSummary?.totalRowCount ?? null,
-          status: nextStatus,
-        }
-      : previousSummary;
-  const countsAdvanced =
-    event.bufferedRowCount > (previousSummary?.bufferedRowCount ?? 0) ||
-    (event.totalRowCount !== null && event.totalRowCount > (previousSummary?.totalRowCount ?? 0));
-  const shouldResetWindow = countsAdvanced || !shouldKeepWindow(tab.result.window, event.resultSetId);
-  const shouldResetViewerDescriptors = previousSummary?.resultSetId !== event.resultSetId;
-  const nextResult = shouldResetViewerDescriptors ? resetViewerDescriptors(tab.result) : tab.result;
-
-  return {
-    ...tab,
-    lastExecutionSummary: event.message,
-    result: {
-      ...nextResult,
-      summary: nextSummary,
-      latestStreamEvent: event,
-      exportOutputPath:
-        nextSummary && nextResult.exportOutputPath.length === 0
-          ? defaultExportPath(nextSummary.resultSetId)
-          : nextResult.exportOutputPath,
-      window: shouldResetWindow ? null : nextResult.window,
-      windowStatus: shouldResetWindow ? 'idle' : nextResult.windowStatus,
-      requestedWindowSignature: shouldResetWindow ? null : nextResult.requestedWindowSignature,
-      windowError: shouldResetWindow ? null : nextResult.windowError,
-    },
-  };
-}
-
 function applyResultExportEvent(
   tab: QueryTabState,
   event: QueryResultExportProgressEvent,
@@ -851,7 +782,7 @@ function summarizeExecutionEvent(event: QueryExecutionProgressEvent): string {
 
   if (event.result?.kind === 'rows') {
     const total = event.result.totalRowCount ?? event.result.bufferedRowCount;
-    return `${total} cached row${total === 1 ? '' : 's'} ready${isTerminalResultStatus(event.result.status) ? '.' : ' so far.'}`;
+    return `${total} row${total === 1 ? '' : 's'} ready.`;
   }
 
   return event.message;
@@ -863,14 +794,6 @@ function isTerminalStatus(status: QueryExecutionStatus): boolean {
 
 function isTerminalExportStatus(status: QueryResultExportStatus): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed';
-}
-
-function isTerminalResultStatus(status: QueryResultStatus): boolean {
-  return status === 'completed' || status === 'cancelled' || status === 'failed';
-}
-
-function shouldKeepWindow(window: QueryResultWindow | null, resultSetId: string): boolean {
-  return window?.resultSetId === resultSetId;
 }
 
 function invalidateWindow(result: QueryTabResultState): QueryTabResultState {
@@ -908,22 +831,6 @@ function mergeSummaryFromWindow(
   };
 }
 
-function resultStatusForStreamEvent(
-  event: QueryResultStreamEvent,
-  previousStatus: QueryResultStatus | undefined,
-): QueryResultStatus {
-  switch (event.status) {
-    case 'completed':
-    case 'cancelled':
-    case 'failed':
-      return event.status;
-    case 'metadata-ready':
-    case 'rows-buffered':
-      void previousStatus;
-      return 'running';
-  }
-}
-
 function defaultExportPath(resultSetId: string): string {
   return `./sparow-result-${resultSetId.slice(0, 8)}.csv`;
 }
@@ -945,10 +852,6 @@ function eventSignatureForQueryEvent(event: QueryExecutionProgressEvent): string
     event.elapsedMs,
     event.message,
   ].join(':');
-}
-
-function eventSignatureForResultStreamEvent(event: QueryResultStreamEvent): string {
-  return [event.jobId, event.status, event.timestamp, event.bufferedRowCount, event.chunkRowCount].join(':');
 }
 
 function eventSignatureForResultExportEvent(event: QueryResultExportProgressEvent): string {

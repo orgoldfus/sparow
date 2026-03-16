@@ -26,7 +26,6 @@ import queryExecutionRequestFixture from '../../fixtures/contracts/query-executi
 import queryResultExportAcceptedFixture from '../../fixtures/contracts/query-result-export-accepted.json';
 import queryResultExportProgressFixture from '../../fixtures/contracts/query-result-export-progress.json';
 import queryResultExportRequestFixture from '../../fixtures/contracts/query-result-export-request.json';
-import queryResultStreamFixture from '../../fixtures/contracts/query-result-stream.json';
 import queryResultWindowFixture from '../../fixtures/contracts/query-result-window.json';
 import queryResultWindowRequestFixture from '../../fixtures/contracts/query-result-window-request.json';
 import {
@@ -52,7 +51,6 @@ import {
   isQueryResultFilter,
   isQueryResultSetSummary,
   isQueryResultSort,
-  isQueryResultStreamEvent,
   isQueryResultWindow,
   isQueryResultWindowRequest,
   isRefreshSchemaScopeRequest,
@@ -187,10 +185,6 @@ describe('contract fixtures', () => {
 
   it('validate the query result window fixture', () => {
     expect(isQueryResultWindow(queryResultWindowFixture)).toBe(true);
-  });
-
-  it('validate the query result stream fixture', () => {
-    expect(isQueryResultStreamEvent(queryResultStreamFixture)).toBe(true);
   });
 
   it('validate the query result export request fixture', () => {
@@ -384,13 +378,6 @@ describe('contract fixtures', () => {
       isQueryResultSetSummary({
         ...queryExecutionProgressFixture.result,
         bufferedRowCount: Number.NaN,
-      }),
-    ).toBe(false);
-
-    expect(
-      isQueryResultStreamEvent({
-        ...queryResultStreamFixture,
-        chunkRowCount: 1.5,
       }),
     ).toBe(false);
 

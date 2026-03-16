@@ -21,7 +21,6 @@ import type {
   QueryResultExportAccepted,
   QueryResultExportProgressEvent,
   QueryResultExportRequest,
-  QueryResultStreamEvent,
   QueryResultWindow,
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
@@ -48,7 +47,6 @@ import {
   isQueryResultExportAccepted,
   isQueryResultExportProgressEvent,
   isQueryResultExportRequest,
-  isQueryResultStreamEvent,
   isQueryResultWindow,
   isQueryResultWindowRequest,
   isSchemaRefreshAccepted,
@@ -233,19 +231,6 @@ export async function subscribeToQueryExecutionEvent(
 ): Promise<() => void> {
   return listen<unknown>(eventName, (event) => {
     if (!isQueryExecutionProgressEvent(event.payload)) {
-      throw new Error(`Invalid event payload for ${eventName}.`);
-    }
-
-    handler(event.payload);
-  });
-}
-
-export async function subscribeToQueryResultStreamEvent(
-  eventName: string,
-  handler: (payload: QueryResultStreamEvent) => void,
-): Promise<() => void> {
-  return listen<unknown>(eventName, (event) => {
-    if (!isQueryResultStreamEvent(event.payload)) {
       throw new Error(`Invalid event payload for ${eventName}.`);
     }
 

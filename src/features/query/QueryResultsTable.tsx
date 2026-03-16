@@ -167,7 +167,7 @@ export function QueryResultsTable({
   if (tab.result.windowStatus === 'failed') {
     return (
       <div className="px-4 py-6">
-        <EmptyPanel message={tab.result.windowError?.message ?? 'Failed to load the cached result window.'} />
+        <EmptyPanel message={tab.result.windowError?.message ?? 'Failed to load the query result window.'} />
       </div>
     );
   }
@@ -175,7 +175,7 @@ export function QueryResultsTable({
   if (totalRows === 0) {
     return (
       <div className="px-4 py-6">
-        <EmptyPanel message="The cached result contains no visible rows." />
+        <EmptyPanel message="The query result contains no visible rows." />
       </div>
     );
   }
@@ -389,9 +389,9 @@ function renderPlaceholderCell(column: Column<ResultGridRow>, rowIndex: number) 
       className="truncate border-r border-[var(--border-subtle)] px-3 py-2 font-mono text-[13px] last:border-r-0"
       key={`${column.id}-${rowIndex}`}
       role="gridcell"
-      title={meta.columnIndex === 0 ? 'Loading cached rows...' : ''}
+      title={meta.columnIndex === 0 ? 'Loading rows...' : ''}
     >
-      {meta.columnIndex === 0 ? 'Loading cached rows...' : ''}
+      {meta.columnIndex === 0 ? 'Loading rows...' : ''}
     </div>
   );
 }

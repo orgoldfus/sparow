@@ -350,15 +350,9 @@ export function QueryResultsPanel({
                 />
               </label>
 
-              {tab?.result.latestStreamEvent && summary?.status === 'running' ? (
-                <span className="text-xs text-[var(--text-secondary)]" data-testid="result-streaming-note">
-                  Viewer reflects cached rows only while streaming continues.
-                </span>
-              ) : (
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {activeSession ? `Connected to ${activeSession.name}` : 'Connect a saved target to run queries.'}
-                </span>
-              )}
+              <span className="text-xs text-[var(--text-secondary)]">
+                {activeSession ? `Connected to ${activeSession.name}` : 'Connect a saved target to run queries.'}
+              </span>
             </div>
           </div>
 
@@ -380,10 +374,10 @@ export function QueryResultsPanel({
                 <EmptyPanel
                   message={
                     tab?.execution.status === 'failed'
-                      ? tab.execution.lastError?.message ?? 'The last query failed before rows were cached.'
+                      ? tab.execution.lastError?.message ?? 'The last query failed before a result set was available.'
                       : tab?.execution.status === 'running'
                         ? 'Waiting for result metadata from the running query.'
-                        : 'Run a query to populate the cached result grid.'
+                        : 'Run a query to populate the result grid.'
                   }
                 />
               </div>
@@ -406,12 +400,12 @@ export function QueryResultsPanel({
             </article>
 
             <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Cached result</p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">Query result</p>
               <div className="mt-3 grid gap-2 text-sm text-[var(--text-secondary)]">
                 <p>Result set: {summary?.resultSetId ?? 'none'}</p>
                 <p>Columns: {summary ? formatResultColumns(summary.columns) : 'n/a'}</p>
                 <p>
-                  Rows buffered:{' '}
+                  Rows available:{' '}
                   {summary ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}` : 'n/a'}
                 </p>
                 <p>Window state: {tab?.result.windowStatus ?? 'idle'}</p>
@@ -494,12 +488,12 @@ function resultStatusBadgeVariant(status: QueryResultStatus): 'accent' | 'succes
 function resultStatusLabel(status: QueryResultStatus): string {
   switch (status) {
     case 'completed':
-      return 'cached result complete';
+      return 'result ready';
     case 'cancelled':
-      return 'cached result cancelled';
+      return 'result cancelled';
     case 'failed':
-      return 'cached result failed';
+      return 'result failed';
     case 'running':
-      return 'streaming cached rows';
+      return 'loading result';
   }
 }

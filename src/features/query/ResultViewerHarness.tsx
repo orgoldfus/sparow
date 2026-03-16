@@ -12,7 +12,6 @@ import type {
   QueryResultStatus,
   QueryResultSetSummary,
   QueryResultSort,
-  QueryResultStreamEvent,
 } from '../../lib/contracts';
 import type {
   QueryTabResultState,
@@ -23,7 +22,7 @@ import type {
 type HarnessScenarioId =
   | 'command'
   | 'small-complete'
-  | 'large-streaming'
+  | 'query-running'
   | 'large-complete'
   | 'query-failed'
   | 'query-cancelled'
@@ -179,7 +178,7 @@ export function ResultViewerHarness() {
             message:
               scenarioId === 'export-failed'
                 ? 'Harness export failed after writing a partial CSV.'
-                : 'Harness export is streaming rows to CSV.',
+                : 'Harness export is writing rows to CSV.',
             startedAt: '2026-03-12T08:10:00.000Z',
             finishedAt: scenarioId === 'export-failed' ? '2026-03-12T08:10:01.000Z' : null,
             lastError:
@@ -230,7 +229,7 @@ export function ResultViewerHarness() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Result Viewer Harness</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">Agent-visible cached result scenarios</h1>
+              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">Agent-visible result scenarios</h1>
             </div>
             <div className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-1 text-xs text-[var(--text-secondary)]">
               `/?harness=results`
@@ -283,12 +282,11 @@ export function ResultViewerHarness() {
 
 function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows: QueryResultCell[][]; label: string; description: string; id: HarnessScenarioId }> {
   const summary = buildSummary('harness-large-complete', baseRows.length, baseRows.length, 'completed');
-  const streamingSummary = buildSummary('harness-large-stream', 620, null, 'running');
   return {
     command: {
       id: 'command',
       label: 'Command result',
-      description: 'Completed command-only query with no cached row set.',
+      description: 'Completed command-only query with no row grid.',
       rows: [],
       tab: buildTab({
         title: 'vacuum analyze',
@@ -313,27 +311,22 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
         },
       }),
     },
-    'large-streaming': {
-      id: 'large-streaming',
-      label: 'Large streaming rows',
-      description: 'Rows are still buffering, so the grid should stay honest about partial viewer semantics.',
-      rows: baseRows.slice(0, 620),
+    'query-running': {
+      id: 'query-running',
+      label: 'Query running',
+      description: 'A running query before result metadata is available.',
+      rows: [],
       tab: buildTab({
         title: 'select * from customers order by id',
         status: 'running',
-        result: { kind: 'rows', ...streamingSummary },
-        resultState: {
-          ...emptyResultState(),
-          summary: streamingSummary,
-          latestStreamEvent: buildStreamEvent('rows-buffered', streamingSummary),
-          exportOutputPath: './large-streaming.csv',
-        },
+        result: null,
+        resultState: emptyResultState(),
       }),
     },
     'large-complete': {
       id: 'large-complete',
       label: 'Large completed rows',
-      description: 'Full cached result with inline sort and per-column filters available.',
+      description: 'Full result with inline sort and per-column filters available.',
       rows: baseRows,
       tab: buildTab({
         title: 'select * from customers order by id',
@@ -342,7 +335,6 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
         resultState: {
           ...emptyResultState(),
           summary,
-          latestStreamEvent: buildStreamEvent('completed', summary),
           exportOutputPath: './large-complete.csv',
         },
       }),
@@ -363,25 +355,20 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
     'query-cancelled': {
       id: 'query-cancelled',
       label: 'Query cancelled',
-      description: 'A cancelled result stream with partial rows already buffered.',
-      rows: baseRows.slice(0, 180),
+      description: 'A cancelled query before a result grid was available.',
+      rows: [],
       tab: buildTab({
         title: 'select * from customers, generate_series(1, 100000)',
         status: 'cancelled',
         result: null,
-        resultState: {
-          ...emptyResultState(),
-          summary: buildSummary('harness-cancelled', 180, null, 'cancelled'),
-          latestStreamEvent: buildStreamEvent('cancelled', buildSummary('harness-cancelled', 180, null, 'cancelled')),
-          exportOutputPath: './cancelled.csv',
-        },
+        resultState: emptyResultState(),
         lastError: buildError('query_cancelled', 'The running query was cancelled.'),
       }),
     },
     'export-running': {
       id: 'export-running',
       label: 'Export running',
-      description: 'Completed cached result with an in-flight CSV export.',
+      description: 'Completed result with an in-flight CSV export.',
       rows: baseRows,
       tab: buildTab({
         title: 'select * from customers',
@@ -390,7 +377,6 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
         resultState: {
           ...emptyResultState(),
           summary,
-          latestStreamEvent: buildStreamEvent('completed', summary),
           exportOutputPath: './export-running.csv',
           exportJobId: 'export-job-running',
           exportStatus: 'running',
@@ -401,7 +387,7 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
     'export-failed': {
       id: 'export-failed',
       label: 'Export failed',
-      description: 'Completed cached result whose CSV export terminated with an error.',
+      description: 'Completed result whose CSV export terminated with an error.',
       rows: baseRows,
       tab: buildTab({
         title: 'select * from customers',
@@ -410,7 +396,6 @@ function buildScenarios(): Record<HarnessScenarioId, { tab: QueryTabState; rows:
         resultState: {
           ...emptyResultState(),
           summary,
-          latestStreamEvent: buildStreamEvent('completed', summary),
           exportOutputPath: './export-failed.csv',
           exportStatus: 'failed',
           exportLastEvent: buildExportEvent('failed', './export-failed.csv', 32),
@@ -557,7 +542,6 @@ function toggleHarnessSort(sort: QueryResultSort | null, columnIndex: number): Q
 function emptyResultState(): QueryTabResultState {
   return {
     summary: null,
-    latestStreamEvent: null,
     window: null,
     windowStatus: 'idle',
     windowError: null,
@@ -585,25 +569,6 @@ function buildSummary(
     bufferedRowCount,
     totalRowCount,
     status,
-  };
-}
-
-function buildStreamEvent(status: QueryResultStreamEvent['status'], summary: QueryResultSetSummary): QueryResultStreamEvent {
-  return {
-    jobId: 'query-job-harness',
-    correlationId: 'query-correlation-harness',
-    tabId: 'tab-harness',
-    connectionId: activeSession.connectionId,
-    resultSetId: summary.resultSetId,
-    status,
-    bufferedRowCount: summary.bufferedRowCount,
-    totalRowCount: summary.totalRowCount,
-    chunkRowCount: status === 'rows-buffered' ? 120 : 0,
-    columns: status === 'metadata-ready' ? [...baseColumns] : null,
-    message: status === 'completed' ? 'Harness result cache completed.' : 'Harness streaming update.',
-    startedAt: '2026-03-12T08:00:00.000Z',
-    timestamp: '2026-03-12T08:00:01.000Z',
-    lastError: status === 'cancelled' ? buildError('query_cancelled', 'The running query was cancelled.') : null,
   };
 }
 

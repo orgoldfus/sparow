@@ -13,6 +13,20 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
+  - The Rust cleanup pass is now formatted and `clippy` clean under `-D warnings` with the direct-query result path in place.
+- 2026-03-16: Completed the cache-removal refactor by replacing the SQLite-backed query-result cache with a direct PostgreSQL window-loading path for replayable queries, a Rust in-memory fallback for non-replayable row-returning statements, and a matching cleanup of the obsolete result-stream contracts, fixtures, and tests.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed after removing the SQLite query-result cache and stream contract. Frontend typecheck, ESLint, 87 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining note is the pre-existing TanStack React Compiler warning around `useReactTable`, plus the known jsdom-only `flushSync` noise from the query workspace component tests.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/contract-fixtures.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx src/test/foundation-smoke.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ✅
+  - Focused cross-stack verification passed under Node `v24.13.0`. TypeScript stayed clean, the edited Vitest suites passed 74 tests, and the targeted Rust query-service test stayed green. The only remaining test noise in this pass is the pre-existing jsdom/TanStack `flushSync` warning emitted by the query workspace component tests.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/contract-fixtures.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx src/test/foundation-smoke.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ❌
+  - The first focused cross-stack verification failed at TypeScript on two dead helpers left behind in `src/features/query/useQueryWorkspace.ts` after removing the result-stream contract: `isTerminalResultStatus` and `shouldKeepWindow`.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ✅
+  - The targeted Rust pass now compiles and the focused query-service test is green. The remaining backend cleanup is explicit dead code from the removed result-stream event contract and a small `drop(writer)` no-op warning in the export cancellation path, both of which are being removed in the next cleanup pass.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ❌
+  - The first Rust compile pass after removing the SQLite result cache failed on three integration issues: `StreamExt` was missing from the new direct-query driver, the replay-query parameter buffer used `Box<dyn ToSql + Sync>` and made the Tauri/window-export futures non-`Send`, and the in-memory buffered-result sort helper missed the `QueryResultCell::Float` branch.
+- 2026-03-16: Started replacing the Phase 5 SQLite query-result cache with a direct PostgreSQL result-loading path so result windows and CSV export no longer depend on the local cached result tables.
 - 2026-03-16: Started a final follow-up CodeRabbit autofix pass after one more accessibility comment landed on the PR header controls; this pass is scoped to the remaining actionable chooser-button state and the standard verification/commit/push flow.
 - 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
   - The focused final follow-up verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
@@ -216,3 +230,6 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
   - The empty-results follow-up fix passes focused verification. The query workspace keeps rendering loaded rows when a fetched window reports `visibleRowCount = 0`, strict TypeScript is clean, and ESLint still reports only the expected TanStack React Compiler warning around `useReactTable`.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - Full verification passed after the empty-results follow-up. Frontend typecheck, ESLint, 87 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully, with the same expected TanStack React Compiler warning and jsdom-only `flushSync` noise from TanStack Virtual tests.
+- Final cleanup pass aligned Phase 5 docs and harness copy with the direct-query result implementation and removed the obsolete `scripts/inspect-result-cache.mjs` helper.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - Post-cleanup typecheck passed after the final harness/doc cleanup and the removal of the obsolete SQLite result-cache inspection script.

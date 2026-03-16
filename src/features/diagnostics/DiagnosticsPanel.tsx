@@ -8,7 +8,6 @@ import type {
   DatabaseSessionSnapshot,
   QueryExecutionProgressEvent,
   QueryResultExportProgressEvent,
-  QueryResultStreamEvent,
   SchemaNode,
   SchemaRefreshProgressEvent,
 } from '../../lib/contracts';
@@ -20,7 +19,6 @@ type DiagnosticsPanelProps = {
   recentEvents: BackgroundJobProgressEvent[];
   recentQueryEvents: QueryExecutionProgressEvent[];
   recentResultExportEvents: QueryResultExportProgressEvent[];
-  recentResultStreamEvents: QueryResultStreamEvent[];
   recentSchemaEvents: SchemaRefreshProgressEvent[];
   selectedSchemaNode: SchemaNode | null;
 };
@@ -32,7 +30,6 @@ export function DiagnosticsPanel({
   recentEvents,
   recentQueryEvents,
   recentResultExportEvents,
-  recentResultStreamEvents,
   recentSchemaEvents,
   selectedSchemaNode,
 }: DiagnosticsPanelProps) {
@@ -126,7 +123,6 @@ export function DiagnosticsPanel({
               {recentEvents.length +
                 recentSchemaEvents.length +
                 recentQueryEvents.length +
-                recentResultStreamEvents.length +
                 recentResultExportEvents.length}
             </Badge>
           </div>
@@ -134,7 +130,6 @@ export function DiagnosticsPanel({
             {recentQueryEvents.length > 0 ||
             recentSchemaEvents.length > 0 ||
             recentEvents.length > 0 ||
-            recentResultStreamEvents.length > 0 ||
             recentResultExportEvents.length > 0 ? (
               <>
                 {recentQueryEvents.slice(0, 4).map((event) => (
@@ -143,15 +138,6 @@ export function DiagnosticsPanel({
                     label={`${event.status} / ${event.tabId}`}
                     message={event.message}
                     meta={`Job ${event.jobId} / ${event.connectionId} / ${event.elapsedMs} ms`}
-                    tone={event.lastError ? 'danger' : 'default'}
-                  />
-                ))}
-                {recentResultStreamEvents.slice(0, 4).map((event) => (
-                  <EventRow
-                    key={`${event.jobId}-${event.status}-${event.timestamp}`}
-                    label={`${event.status} / ${event.resultSetId.slice(0, 8)}`}
-                    message={event.message}
-                    meta={`${event.connectionId} / ${event.bufferedRowCount} buffered`}
                     tone={event.lastError ? 'danger' : 'default'}
                   />
                 ))}

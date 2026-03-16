@@ -5,7 +5,6 @@ import type {
   ConnectionSummary,
   DatabaseSessionSnapshot,
   QueryExecutionProgressEvent,
-  QueryResultStreamEvent,
 } from '../lib/contracts';
 import {
   cancelQueryExecution,
@@ -103,18 +102,15 @@ const activeSession: DatabaseSessionSnapshot = {
 
 function Harness({
   queryEvents,
-  resultStreamEvents = [],
   onError,
 }: {
   queryEvents: QueryExecutionProgressEvent[];
-  resultStreamEvents?: QueryResultStreamEvent[];
   onError: (error: AppError) => void;
 }) {
   const workspace = useQueryWorkspace({
     activeSession,
     connections,
     queryEvents,
-    resultStreamEvents,
     resultExportEvents: [],
     selectedConnectionId: activeSession.connectionId,
     onError,
