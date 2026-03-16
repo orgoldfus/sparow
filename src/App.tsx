@@ -489,8 +489,8 @@ export default function App() {
                 onActivateConnection={workspace.activateConnection}
                 onCreateConnection={openNewConnectionDialog}
                 onDisconnectSelected={workspace.disconnectSelectedConnection}
-                onEditSelected={() => {
-                  openEditConnectionDialog();
+                onEditSelected={(connectionId) => {
+                  openEditConnectionDialog(connectionId);
                 }}
                 onSelectConnection={workspace.selectConnection}
                 selectedConnectionId={workspace.selectedConnectionId}

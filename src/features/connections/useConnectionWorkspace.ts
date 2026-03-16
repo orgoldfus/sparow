@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import type {
   AppBootstrap,
   AppError,
@@ -90,6 +90,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     disconnecting: false,
     deleting: false,
   });
+  const latestActivationIdRef = useRef(0);
 
   const loadedDraft = loadedDetails ? detailsToDraft(loadedDetails) : EMPTY_DRAFT;
   const draftErrors = validateDraft(draft);
@@ -255,18 +256,30 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
   }
 
   async function connectConnection(connectionId: string) {
+    const activationId = latestActivationIdRef.current + 1;
+    latestActivationIdRef.current = activationId;
     setPending((current) => ({ ...current, connecting: true }));
+    setSelectedConnectionId(connectionId);
 
     try {
-      setSelectedConnectionId(connectionId);
       const session =
         activeSession?.connectionId === connectionId ? activeSession : await connectSavedConnection(connectionId);
+      if (latestActivationIdRef.current !== activationId) {
+        return;
+      }
+
       setActiveSession(session);
       await refreshConnections(connectionId);
     } catch (caught) {
+      if (latestActivationIdRef.current !== activationId) {
+        return;
+      }
+
       onError(logger.asAppError(caught, 'connect_saved_connection'));
     } finally {
-      setPending((current) => ({ ...current, connecting: false }));
+      if (latestActivationIdRef.current === activationId) {
+        setPending((current) => ({ ...current, connecting: false }));
+      }
     }
   }
 

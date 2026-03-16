@@ -298,9 +298,16 @@ function renderHeaderCell(
   }
 
   const isSorted = tab.result.sort?.columnIndex === meta.columnIndex;
+  const ariaSort = !isSorted
+    ? 'none'
+    : tab.result.sort?.direction === 'asc'
+      ? 'ascending'
+      : 'descending';
 
   return (
     <button
+      aria-label={`Sort by ${meta.name}`}
+      aria-sort={ariaSort}
       className="flex items-center justify-between gap-2 border-r border-[var(--border-subtle)] px-3 py-2 text-left text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)] last:border-r-0"
       data-testid={`result-column-${meta.columnIndex}`}
       key={key}
@@ -349,6 +356,7 @@ function renderFilterCell(
       role="gridcell"
     >
       <input
+        aria-label={`Filter ${meta.name}`}
         className="w-full rounded-lg border border-transparent bg-[var(--surface-panel)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-accent)]"
         data-testid={`result-filter-${meta.columnIndex}`}
         placeholder={meta.name}

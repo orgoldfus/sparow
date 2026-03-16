@@ -1,6 +1,6 @@
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ForwardedRef, type HTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
@@ -33,17 +33,39 @@ const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
-}
+type ButtonOwnProps = VariantProps<typeof buttonVariants>;
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { asChild = false, className, size, variant, ...props },
-  ref,
-) {
-  const Comp = asChild ? Slot : 'button';
+type NativeButtonProps = ButtonOwnProps &
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    asChild?: false;
+  };
 
-  return <Comp className={cn(buttonVariants({ className, size, variant }))} ref={ref} {...props} />;
+type SlottedButtonProps = ButtonOwnProps &
+  HTMLAttributes<HTMLElement> & {
+    asChild: true;
+  };
+
+export type ButtonProps = NativeButtonProps | SlottedButtonProps;
+
+export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(props, ref) {
+  const { asChild = false, className, size, variant, ...restProps } = props;
+  const classNames = cn(buttonVariants({ className, size, variant }));
+
+  if (asChild) {
+    return <Slot className={classNames} ref={ref} {...restProps} />;
+  }
+
+  const buttonProps = { ...restProps } as ButtonHTMLAttributes<HTMLButtonElement>;
+
+  if (buttonProps.type == null) {
+    buttonProps.type = 'button';
+  }
+
+  return (
+    <button
+      className={classNames}
+      ref={ref as ForwardedRef<HTMLButtonElement>}
+      {...buttonProps}
+    />
+  );
 });

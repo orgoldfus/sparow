@@ -336,6 +336,7 @@ export function QueryResultsPanel({
               <label className="flex min-w-[240px] max-w-[420px] flex-1 items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2">
                 <Search className="h-4 w-4 text-[var(--text-muted)]" />
                 <input
+                  aria-label="Filter result rows"
                   className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   data-testid="result-quick-filter"
                   disabled={!summary}

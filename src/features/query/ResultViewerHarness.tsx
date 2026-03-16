@@ -70,7 +70,7 @@ const baseRows: QueryResultCell[][] = Array.from({ length: 1_200 }, (_, index) =
   teams[index % teams.length] ?? 'Growth',
   plans[index % plans.length] ?? 'starter',
   12 + (index % 41),
-  `$${(4200 + index * 18.75).toFixed(2)}`,
+  4200 + index * 18.75,
   `2026-03-${String(1 + (index % 9)).padStart(2, '0')} 1${index % 10}:2${index % 6}:0${index % 5}`,
 ]);
 

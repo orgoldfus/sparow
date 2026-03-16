@@ -124,6 +124,7 @@ export function useQueryWorkspace({
   const seenResultStreamEventsRef = useRef<Set<string>>(new Set());
   const seenResultExportEventsRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<QueryTabState[]>(tabs);
+  const activeTabExecutionJobId = tabs.find((tab) => tab.id === activeTabId)?.execution.jobId ?? null;
 
   function commitTabs(
     updater: QueryTabState[] | ((currentTabs: QueryTabState[]) => QueryTabState[]),
@@ -164,7 +165,11 @@ export function useQueryWorkspace({
           : tab,
       ),
     );
-  }, [activeSession?.connectionId, activeTabId]);
+  }, [
+    activeSession?.connectionId,
+    activeTabId,
+    activeTabExecutionJobId,
+  ]);
 
   useEffect(() => {
     const unseenEvents = queryEvents

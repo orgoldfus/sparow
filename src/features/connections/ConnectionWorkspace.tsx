@@ -46,7 +46,7 @@ type ConnectionsRailProps = {
   onActivateConnection: (connectionId: string) => Promise<void>;
   onCreateConnection: () => void;
   onDisconnectSelected: () => Promise<void>;
-  onEditSelected: () => void;
+  onEditSelected: (connectionId: string) => void;
   onSelectConnection: (connectionId: string) => void;
   selectedConnectionId: string | null;
 };
@@ -244,8 +244,7 @@ export function ConnectionsRail({
             void onDisconnectSelected();
           }}
           onEdit={() => {
-            onSelectConnection(menuState.connectionId);
-            onEditSelected();
+            onEditSelected(menuState.connectionId);
           }}
           top={Math.max(16, menuState.top)}
         />
