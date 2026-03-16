@@ -13,6 +13,14 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by recording missing-result-set early returns in `DiagnosticsStore` for both result-window and export requests, eliminating that observability gap.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed with 80 tests green and 2 expected PostgreSQL smoke tests still ignored. The new missing-result-set diagnostics assertions passed alongside the existing query-service coverage.
+- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
+  - `clippy` remained clean under `-D warnings` after the missing-result diagnostics helper and test additions.
+- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting succeeded after the missing-result diagnostics update.
+- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the remaining missing-result-set diagnostics comment in `src-tauri/src/query/service.rs`. This pass is wiring missing-result-set early returns into `DiagnosticsStore` and adding focused query-service coverage before the next Rust verification run.
 - 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by updating the buffered-result byte estimator so the 32 MB cap includes enum storage and owned-string heap payloads instead of undercounting them.
 - 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - The Rust suite passed with 78 tests green and 2 expected PostgreSQL smoke tests still ignored. The new direct estimator assertions passed alongside the existing buffered-result-cap, cleanup, and query-service coverage.

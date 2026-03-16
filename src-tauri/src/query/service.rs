@@ -341,13 +341,7 @@ impl QueryService {
             .results
             .load(&request.result_set_id)
             .await
-            .ok_or_else(|| {
-                AppError::retryable(
-                    "query_result_set_missing",
-                    "The requested query result no longer exists.",
-                    Some(request.result_set_id.clone()),
-                )
-            })?;
+            .ok_or_else(|| self.missing_result_set_error(&request.result_set_id))?;
 
         match handle.as_ref() {
             QueryResultHandle::Replayable(handle) => {
@@ -382,13 +376,7 @@ impl QueryService {
             .results
             .load(&request.result_set_id)
             .await
-            .ok_or_else(|| {
-                AppError::retryable(
-                    "query_result_set_missing",
-                    "The requested query result no longer exists.",
-                    Some(request.result_set_id.clone()),
-                )
-            })?;
+            .ok_or_else(|| self.missing_result_set_error(&request.result_set_id))?;
 
         let job_id = Uuid::new_v4().to_string();
         let correlation_id = Uuid::new_v4().to_string();
@@ -517,6 +505,16 @@ impl QueryService {
     async fn track_export_result_set(&self, result_set_id: &str) {
         let mut guard = self.active_export_result_sets.lock().await;
         *guard.entry(result_set_id.to_string()).or_insert(0) += 1;
+    }
+
+    fn missing_result_set_error(&self, result_set_id: &str) -> AppError {
+        let error = AppError::retryable(
+            "query_result_set_missing",
+            "The requested query result no longer exists.",
+            Some(result_set_id.to_string()),
+        );
+        self.diagnostics.record_error(error.clone());
+        error
     }
 
     async fn record_query_history(&self, request: &QueryExecutionRequest) {
@@ -1069,7 +1067,7 @@ mod tests {
             iso_timestamp, AppError, ConnectionSessionStatus, DatabaseEngine,
             DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
             QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
-            QueryResultExportAccepted, QueryResultExportRequest, SslMode,
+            QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindowRequest, SslMode,
         },
         persistence::Repository,
     };
@@ -1195,6 +1193,17 @@ mod tests {
         }
     }
 
+    fn test_window_request(result_set_id: &str) -> QueryResultWindowRequest {
+        QueryResultWindowRequest {
+            result_set_id: result_set_id.to_string(),
+            offset: 0,
+            limit: 10,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        }
+    }
+
     fn test_export_accepted(path: &Path) -> QueryResultExportAccepted {
         QueryResultExportAccepted {
             job_id: "job-1".to_string(),
@@ -1263,6 +1272,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn records_missing_result_set_errors_for_window_requests() {
+        let (service, _, _) = test_service(
+            "records-missing-result-window.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+
+        let error = service
+            .get_query_result_window(test_window_request("missing-result"))
+            .await
+            .expect_err("missing result set should fail");
+
+        assert_eq!(error.code, "query_result_set_missing");
+        assert_eq!(
+            service
+                .diagnostics
+                .snapshot()
+                .last_error
+                .map(|value| value.code),
+            Some("query_result_set_missing".to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn rejects_target_mismatch() {
         let (service, _, connections) = test_service(
             "rejects-target-mismatch.sqlite3",
@@ -1310,6 +1342,30 @@ mod tests {
         })
         .await
         .expect("history should be recorded");
+    }
+
+    #[tokio::test]
+    async fn records_missing_result_set_errors_for_export_requests() {
+        let (service, _, _) = test_service(
+            "records-missing-result-export.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+        let output_path = test_database_path("missing-result-export.csv");
+
+        let error = service
+            .start_query_result_export(None, test_export_request(&output_path))
+            .await
+            .expect_err("missing export result set should fail");
+
+        assert_eq!(error.code, "query_result_set_missing");
+        assert_eq!(
+            service
+                .diagnostics
+                .snapshot()
+                .last_error
+                .map(|value| value.code),
+            Some("query_result_set_missing".to_string())
+        );
     }
 
     #[tokio::test]
