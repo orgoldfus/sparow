@@ -13,6 +13,15 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Transient blocker during the latest CodeRabbit autofix commit flow: `git commit -m "fix: apply CodeRabbit auto-fixes"` initially failed on `.git/index.lock`, but no live git process remained and the lock cleared before manual cleanup was needed.
+- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by bounding the in-memory buffered fallback for non-replayable results and by closing the CSV writer before deleting cancelled export files, while intentionally leaving the dismissed `todo.md` review thread untouched.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed with 74 tests green and 2 expected PostgreSQL smoke tests still ignored. The new query-service regressions for buffered-result caps and cancelled export cleanup both passed.
+- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
+  - `clippy` is clean under `-D warnings` after the bounded-buffering and export-cancellation fixes.
+- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting succeeded after the latest query-service edits.
+- 2026-03-16: Started a new CodeRabbit autofix pass for PR #10 scoped to the fresh Rust query-service comments; this pass is fixing the unbounded buffered-result fallback and the Windows-incompatible export-cancellation cleanup while intentionally ignoring the already-dismissed `todo.md` comment.
 - 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
   - The Rust cleanup pass is now formatted and `clippy` clean under `-D warnings` with the direct-query result path in place.
 - 2026-03-16: Completed the cache-removal refactor by replacing the SQLite-backed query-result cache with a direct PostgreSQL window-loading path for replayable queries, a Rust in-memory fallback for non-replayable row-returning statements, and a matching cleanup of the obsolete result-stream contracts, fixtures, and tests.

@@ -19,7 +19,7 @@ use crate::{
         ensure_parent_directory, iso_timestamp, AppError, CancelQueryExecutionResult,
         CancelQueryResultExportResult, DiagnosticsStore, QueryExecutionAccepted,
         QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
-        QueryExecutionStatus, QueryResultCell, QueryResultExportAccepted,
+        QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultExportAccepted,
         QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultExportStatus,
         QueryResultWindow, QueryResultWindowRequest,
     },
@@ -37,6 +37,37 @@ use super::{
 };
 
 const EXPORT_WINDOW_SIZE: usize = 1_000;
+const MAX_BUFFERED_RESULT_ROWS: usize = 20_000;
+const MAX_BUFFERED_RESULT_BYTES: usize = 32 * 1024 * 1024;
+
+struct BufferedResultMetrics {
+    row_count: usize,
+    estimated_bytes: usize,
+}
+
+struct QueryResultExportWriteResult {
+    rows_written: usize,
+    writer: BufWriter<File>,
+    was_cancelled: bool,
+}
+
+impl QueryResultExportWriteResult {
+    fn completed(rows_written: usize, writer: BufWriter<File>) -> Self {
+        Self {
+            rows_written,
+            writer,
+            was_cancelled: false,
+        }
+    }
+
+    fn cancelled(rows_written: usize, writer: BufWriter<File>) -> Self {
+        Self {
+            rows_written,
+            writer,
+            was_cancelled: true,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct QueryService {
@@ -545,6 +576,7 @@ async fn store_query_result(
             })
         }
         ExecutedQueryResult::BufferedRows { columns, rows } => {
+            enforce_buffered_result_limits(&columns, &rows)?;
             let handle = results
                 .insert(QueryResultHandle::Buffered(BufferedQueryResultHandle {
                     result_set_id: result_set_id.to_string(),
@@ -604,7 +636,7 @@ async fn run_query_result_export(
             .map(|column| QueryResultCell::String(column.name.clone())),
     )?;
 
-    let rows_written = match handle.as_ref() {
+    let mut export_result = match handle.as_ref() {
         QueryResultHandle::Replayable(handle) => {
             export_replayable_rows(
                 &connections,
@@ -612,23 +644,29 @@ async fn run_query_result_export(
                 handle,
                 &request,
                 &app,
-                &mut writer,
+                writer,
                 &cancellation,
             )
             .await?
         }
         QueryResultHandle::Buffered(handle) => {
-            export_buffered_rows(
-                &accepted,
-                handle,
-                &request,
-                &app,
-                &mut writer,
-                &cancellation,
-            )
-            .await?
+            export_buffered_rows(&accepted, handle, &request, &app, writer, &cancellation).await?
         }
     };
+
+    if export_result.was_cancelled {
+        cancel_query_result_export(
+            &accepted,
+            &request,
+            app.as_ref(),
+            export_result.rows_written,
+            export_result.writer,
+        )?;
+        return Ok(());
+    }
+
+    flush_export_writer(&mut export_result.writer)?;
+    let rows_written = export_result.rows_written;
 
     if let Some(app) = app.as_ref() {
         emit_query_result_export_event(
@@ -657,9 +695,9 @@ async fn export_replayable_rows(
     handle: &ReplayableQueryResultHandle,
     request: &QueryResultExportRequest,
     app: &Option<AppHandle>,
-    writer: &mut BufWriter<File>,
+    mut writer: BufWriter<File>,
     cancellation: &CancellationToken,
-) -> Result<usize, AppError> {
+) -> Result<QueryResultExportWriteResult, AppError> {
     let session = connections
         .active_session_runtime(handle.connection_id.as_str())
         .await
@@ -669,13 +707,10 @@ async fn export_replayable_rows(
 
     loop {
         if cancellation.is_cancelled() {
-            return cancel_query_result_export(
-                accepted,
-                request,
-                app.as_ref(),
+            return Ok(QueryResultExportWriteResult::cancelled(
                 rows_written,
                 writer,
-            );
+            ));
         }
 
         let window = load_replayable_query_result_window(
@@ -697,15 +732,9 @@ async fn export_replayable_rows(
         }
 
         for row in &window.rows {
-            write_csv_row(&mut *writer, row.iter().cloned())?;
+            write_csv_row(&mut writer, row.iter().cloned())?;
         }
-        writer.flush().map_err(|error| {
-            AppError::internal(
-                "query_result_export_flush_failed",
-                "Failed to flush the CSV export file.",
-                Some(error.to_string()),
-            )
-        })?;
+        flush_export_writer(&mut writer)?;
 
         rows_written += window.rows.len();
         offset += window.rows.len();
@@ -716,7 +745,10 @@ async fn export_replayable_rows(
         }
     }
 
-    Ok(rows_written)
+    Ok(QueryResultExportWriteResult::completed(
+        rows_written,
+        writer,
+    ))
 }
 
 async fn export_buffered_rows(
@@ -724,9 +756,9 @@ async fn export_buffered_rows(
     handle: &BufferedQueryResultHandle,
     request: &QueryResultExportRequest,
     app: &Option<AppHandle>,
-    writer: &mut BufWriter<File>,
+    mut writer: BufWriter<File>,
     cancellation: &CancellationToken,
-) -> Result<usize, AppError> {
+) -> Result<QueryResultExportWriteResult, AppError> {
     let rows = handle.rows_for_export(
         request.sort.as_ref(),
         &request.filters,
@@ -736,31 +768,25 @@ async fn export_buffered_rows(
 
     for batch in rows.chunks(EXPORT_WINDOW_SIZE) {
         if cancellation.is_cancelled() {
-            return cancel_query_result_export(
-                accepted,
-                request,
-                app.as_ref(),
+            return Ok(QueryResultExportWriteResult::cancelled(
                 rows_written,
                 writer,
-            );
+            ));
         }
 
         for row in batch {
-            write_csv_row(&mut *writer, row.iter().cloned())?;
+            write_csv_row(&mut writer, row.iter().cloned())?;
         }
-        writer.flush().map_err(|error| {
-            AppError::internal(
-                "query_result_export_flush_failed",
-                "Failed to flush the CSV export file.",
-                Some(error.to_string()),
-            )
-        })?;
+        flush_export_writer(&mut writer)?;
 
         rows_written += batch.len();
         emit_running_export_progress(app.as_ref(), accepted, rows_written)?;
     }
 
-    Ok(rows_written)
+    Ok(QueryResultExportWriteResult::completed(
+        rows_written,
+        writer,
+    ))
 }
 
 fn emit_running_export_progress(
@@ -794,14 +820,17 @@ fn cancel_query_result_export(
     request: &QueryResultExportRequest,
     app: Option<&AppHandle>,
     rows_written: usize,
-    writer: &mut BufWriter<File>,
+    writer: BufWriter<File>,
 ) -> Result<usize, AppError> {
     let cancelled_error = AppError::retryable(
         "query_result_export_cancelled",
         "The CSV export was cancelled.",
         Some(accepted.result_set_id.clone()),
     );
-    writer.flush().map_err(csv_write_error)?;
+    let file = writer
+        .into_inner()
+        .map_err(|error| csv_write_error(error.into_error()))?;
+    drop(file);
     let _ = fs::remove_file(&request.output_path);
 
     if let Some(app) = app {
@@ -823,6 +852,70 @@ fn cancel_query_result_export(
     }
 
     Ok(rows_written)
+}
+
+fn enforce_buffered_result_limits(
+    columns: &[QueryResultColumn],
+    rows: &[Vec<QueryResultCell>],
+) -> Result<(), AppError> {
+    let metrics = buffered_result_metrics(columns, rows);
+    if metrics.row_count <= MAX_BUFFERED_RESULT_ROWS
+        && metrics.estimated_bytes <= MAX_BUFFERED_RESULT_BYTES
+    {
+        return Ok(());
+    }
+
+    Err(AppError::retryable(
+        "query_result_buffer_limit_exceeded",
+        "This non-replayable query returned too much data to keep in memory.",
+        Some(format!(
+            "Buffered fallback estimated {} rows and {} bytes; limit is {} rows or {} bytes. Add a LIMIT clause or re-run a replayable SELECT.",
+            metrics.row_count,
+            metrics.estimated_bytes,
+            MAX_BUFFERED_RESULT_ROWS,
+            MAX_BUFFERED_RESULT_BYTES,
+        )),
+    ))
+}
+
+fn buffered_result_metrics(
+    columns: &[QueryResultColumn],
+    rows: &[Vec<QueryResultCell>],
+) -> BufferedResultMetrics {
+    let estimated_bytes = columns
+        .iter()
+        .map(approximate_query_result_column_bytes)
+        .sum::<usize>()
+        + rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(approximate_query_result_cell_bytes)
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
+
+    BufferedResultMetrics {
+        row_count: rows.len(),
+        estimated_bytes,
+    }
+}
+
+fn approximate_query_result_column_bytes(column: &QueryResultColumn) -> usize {
+    column.name.len()
+        + column.postgres_type.len()
+        + std::mem::size_of_val(&column.semantic_type)
+        + std::mem::size_of_val(&column.is_nullable)
+}
+
+fn approximate_query_result_cell_bytes(cell: &QueryResultCell) -> usize {
+    match cell {
+        QueryResultCell::String(value) => value.len(),
+        QueryResultCell::Integer(_) => std::mem::size_of::<i64>(),
+        QueryResultCell::Float(_) => std::mem::size_of::<f64>(),
+        QueryResultCell::Boolean(_) => std::mem::size_of::<bool>(),
+        QueryResultCell::Null => 0,
+    }
 }
 
 fn emit_failed_query_result_export_event(
@@ -900,6 +993,16 @@ fn csv_write_error(error: std::io::Error) -> AppError {
     )
 }
 
+fn flush_export_writer(writer: &mut BufWriter<File>) -> Result<(), AppError> {
+    writer.flush().map_err(|error| {
+        AppError::internal(
+            "query_result_export_flush_failed",
+            "Failed to flush the CSV export file.",
+            Some(error.to_string()),
+        )
+    })
+}
+
 async fn clear_tab_job(tab_jobs: &Arc<Mutex<HashMap<String, String>>>, tab_id: &str, job_id: &str) {
     let mut guard = tab_jobs.lock().await;
     if guard.get(tab_id).map(String::as_str) == Some(job_id) {
@@ -941,7 +1044,11 @@ fn map_session_error(error: AppError) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::Arc, time::Duration};
+    use std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+        time::Duration,
+    };
 
     use async_trait::async_trait;
     use tokio::time::{sleep, timeout};
@@ -952,7 +1059,8 @@ mod tests {
         foundation::{
             iso_timestamp, AppError, ConnectionSessionStatus, DatabaseEngine,
             DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
-            QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType, SslMode,
+            QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
+            QueryResultExportAccepted, QueryResultExportRequest, SslMode,
         },
         persistence::Repository,
     };
@@ -986,12 +1094,7 @@ mod tests {
 
             Ok((
                 ExecutedQueryResult::BufferedRows {
-                    columns: vec![QueryResultColumn {
-                        name: "result".to_string(),
-                        postgres_type: "text".to_string(),
-                        semantic_type: QueryResultColumnSemanticType::Text,
-                        is_nullable: false,
-                    }],
+                    columns: vec![test_result_column()],
                     rows: vec![vec![QueryResultCell::String(sql)]],
                 },
                 7,
@@ -1061,6 +1164,35 @@ mod tests {
             sql: sql.to_string(),
             origin: QueryExecutionOrigin::CurrentStatement,
             is_selection_multi_statement: false,
+        }
+    }
+
+    fn test_result_column() -> QueryResultColumn {
+        QueryResultColumn {
+            name: "result".to_string(),
+            postgres_type: "text".to_string(),
+            semantic_type: QueryResultColumnSemanticType::Text,
+            is_nullable: false,
+        }
+    }
+
+    fn test_export_request(path: &Path) -> QueryResultExportRequest {
+        QueryResultExportRequest {
+            result_set_id: "result-set-1".to_string(),
+            output_path: path.to_string_lossy().into_owned(),
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        }
+    }
+
+    fn test_export_accepted(path: &Path) -> QueryResultExportAccepted {
+        QueryResultExportAccepted {
+            job_id: "job-1".to_string(),
+            correlation_id: "corr-1".to_string(),
+            result_set_id: "result-set-1".to_string(),
+            output_path: path.to_string_lossy().into_owned(),
+            started_at: iso_timestamp(),
         }
     }
 
@@ -1274,5 +1406,62 @@ mod tests {
         );
         assert_eq!(csv_field_for_cell(QueryResultCell::Integer(-1)), "-1");
         assert_eq!(csv_field_for_cell(QueryResultCell::Float(-1.5)), "-1.5");
+    }
+
+    #[tokio::test]
+    async fn rejects_buffered_results_that_exceed_row_limit() {
+        let error = store_query_result(
+            &QueryResultStore::default(),
+            &test_request("tab-1", "conn-1", "select 1"),
+            "result-set-1",
+            ExecutedQueryResult::BufferedRows {
+                columns: vec![test_result_column()],
+                rows: vec![vec![QueryResultCell::Null]; MAX_BUFFERED_RESULT_ROWS + 1],
+            },
+        )
+        .await
+        .expect_err("oversized buffered result should fail");
+
+        assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[test]
+    fn rejects_buffered_results_that_exceed_byte_limit() {
+        let error = enforce_buffered_result_limits(
+            &[test_result_column()],
+            &[vec![QueryResultCell::String(
+                "x".repeat(MAX_BUFFERED_RESULT_BYTES + 1),
+            )]],
+        )
+        .expect_err("oversized buffered payload should fail");
+
+        assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[test]
+    fn cancelled_export_removes_the_partial_file() {
+        let output_path = test_database_path("cancelled-export.csv");
+        let _ = std::fs::remove_file(&output_path);
+        let file = File::create(&output_path).expect("export file should open");
+        let mut writer = BufWriter::new(file);
+        write_csv_row(
+            &mut writer,
+            [QueryResultCell::String("partial".to_string())],
+        )
+        .expect("partial row should write");
+
+        cancel_query_result_export(
+            &test_export_accepted(&output_path),
+            &test_export_request(&output_path),
+            None,
+            0,
+            writer,
+        )
+        .expect("cancel should succeed");
+
+        assert!(
+            !output_path.exists(),
+            "cancelled export should remove the partial file"
+        );
     }
 }
