@@ -13,6 +13,14 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by updating the buffered-result byte estimator so the 32 MB cap includes enum storage and owned-string heap payloads instead of undercounting them.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed with 78 tests green and 2 expected PostgreSQL smoke tests still ignored. The new direct estimator assertions passed alongside the existing buffered-result-cap, cleanup, and query-service coverage.
+- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
+  - `clippy` remained clean under `-D warnings` after tightening the buffered-result memory estimator.
+- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting succeeded after the buffered-result estimator update.
+- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the remaining buffered-result memory-estimation comment in `src-tauri/src/query/service.rs`. This pass is tightening the byte estimator so the 32 MB cap accounts for enum and owned-string overhead before any new verification run.
 - 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by making cancelled export cleanup explicit even when the final flush fails and by changing the shared session-error copy from result-specific wording to query-operation wording.
 - 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - The Rust suite passed with 76 tests green and 2 expected PostgreSQL smoke tests still ignored. The new cleanup-helper and session-error wording tests both passed alongside the earlier buffered-result coverage.

@@ -913,20 +913,18 @@ fn buffered_result_metrics(
 }
 
 fn approximate_query_result_column_bytes(column: &QueryResultColumn) -> usize {
-    column.name.len()
-        + column.postgres_type.len()
-        + std::mem::size_of_val(&column.semantic_type)
-        + std::mem::size_of_val(&column.is_nullable)
+    std::mem::size_of::<QueryResultColumn>() + column.name.len() + column.postgres_type.len()
 }
 
 fn approximate_query_result_cell_bytes(cell: &QueryResultCell) -> usize {
-    match cell {
-        QueryResultCell::String(value) => value.len(),
-        QueryResultCell::Integer(_) => std::mem::size_of::<i64>(),
-        QueryResultCell::Float(_) => std::mem::size_of::<f64>(),
-        QueryResultCell::Boolean(_) => std::mem::size_of::<bool>(),
-        QueryResultCell::Null => 0,
-    }
+    std::mem::size_of::<QueryResultCell>()
+        + match cell {
+            QueryResultCell::String(value) => value.len(),
+            QueryResultCell::Integer(_)
+            | QueryResultCell::Float(_)
+            | QueryResultCell::Boolean(_)
+            | QueryResultCell::Null => 0,
+        }
 }
 
 fn emit_failed_query_result_export_event(
@@ -1447,6 +1445,31 @@ mod tests {
         .expect_err("oversized buffered payload should fail");
 
         assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[test]
+    fn query_result_cell_estimator_includes_enum_overhead() {
+        assert_eq!(
+            approximate_query_result_cell_bytes(&QueryResultCell::Null),
+            std::mem::size_of::<QueryResultCell>()
+        );
+
+        let text = "sparow".to_string();
+        assert_eq!(
+            approximate_query_result_cell_bytes(&QueryResultCell::String(text.clone())),
+            std::mem::size_of::<QueryResultCell>() + text.len()
+        );
+    }
+
+    #[test]
+    fn query_result_column_estimator_includes_struct_and_owned_strings() {
+        let column = test_result_column();
+        assert_eq!(
+            approximate_query_result_column_bytes(&column),
+            std::mem::size_of::<QueryResultColumn>()
+                + column.name.len()
+                + column.postgres_type.len()
+        );
     }
 
     #[test]
