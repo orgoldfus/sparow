@@ -396,13 +396,13 @@ export default function App() {
 
                 <div className="hidden items-center gap-1 text-sm text-[var(--text-secondary)] md:flex">
                   {['File', 'Edit', 'View', 'Query', 'Tools'].map((label) => (
-                    <button
+                    <span
+                      aria-disabled="true"
                       className="rounded-lg px-3 py-2 transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-primary)]"
                       key={label}
-                      type="button"
                     >
                       {label}
-                    </button>
+                    </span>
                   ))}
                 </div>
               </div>

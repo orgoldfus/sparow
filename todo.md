@@ -13,6 +13,12 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Started a follow-up CodeRabbit autofix pass after a new accessibility review comment landed on the current PR; this pass is verifying whether older unresolved threads are stale before applying only the remaining code change and rerunning verification.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused follow-up autofix verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed after the follow-up CodeRabbit autofix. Frontend typecheck, ESLint, 88 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining lint note is the expected TanStack React Compiler warning around `useReactTable`, and the query workspace tests still emit the known jsdom-only `flushSync` noise from TanStack Virtual.
+- 2026-03-16: Completed the follow-up CodeRabbit autofix by converting the placeholder top-level menu labels from dead buttons into non-interactive text and confirming the still-open connection-edit thread is already fixed in the current branch state.
 - 2026-03-16: Started another CodeRabbit autofix pass to fetch unresolved review threads for the current branch, apply the required fixes, and re-run the relevant verification before reporting back.
 - 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ❌
   - The first autofix verification pass failed in `src/components/ui/button.tsx` because widening the shared `Button` ref to `HTMLElement` made the native `<button>` branch incompatible with `Ref<HTMLButtonElement>`. The follow-up patch is splitting the `asChild` and native branches so the button keeps a typed native ref while the slotted branch stays generic.
