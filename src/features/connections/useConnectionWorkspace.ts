@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import type {
   AppBootstrap,
   AppError,
@@ -63,6 +63,7 @@ export type ConnectionWorkspaceState = {
   canDisconnect: boolean;
   canDelete: boolean;
   selectConnection: (connectionId: string | null) => void;
+  activateConnection: (connectionId: string) => Promise<void>;
   createConnection: () => void;
   updateDraft: <Key extends keyof ConnectionDraft>(key: Key, value: ConnectionDraft[Key]) => void;
   setReplacePassword: (enabled: boolean) => void;
@@ -89,6 +90,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     disconnecting: false,
     deleting: false,
   });
+  const latestActivationIdRef = useRef(0);
 
   const loadedDraft = loadedDetails ? detailsToDraft(loadedDetails) : EMPTY_DRAFT;
   const draftErrors = validateDraft(draft);
@@ -250,16 +252,34 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
       return;
     }
 
+    await connectConnection(selectedConnectionId);
+  }
+
+  async function connectConnection(connectionId: string) {
+    const activationId = latestActivationIdRef.current + 1;
+    latestActivationIdRef.current = activationId;
     setPending((current) => ({ ...current, connecting: true }));
+    setSelectedConnectionId(connectionId);
 
     try {
-      const session = await connectSavedConnection(selectedConnectionId);
+      const session =
+        activeSession?.connectionId === connectionId ? activeSession : await connectSavedConnection(connectionId);
+      if (latestActivationIdRef.current !== activationId) {
+        return;
+      }
+
       setActiveSession(session);
-      await refreshConnections(selectedConnectionId);
+      await refreshConnections(connectionId);
     } catch (caught) {
+      if (latestActivationIdRef.current !== activationId) {
+        return;
+      }
+
       onError(logger.asAppError(caught, 'connect_saved_connection'));
     } finally {
-      setPending((current) => ({ ...current, connecting: false }));
+      if (latestActivationIdRef.current === activationId) {
+        setPending((current) => ({ ...current, connecting: false }));
+      }
     }
   }
 
@@ -317,6 +337,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     canDisconnect: Boolean(activeSession) && !isBusy,
     canDelete: Boolean(selectedConnectionId) && !isBusy,
     selectConnection,
+    activateConnection: connectConnection,
     createConnection,
     updateDraft,
     setReplacePassword,

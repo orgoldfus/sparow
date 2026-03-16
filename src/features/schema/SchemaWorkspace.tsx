@@ -18,12 +18,12 @@ type SchemaSidebarProps = {
 
 export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
   return (
-    <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)]">
+    <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-sidebar)_94%,_black_6%)]">
       <div className="px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Schema</p>
-            <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
+            <h3 className="mt-1 text-base font-semibold text-[var(--text-primary)]">
               {activeSession?.database ?? 'Metadata browser'}
             </h3>
           </div>
@@ -43,7 +43,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
         <div className="mt-3 flex items-center gap-2">
           <Input
             aria-label="Search schema cache"
-            className="h-9"
+            className="h-10 rounded-xl"
             disabled={schema.isDisabled}
             onChange={(event) => {
               schema.setSearchQuery(event.currentTarget.value);
@@ -51,7 +51,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
             placeholder={schema.isDisabled ? 'Connect to browse metadata' : 'Search tables, views, columns'}
             value={schema.searchQuery}
           />
-          <div className="rounded-md bg-[var(--surface-panel)] p-2 text-[var(--text-muted)]">
+          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-2.5 text-[var(--text-muted)]">
             <Search className="h-4 w-4" />
           </div>
         </div>
@@ -65,7 +65,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
             schema.searchResults.length > 0 ? (
               schema.searchResults.map((node) => (
                 <button
-                  className="grid gap-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3 py-2 text-left transition hover:border-[var(--border-strong)]"
+                  className="grid gap-1 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3 py-2 text-left transition hover:border-[var(--border-strong)]"
                   key={node.path}
                   onClick={() => {
                     schema.selectNode(node);
@@ -108,9 +108,9 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
                       aria-level={row.depth + 1}
                       aria-selected={isSelected}
                       className={cn(
-                        'flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition',
+                        'flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition',
                         isSelected
-                          ? 'bg-[var(--surface-highlight)] text-[var(--text-primary)]'
+                          ? 'bg-[color-mix(in_oklch,_var(--surface-highlight)_86%,_black_14%)] text-[var(--text-primary)]'
                           : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)]',
                       )}
                       data-testid={`schema-node-${row.node.path}`}
@@ -159,7 +159,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
+    <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
       {message}
     </div>
   );

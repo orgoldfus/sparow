@@ -1,96 +1,79 @@
-import { Command, Database, LoaderCircle, MoonStar } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Separator } from '../../components/ui/separator';
-import { TooltipLabel } from '../../components/ui/tooltip';
+
+const SHELL_COLUMNS_CLASS = 'lg:grid-cols-[clamp(360px,34vw,460px)_minmax(0,1fr)]';
+const SHELL_ROWS_WITH_TABS = 'auto minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
+const SHELL_ROWS_WITHOUT_TABS = 'minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
 
 type AppShellProps = {
-  bootstrapEnvironment: string | null;
-  bootstrapPlatform: string | null;
+  connectionDialog: ReactNode;
+  diagnosticsDialog: ReactNode;
   editor: ReactNode;
   editorTabs: ReactNode;
+  headerBar: ReactNode;
   isLoading: boolean;
   leftSidebar: ReactNode;
   results: ReactNode;
   statusBar: ReactNode;
-  connectionDialog: ReactNode;
-  diagnosticsDialog: ReactNode;
 };
 
 export function AppShell({
-  bootstrapEnvironment,
-  bootstrapPlatform,
+  connectionDialog,
+  diagnosticsDialog,
   editor,
   editorTabs,
+  headerBar,
   isLoading,
   leftSidebar,
   results,
   statusBar,
-  connectionDialog,
-  diagnosticsDialog,
 }: AppShellProps) {
   return (
-    <main className="min-h-screen bg-[var(--surface-app)] px-4 py-4 text-[var(--text-primary)] sm:px-6">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1680px] flex-col overflow-hidden rounded-[28px] border border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-app)_90%,_black_10%)] shadow-[var(--shadow-shell)]">
-        <header className="flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_86%,_black_14%)] px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)] text-[var(--accent-text)]">
-              <Database className="h-4 w-4" />
+    <main className="h-dvh overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)]">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <header
+          className="shrink-0 border-b border-[var(--border-subtle)] bg-[linear-gradient(180deg,_color-mix(in_oklch,_var(--surface-panel)_78%,_black_22%),_color-mix(in_oklch,_var(--surface-panel)_88%,_black_12%))]"
+          data-testid="app-header"
+        >
+          {headerBar}
+          {isLoading ? (
+            <div className="border-t border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-muted)] sm:px-5">
+              Booting shell…
             </div>
-            <div className="flex items-center gap-3">
-              <div>
-                <p className="text-sm font-semibold tracking-[0.01em]">Sparow</p>
-                <p className="text-[11px] text-[var(--text-muted)]">Query workspace</p>
-              </div>
-              <Separator className="hidden h-6 md:block" orientation="vertical" />
-              <div className="hidden items-center gap-2 md:flex">
-                <Badge data-testid="environment-value">{bootstrapEnvironment ?? 'booting'}</Badge>
-                <Badge>{bootstrapPlatform ?? 'desktop'}</Badge>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <TooltipLabel content="Command palette lands in a later pass.">
-              <Button size="sm" type="button" variant="ghost">
-                <Command className="h-3.5 w-3.5" />
-                Cmd+K
-              </Button>
-            </TooltipLabel>
-            <Badge className="hidden md:inline-flex" variant="accent">
-              <MoonStar className="mr-1.5 h-3.5 w-3.5" />
-              Dark by default
-            </Badge>
-            {isLoading ? (
-              <div className="inline-flex items-center gap-2 rounded-md bg-[var(--surface-panel)] px-3 py-1.5 text-xs text-[var(--text-secondary)]">
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                Booting shell
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </header>
 
-        <div className="grid flex-1 min-h-0 bg-[var(--border-subtle)] lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="min-h-0 bg-[var(--surface-sidebar)]" data-testid="connections-region">
+        <div className={`grid min-h-0 flex-1 bg-[var(--border-subtle)] ${SHELL_COLUMNS_CLASS}`}>
+          <aside
+            className="min-h-0 overflow-hidden bg-[linear-gradient(180deg,_color-mix(in_oklch,_var(--surface-sidebar)_92%,_black_8%),_color-mix(in_oklch,_var(--surface-sidebar)_84%,_black_16%))]"
+            data-testid="connections-region"
+          >
             {leftSidebar}
           </aside>
 
-          <section className="grid min-h-0 gap-px bg-[var(--border-subtle)] grid-rows-[auto_minmax(0,1fr)_320px]">
-            <div className="bg-[var(--surface-panel)]" data-testid="editor-tabs-region">
-              {editorTabs}
-            </div>
-            <div className="min-h-0 bg-[var(--surface-editor)]" data-testid="editor-region">
+          <section
+            className="grid min-h-0 overflow-hidden bg-[var(--border-subtle)]"
+            style={{ gridTemplateRows: editorTabs ? SHELL_ROWS_WITH_TABS : SHELL_ROWS_WITHOUT_TABS }}
+          >
+            {editorTabs ? (
+              <div className="min-h-0 overflow-hidden bg-[var(--surface-panel)]" data-testid="editor-tabs-region">
+                {editorTabs}
+              </div>
+            ) : (
+              <div className="hidden" data-testid="editor-tabs-region" />
+            )}
+
+            <div className="min-h-0 overflow-hidden bg-[var(--surface-editor)]" data-testid="editor-region">
               {editor}
             </div>
-            <div className="min-h-0 bg-[var(--surface-panel)]" data-testid="results-region">
+
+            <div className="min-h-0 overflow-hidden border-t border-[var(--border-subtle)] bg-[var(--surface-panel)]" data-testid="results-region">
               {results}
             </div>
           </section>
         </div>
 
         <footer
-          className="border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]"
+          className="shrink-0 border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]"
           data-testid="status-region"
         >
           {statusBar}

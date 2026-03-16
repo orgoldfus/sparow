@@ -3,9 +3,9 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 
-const port = 4174;
-const url = `http://127.0.0.1:${port}/?harness=results`;
-const screenshotPath = resolve(process.cwd(), 'artifacts', 'result-viewer-smoke.png');
+const port = 4175;
+const url = `http://127.0.0.1:${port}/?harness=shell`;
+const screenshotPath = resolve(process.cwd(), 'artifacts', 'shell-harness-smoke.png');
 const viteExecutable =
   process.platform === 'win32'
     ? resolve(process.cwd(), 'node_modules', '.bin', 'vite.cmd')
@@ -38,22 +38,19 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({
-      viewport: { width: 1440, height: 1024 },
+      viewport: { width: 1600, height: 1020 },
     });
 
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('result-viewer-harness').waitFor();
-    await page.getByTestId('harness-scenario-select').selectOption('large-complete');
+    await page.getByTestId('shell-harness').waitFor();
+    await page.getByTestId('connection-row-conn-local').click();
     await page.getByTestId('query-result-grid-scroll').evaluate((element) => {
-      element.scrollTop = 2_400;
+      element.scrollTop = 1400;
       element.dispatchEvent(new Event('scroll'));
     });
-    await page.getByTestId('result-quick-filter').fill('customer-0110');
-    await page.getByRole('gridcell', { name: 'customer-0110', exact: true }).waitFor();
-    await page.getByTestId('result-column-0').click();
-    await page.getByRole('tab', { name: 'Messages' }).click();
-    await page.getByText('Window state: ready').waitFor();
-    await page.getByRole('tab', { name: 'Results' }).click();
+    await page.getByTestId('result-quick-filter').fill('sarah');
+    await page.getByTestId('connection-row-conn-staging').click({ button: 'right' });
+    await page.getByTestId('connection-context-menu').waitFor({ state: 'visible' });
     await page.screenshot({
       path: screenshotPath,
       fullPage: true,
@@ -62,7 +59,7 @@ try {
     await browser.close();
   }
 
-  console.log(`Results browser smoke screenshot written to ${screenshotPath}`);
+  console.log(`Shell harness smoke screenshot written to ${screenshotPath}`);
 } catch (error) {
   if (String(error).toLowerCase().includes('executable')) {
     throw new Error(

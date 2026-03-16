@@ -55,6 +55,23 @@ const SQL_KEYWORDS: KeywordDefinition[] = [
   },
 ];
 
+function schemaNodeInsertText(node: SchemaNode): string {
+  switch (node.kind) {
+    case 'schema':
+      return quoteSqlIdentifier(node.name);
+    case 'table':
+    case 'view':
+      return `${quoteSqlIdentifier(node.schemaName)}.${quoteSqlIdentifier(node.relationName)}`;
+    case 'column':
+    case 'index':
+      return quoteSqlIdentifier(node.name);
+  }
+}
+
+function quoteSqlIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
 export function mergeSqlAutocompleteSuggestions(
   query: string,
   nodes: SchemaNode[],
@@ -93,7 +110,7 @@ export function mergeSqlAutocompleteSuggestions(
     const dedupeKey = `${node.kind}:${node.path}`.toLowerCase();
     suggestions.set(dedupeKey, {
       label: node.name,
-      insertText: node.name,
+      insertText: schemaNodeInsertText(node),
       detail: node.path,
       kind: node.kind,
     });
