@@ -13,6 +13,14 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by making cancelled export cleanup explicit even when the final flush fails and by changing the shared session-error copy from result-specific wording to query-operation wording.
+- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust suite passed with 76 tests green and 2 expected PostgreSQL smoke tests still ignored. The new cleanup-helper and session-error wording tests both passed alongside the earlier buffered-result coverage.
+- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
+  - `clippy` stayed clean under `-D warnings` after the cancelled-export cleanup refactor and shared message update.
+- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting succeeded after the latest query-service edits.
+- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the two new `src-tauri/src/query/service.rs` comments. This pass is tightening cancelled-export cleanup semantics and generalizing the shared session-error copy, while leaving the older dismissed `todo.md` thread alone.
 - 2026-03-16: Transient blocker during the latest CodeRabbit autofix commit flow: `git commit -m "fix: apply CodeRabbit auto-fixes"` initially failed on `.git/index.lock`, but no live git process remained and the lock cleared before manual cleanup was needed.
 - 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by bounding the in-memory buffered fallback for non-replayable results and by closing the CSV writer before deleting cancelled export files, while intentionally leaving the dismissed `todo.md` review thread untouched.
 - 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅

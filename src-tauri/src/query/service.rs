@@ -820,18 +820,17 @@ fn cancel_query_result_export(
     request: &QueryResultExportRequest,
     app: Option<&AppHandle>,
     rows_written: usize,
-    writer: BufWriter<File>,
+    mut writer: BufWriter<File>,
 ) -> Result<usize, AppError> {
     let cancelled_error = AppError::retryable(
         "query_result_export_cancelled",
         "The CSV export was cancelled.",
         Some(accepted.result_set_id.clone()),
     );
-    let file = writer
-        .into_inner()
-        .map_err(|error| csv_write_error(error.into_error()))?;
-    drop(file);
-    let _ = fs::remove_file(&request.output_path);
+    let flush_result = flush_export_writer(&mut writer);
+    drop(writer);
+    cleanup_cancelled_export_file(&request.output_path)?;
+    flush_result?;
 
     if let Some(app) = app {
         emit_query_result_export_event(
@@ -852,6 +851,18 @@ fn cancel_query_result_export(
     }
 
     Ok(rows_written)
+}
+
+fn cleanup_cancelled_export_file(output_path: &str) -> Result<(), AppError> {
+    match fs::remove_file(output_path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::internal(
+            "query_result_export_cleanup_failed",
+            "Cancelled export could not remove the partial CSV file.",
+            Some(error.to_string()),
+        )),
+    }
 }
 
 fn enforce_buffered_result_limits(
@@ -1030,12 +1041,12 @@ fn map_session_error(error: AppError) -> AppError {
     match error.code.as_str() {
         "schema_no_active_session" => AppError::retryable(
             "query_no_active_session",
-            "Query results require an active PostgreSQL connection.",
+            "Query operations require an active PostgreSQL connection.",
             error.detail,
         ),
         "schema_wrong_connection_selected" => AppError::retryable(
             "query_tab_target_mismatch",
-            "This query result targets a different saved connection than the active PostgreSQL session.",
+            "This query operation targets a different saved connection than the active PostgreSQL session.",
             error.detail,
         ),
         _ => error,
@@ -1462,6 +1473,42 @@ mod tests {
         assert!(
             !output_path.exists(),
             "cancelled export should remove the partial file"
+        );
+    }
+
+    #[test]
+    fn cancelled_export_cleanup_allows_missing_file() {
+        let output_path = test_database_path("missing-cancelled-export.csv");
+        let _ = std::fs::remove_file(&output_path);
+
+        cleanup_cancelled_export_file(
+            output_path
+                .to_str()
+                .expect("temporary path should stay valid unicode"),
+        )
+        .expect("missing file should be treated as cleaned up");
+    }
+
+    #[test]
+    fn map_session_error_uses_generic_query_operation_messages() {
+        let no_session = map_session_error(AppError::retryable(
+            "schema_no_active_session",
+            "irrelevant",
+            Some("detail".to_string()),
+        ));
+        assert_eq!(
+            no_session.message,
+            "Query operations require an active PostgreSQL connection."
+        );
+
+        let wrong_connection = map_session_error(AppError::retryable(
+            "schema_wrong_connection_selected",
+            "irrelevant",
+            Some("detail".to_string()),
+        ));
+        assert_eq!(
+            wrong_connection.message,
+            "This query operation targets a different saved connection than the active PostgreSQL session."
         );
     }
 }
