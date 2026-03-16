@@ -299,6 +299,7 @@ export default function App() {
     workspace.activeSession?.name ??
     workspace.connections.find((connection) => connection.id === workspace.selectedConnectionId)?.name ??
     'No connection';
+  const editableConnectionId = workspace.activeSession?.connectionId ?? workspace.selectedConnectionId ?? null;
 
   function openNewConnectionDialog() {
     workspace.createConnection();
@@ -412,11 +413,10 @@ export default function App() {
                 <Badge>{bootstrap?.platform ?? 'desktop'}</Badge>
                 <Button
                   className="min-w-[210px] justify-between"
+                  disabled={!editableConnectionId}
                   onClick={() => {
-                    if (workspace.activeSession) {
-                      openEditConnectionDialog(workspace.activeSession.connectionId);
-                    } else if (workspace.selectedConnectionId) {
-                      openEditConnectionDialog(workspace.selectedConnectionId);
+                    if (editableConnectionId) {
+                      openEditConnectionDialog(editableConnectionId);
                     }
                   }}
                   size="sm"

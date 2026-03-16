@@ -13,6 +13,12 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-16: Started a final follow-up CodeRabbit autofix pass after one more accessibility comment landed on the PR header controls; this pass is scoped to the remaining actionable chooser-button state and the standard verification/commit/push flow.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused final follow-up verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
+- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed after the final CodeRabbit chooser-button autofix. Frontend typecheck, ESLint, 88 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining lint note is the expected TanStack React Compiler warning around `useReactTable`, and the query workspace tests still emit the known jsdom-only `flushSync` noise from TanStack Virtual.
+- 2026-03-16: Completed the final CodeRabbit autofix by disabling the header connection chooser whenever there is no active or selected connection to edit, leaving no dead interactive control in the shell header.
 - 2026-03-16: Started a follow-up CodeRabbit autofix pass after a new accessibility review comment landed on the current PR; this pass is verifying whether older unresolved threads are stale before applying only the remaining code change and rerunning verification.
 - 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
   - The focused follow-up autofix verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
