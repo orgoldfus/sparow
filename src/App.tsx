@@ -448,6 +448,7 @@ export default function App() {
               <ConnectionsRail
                 activeSession={workspace.activeSession}
                 canDisconnect={workspace.canDisconnect}
+                connectingConnectionId={workspace.connectingConnectionId}
                 connections={workspace.connections}
                 onActivateConnection={workspace.activateConnection}
                 onCreateConnection={openNewConnectionDialog}

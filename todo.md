@@ -13,6 +13,28 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-17: Completed the connection-rail UX pass by making single click selection-only, moving activation to double click, and showing an inline row loader for the connection currently being opened.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint completed under Node `v24.13.0` after the interaction change. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compiled cleanly under Node `v24.13.0` after the rail received the row-specific connecting state and the shell harness was updated to pass the new prop.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 17 tests green, including the new single-click selection, double-click activation, and inline loader coverage.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ❌
+  - The first typecheck pass failed because `src/features/shell/ShellHarness.tsx` had not yet been updated for the new `connectingConnectionId` prop on `ConnectionsRail`. The harness was aligned before the next rerun.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ❌
+  - The first focused shell pass failed because the loader test targeted the already-active local connection, which short-circuited the connect flow before the spinner could render. The test was moved to a staged non-active connection before the rerun.
+- 2026-03-17: Started a connection-rail UX pass to require double click for activation, keep single click as selection only, and surface an inline loading state on the row that is currently connecting.
+- 2026-03-17: Completed the compact connection-rail polish by collapsing each connection entry into a slim name-first row with a single live-status dot and by removing the old saved-target summary strip that made the sidebar feel oversized.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint completed under Node `v24.13.0` after the rail cleanup. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
+  - The focused shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 15 tests green, including the new compact-connection-row coverage.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compiled cleanly under Node `v24.13.0` after the connection-rail markup reduction and the new regression assertions.
+- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ❌
+  - The first focused shell pass failed because a new assertion matched unrelated editor copy containing the words `saved target`; the expectation was narrowed before the next rerun.
+- 2026-03-17: Started a compact connection-rail polish pass to replace the oversized connection cards with slimmer name-first rows that only surface a connection label plus a live-status dot, matching the updated shell direction.
 - 2026-03-17: Completed the macOS keychain prompt fix by stopping saved-connection summaries/details from reading OS keychain entries during bootstrap, list, and edit flows. `hasStoredSecret` now reflects the persisted secret reference, and a focused Rust regression test locks that non-connect behavior in place.
 - 2026-03-17: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
   - Rust formatting succeeded after the saved-connection summary change and new secret-store regression test.

@@ -48,6 +48,7 @@ type UseConnectionWorkspaceArgs = {
 export type ConnectionWorkspaceState = {
   connections: ConnectionSummary[];
   selectedConnectionId: string | null;
+  connectingConnectionId: string | null;
   loadedDetails: ConnectionDetails | null;
   draft: ConnectionDraft;
   draftErrors: DraftErrors;
@@ -82,6 +83,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
   const [replacePassword, setReplacePassword] = useState(false);
   const [latestTestResult, setLatestTestResult] = useState<ConnectionTestResult | null>(null);
   const [activeSession, setActiveSession] = useState<DatabaseSessionSnapshot | null>(null);
+  const [connectingConnectionId, setConnectingConnectionId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingState>({
     loadingDetails: false,
     saving: false,
@@ -260,6 +262,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     latestActivationIdRef.current = activationId;
     setPending((current) => ({ ...current, connecting: true }));
     setSelectedConnectionId(connectionId);
+    setConnectingConnectionId(connectionId);
 
     try {
       const session =
@@ -279,6 +282,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
     } finally {
       if (latestActivationIdRef.current === activationId) {
         setPending((current) => ({ ...current, connecting: false }));
+        setConnectingConnectionId(null);
       }
     }
   }
@@ -322,6 +326,7 @@ export function useConnectionWorkspace({ bootstrap, onError }: UseConnectionWork
   return {
     connections,
     selectedConnectionId,
+    connectingConnectionId,
     loadedDetails,
     draft,
     draftErrors,

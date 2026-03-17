@@ -422,6 +422,7 @@ export function ShellHarness() {
             <ConnectionsRail
               activeSession={activeSession}
               canDisconnect={Boolean(activeSession)}
+              connectingConnectionId={null}
               connections={connections}
               onActivateConnection={(connectionId) => {
                 setSelectedConnectionId(connectionId);

@@ -1,10 +1,9 @@
 import {
   CheckCircle2,
-  ChevronRight,
   CircleSlash2,
   Database,
-  Ellipsis,
   KeyRound,
+  LoaderCircle,
   Plus,
   RefreshCcw,
   Shield,
@@ -42,6 +41,7 @@ type PendingState = {
 type ConnectionsRailProps = {
   activeSession: DatabaseSessionSnapshot | null;
   canDisconnect: boolean;
+  connectingConnectionId: string | null;
   connections: ConnectionSummary[];
   onActivateConnection: (connectionId: string) => Promise<void>;
   onCreateConnection: () => void;
@@ -84,6 +84,7 @@ const SSL_OPTIONS: { value: SslMode; label: string; caption: string }[] = [
 export function ConnectionsRail({
   activeSession,
   canDisconnect,
+  connectingConnectionId,
   connections,
   onActivateConnection,
   onCreateConnection,
@@ -124,11 +125,9 @@ export function ConnectionsRail({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [menuState]);
-
-  const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null;
   const activeConnectionId = activeSession?.connectionId ?? null;
   return (
-    <section className="relative grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)]" ref={railRef}>
+    <section className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)]" ref={railRef}>
       <div className="border-b border-[var(--border-subtle)] px-4 py-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Connections</p>
@@ -145,29 +144,28 @@ export function ConnectionsRail({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
-        <span>{connections.length} saved target{connections.length === 1 ? '' : 's'}</span>
-        <span className="truncate">{selectedConnection?.database ?? 'Select a target'}</span>
-      </div>
-
-      <ScrollArea className="min-h-0 px-2 py-3">
-        <div className="grid gap-2 px-2">
+      <ScrollArea className="min-h-0 px-3 py-3">
+        <div className="grid gap-1">
           {connections.length > 0 ? (
             connections.map((connection) => {
               const isActive = activeSession?.connectionId === connection.id;
+              const isConnecting = connectingConnectionId === connection.id;
               const isSelected = selectedConnectionId === connection.id;
 
               return (
                 <button
                   className={cn(
-                    'group grid w-full gap-2 rounded-2xl border px-3 py-3 text-left transition',
+                    'w-full rounded-xl px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-0',
                     isSelected
-                      ? 'border-[var(--border-accent)] bg-[color-mix(in_oklch,_var(--surface-highlight)_86%,_black_14%)] shadow-[var(--shadow-elevated)]'
-                      : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[color-mix(in_oklch,_var(--surface-panel)_90%,_black_10%)]',
+                      ? 'bg-[color-mix(in_oklch,_var(--surface-highlight)_72%,_var(--surface-sidebar)_28%)] text-[var(--text-primary)]'
+                      : 'bg-transparent text-[var(--text-secondary)] hover:bg-[color-mix(in_oklch,_var(--surface-panel)_72%,_transparent)] hover:text-[var(--text-primary)]',
                   )}
                   data-testid={`connection-row-${connection.id}`}
                   key={connection.id}
                   onClick={() => {
+                    onSelectConnection(connection.id);
+                  }}
+                  onDoubleClick={() => {
                     onSelectConnection(connection.id);
                     void onActivateConnection(connection.id);
                   }}
@@ -184,36 +182,25 @@ export function ConnectionsRail({
                   }}
                   type="button"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
-                          isActive ? 'bg-[var(--success-text)] shadow-[0_0_0_4px_rgba(34,197,94,0.12)]' : 'bg-[var(--border-subtle)]',
-                        )}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-[15px] font-medium text-[var(--text-primary)]">{connection.name}</p>
-                        <p className="mt-1 break-all text-xs text-[var(--text-muted)]">
-                          {connection.engine} • {connection.host}:{connection.port}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {isActive ? <Badge variant="success">Live</Badge> : null}
-                      <Ellipsis className="h-4 w-4 text-[var(--text-muted)] opacity-0 transition group-hover:opacity-100" />
-                    </div>
-                  </div>
-                  <div className="grid gap-1 text-xs text-[var(--text-secondary)] [overflow-wrap:anywhere]">
-                    <span>{connection.database}</span>
-                    <span>{connection.username}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                    <span>{connection.sslMode}</span>
-                    <span className="inline-flex items-center gap-1">
-                      Open
-                      <ChevronRight className="h-3.5 w-3.5" />
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'h-2 w-2 shrink-0 rounded-full transition',
+                        isActive
+                          ? 'bg-[var(--success-text)] shadow-[0_0_0_4px_rgba(34,197,94,0.12)]'
+                          : 'bg-[color-mix(in_oklch,_var(--border-subtle)_86%,_black_14%)]',
+                      )}
+                      data-testid={`connection-status-${connection.id}`}
+                    />
+                    <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium">
+                      {isConnecting ? (
+                        <LoaderCircle
+                          className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--accent-text)]"
+                          data-testid={`connection-loader-${connection.id}`}
+                        />
+                      ) : null}
+                      <span className="truncate">{connection.name}</span>
                     </span>
                   </div>
                 </button>
