@@ -17,13 +17,12 @@ pub use contracts::{
     QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
     QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
     QueryResultExportStatus, QueryResultFilter, QueryResultFilterMode, QueryResultSetSummary,
-    QueryResultSort, QueryResultSortDirection, QueryResultStatus, QueryResultStreamEvent,
-    QueryResultStreamStatus, QueryResultWindow, QueryResultWindowRequest,
-    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaCacheStatus, SchemaNode,
-    SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
+    QueryResultSort, QueryResultSortDirection, QueryResultStatus, QueryResultWindow,
+    QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaCacheStatus,
+    SchemaNode, SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
     SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult, SecretProvider,
     SslMode, TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT,
-    QUERY_RESULT_EXPORT_EVENT, QUERY_RESULT_STREAM_EVENT, SCHEMA_REFRESH_EVENT,
+    QUERY_RESULT_EXPORT_EVENT, SCHEMA_REFRESH_EVENT,
 };
 pub use error::AppError;
 pub use jobs::JobRegistry;

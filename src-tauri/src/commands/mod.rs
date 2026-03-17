@@ -7,10 +7,9 @@ use crate::foundation::{
     DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
     QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
     QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-    QueryResultStreamEvent, QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
-    SaveConnectionRequest, SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult,
-    TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT,
-    QUERY_RESULT_STREAM_EVENT,
+    QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
+    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
+    BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT,
 };
 
 #[tauri::command]
@@ -178,19 +177,6 @@ pub fn emit_query_execution_event(
         AppError::internal(
             "emit_failed",
             "Failed to emit query execution event.",
-            Some(error.to_string()),
-        )
-    })
-}
-
-pub fn emit_query_result_stream_event(
-    app: &AppHandle,
-    event: &QueryResultStreamEvent,
-) -> Result<(), AppError> {
-    app.emit(QUERY_RESULT_STREAM_EVENT, event).map_err(|error| {
-        AppError::internal(
-            "emit_failed",
-            "Failed to emit query result stream event.",
             Some(error.to_string()),
         )
     })

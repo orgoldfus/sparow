@@ -13,26 +13,61 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
-    commands::{
-        emit_query_execution_event, emit_query_result_export_event, emit_query_result_stream_event,
-    },
+    commands::{emit_query_execution_event, emit_query_result_export_event},
     connections::ConnectionService,
     foundation::{
         ensure_parent_directory, iso_timestamp, AppError, CancelQueryExecutionResult,
         CancelQueryResultExportResult, DiagnosticsStore, QueryExecutionAccepted,
-        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionStatus, QueryResultCell,
-        QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-        QueryResultExportStatus, QueryResultStreamEvent, QueryResultStreamStatus,
+        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
+        QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultExportAccepted,
+        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultExportStatus,
         QueryResultWindow, QueryResultWindowRequest,
     },
-    persistence::{
-        FinalizeQueryResultSetRecord, QueryResultSetRecord, QueryResultSetStatus, Repository,
+    persistence::Repository,
+};
+
+use super::{
+    driver::{
+        cancelled_query_error, load_replayable_query_result_window, ExecutedQueryResult,
+        QueryExecutionDriver,
+    },
+    result_store::{
+        BufferedQueryResultHandle, QueryResultHandle, QueryResultStore, ReplayableQueryResultHandle,
     },
 };
 
-use super::driver::{cancelled_query_error, QueryExecutionDriver, QueryResultStreamContext};
-
 const EXPORT_WINDOW_SIZE: usize = 1_000;
+const MAX_BUFFERED_RESULT_ROWS: usize = 20_000;
+const MAX_BUFFERED_RESULT_BYTES: usize = 32 * 1024 * 1024;
+
+struct BufferedResultMetrics {
+    row_count: usize,
+    estimated_bytes: usize,
+}
+
+struct QueryResultExportWriteResult {
+    rows_written: usize,
+    writer: BufWriter<File>,
+    was_cancelled: bool,
+}
+
+impl QueryResultExportWriteResult {
+    fn completed(rows_written: usize, writer: BufWriter<File>) -> Self {
+        Self {
+            rows_written,
+            writer,
+            was_cancelled: false,
+        }
+    }
+
+    fn cancelled(rows_written: usize, writer: BufWriter<File>) -> Self {
+        Self {
+            rows_written,
+            writer,
+            was_cancelled: true,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct QueryService {
@@ -40,6 +75,7 @@ pub(crate) struct QueryService {
     connections: ConnectionService,
     diagnostics: DiagnosticsStore,
     driver: Arc<dyn QueryExecutionDriver>,
+    results: QueryResultStore,
     jobs: crate::foundation::JobRegistry,
     export_jobs: crate::foundation::JobRegistry,
     active_export_result_sets: Arc<Mutex<HashMap<String, usize>>>,
@@ -60,6 +96,7 @@ impl QueryService {
             connections,
             diagnostics,
             driver,
+            results: QueryResultStore::default(),
             jobs,
             export_jobs,
             active_export_result_sets: Arc::new(Mutex::new(HashMap::new())),
@@ -114,16 +151,9 @@ impl QueryService {
         }
 
         let preserved_result_set_ids = self.active_export_result_set_ids().await;
-        if let Err(error) = clear_tab_result_cache(
-            self.repository.clone(),
-            &request.tab_id,
-            preserved_result_set_ids,
-        )
-        .await
-        {
-            clear_tab_job(&self.tab_jobs, &request.tab_id, "").await;
-            return Err(error);
-        }
+        self.results
+            .clear_tab_except(&request.tab_id, &preserved_result_set_ids)
+            .await;
 
         let job_id = Uuid::new_v4().to_string();
         let correlation_id = Uuid::new_v4().to_string();
@@ -170,21 +200,10 @@ impl QueryService {
         let tab_jobs = self.tab_jobs.clone();
         let diagnostics = self.diagnostics.clone();
         let driver = self.driver.clone();
-        let repository = self.repository.clone();
+        let results = self.results.clone();
         let task_request = request.clone();
         task::spawn(async move {
             let maybe_app = app.clone();
-            let stream_context = QueryResultStreamContext {
-                repository: repository.clone(),
-                app: maybe_app.clone(),
-                result_set_id: result_set_id.clone(),
-                job_id: task_accepted.job_id.clone(),
-                correlation_id: task_accepted.correlation_id.clone(),
-                tab_id: task_accepted.tab_id.clone(),
-                connection_id: task_accepted.connection_id.clone(),
-                sql: task_request.sql.clone(),
-                started_at: task_accepted.started_at.clone(),
-            };
 
             if let Some(app) = maybe_app.as_ref() {
                 let running_event = QueryExecutionProgressEvent {
@@ -208,21 +227,28 @@ impl QueryService {
             }
 
             let (status, result, last_error, elapsed_ms, message) = match driver
-                .run_query(
-                    session,
-                    task_request.sql.clone(),
-                    stream_context.clone(),
-                    cancellation,
-                )
+                .run_query(session, task_request.sql.clone(), cancellation)
                 .await
             {
-                Ok((result, elapsed_ms)) => (
-                    QueryExecutionStatus::Completed,
-                    Some(result),
-                    None,
-                    elapsed_ms,
-                    "Query completed.".to_string(),
-                ),
+                Ok((result, elapsed_ms)) => {
+                    match store_query_result(&results, &task_request, &result_set_id, result).await
+                    {
+                        Ok(result) => (
+                            QueryExecutionStatus::Completed,
+                            Some(result),
+                            None,
+                            elapsed_ms,
+                            "Query completed.".to_string(),
+                        ),
+                        Err(error) => (
+                            QueryExecutionStatus::Failed,
+                            None,
+                            Some(error.clone()),
+                            elapsed_ms,
+                            error.message.clone(),
+                        ),
+                    }
+                }
                 Err(error) if error.code == cancelled_query_error().code => (
                     QueryExecutionStatus::Cancelled,
                     None,
@@ -230,30 +256,13 @@ impl QueryService {
                     0,
                     "Query cancelled by user.".to_string(),
                 ),
-                Err(error) => {
-                    if let Err(finalize_error) = finalize_failed_result_set(
-                        repository.clone(),
-                        maybe_app.clone(),
-                        &stream_context,
-                        &error,
-                    )
-                    .await
-                    {
-                        diagnostics.record_error(finalize_error.clone());
-                        error!(
-                            ?finalize_error,
-                            "failed to finalize cached query result after execution failure"
-                        );
-                    }
-
-                    (
-                        QueryExecutionStatus::Failed,
-                        None,
-                        Some(error.clone()),
-                        0,
-                        error.message.clone(),
-                    )
-                }
+                Err(error) => (
+                    QueryExecutionStatus::Failed,
+                    None,
+                    Some(error.clone()),
+                    0,
+                    error.message.clone(),
+                ),
             };
 
             if let Some(error) = last_error.clone() {
@@ -283,7 +292,11 @@ impl QueryService {
 
             jobs.remove(&task_accepted.job_id).await;
             clear_tab_job(&tab_jobs, &task_accepted.tab_id, &task_accepted.job_id).await;
-            info!(job_id = %task_accepted.job_id, tab_id = %task_accepted.tab_id, "query job finished");
+            info!(
+                job_id = %task_accepted.job_id,
+                tab_id = %task_accepted.tab_id,
+                "query job finished"
+            );
         });
 
         Ok(accepted)
@@ -309,7 +322,7 @@ impl QueryService {
         Ok(CancelQueryExecutionResult { job_id })
     }
 
-    /// Loads one cached result window for the frontend result grid.
+    /// Loads one result window for the frontend result grid.
     pub(crate) async fn get_query_result_window(
         &self,
         request: QueryResultWindowRequest,
@@ -324,21 +337,26 @@ impl QueryService {
             return Err(error);
         }
 
-        let repository = self.repository.clone();
-        let result = task::spawn_blocking(move || repository.load_query_result_window(&request))
+        let handle = self
+            .results
+            .load(&request.result_set_id)
             .await
-            .map_err(|error| {
-                AppError::internal(
-                    "query_result_window_join_failed",
-                    "Failed to join cached query result window loading.",
-                    Some(error.to_string()),
-                )
-            })??;
+            .ok_or_else(|| self.missing_result_set_error(&request.result_set_id))?;
 
-        Ok(result)
+        match handle.as_ref() {
+            QueryResultHandle::Replayable(handle) => {
+                let session = self
+                    .connections
+                    .active_session_runtime(handle.connection_id.as_str())
+                    .await
+                    .map_err(map_session_error)?;
+                load_replayable_query_result_window(session, handle, &request).await
+            }
+            QueryResultHandle::Buffered(handle) => Ok(handle.load_window(&request)),
+        }
     }
 
-    /// Starts a background CSV export for a completed cached result set.
+    /// Starts a background CSV export for a completed query result.
     pub(crate) async fn start_query_result_export(
         &self,
         app: Option<AppHandle>,
@@ -354,36 +372,11 @@ impl QueryService {
             return Err(error);
         }
 
-        let repository = self.repository.clone();
-        let result_set = task::spawn_blocking({
-            let result_set_id = request.result_set_id.clone();
-            move || repository.load_query_result_set(&result_set_id)
-        })
-        .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_result_export_lookup_join_failed",
-                "Failed to join cached query result lookup.",
-                Some(error.to_string()),
-            )
-        })??
-        .ok_or_else(|| {
-            AppError::retryable(
-                "query_result_set_missing",
-                "The requested cached result set no longer exists.",
-                Some(request.result_set_id.clone()),
-            )
-        })?;
-
-        if result_set.status != QueryResultSetStatus::Completed {
-            let error = AppError::retryable(
-                "query_result_export_incomplete",
-                "Export requires a completed cached result set.",
-                Some(result_set.result_set_id.clone()),
-            );
-            self.diagnostics.record_error(error.clone());
-            return Err(error);
-        }
+        let handle = self
+            .results
+            .load(&request.result_set_id)
+            .await
+            .ok_or_else(|| self.missing_result_set_error(&request.result_set_id))?;
 
         let job_id = Uuid::new_v4().to_string();
         let correlation_id = Uuid::new_v4().to_string();
@@ -419,18 +412,18 @@ impl QueryService {
         self.track_export_result_set(&request.result_set_id).await;
 
         let diagnostics = self.diagnostics.clone();
+        let connections = self.connections.clone();
         let export_jobs = self.export_jobs.clone();
         let active_export_result_sets = self.active_export_result_sets.clone();
-        let export_repository = self.repository.clone();
         let export_request = request.clone();
         let task_accepted = accepted.clone();
         task::spawn(async move {
             let maybe_app = app.clone();
             let export_result = run_query_result_export(
-                export_repository,
+                connections,
                 maybe_app.clone(),
                 task_accepted.clone(),
-                result_set,
+                handle,
                 export_request,
                 cancellation,
             )
@@ -459,13 +452,17 @@ impl QueryService {
                 &task_accepted.result_set_id,
             )
             .await;
-            info!(job_id = %job_id, result_set_id = %task_accepted.result_set_id, "query result export finished");
+            info!(
+                job_id = %job_id,
+                result_set_id = %task_accepted.result_set_id,
+                "query result export finished"
+            );
         });
 
         Ok(accepted)
     }
 
-    /// Cancels an in-flight cached-result export job.
+    /// Cancels an in-flight query-result export job.
     pub(crate) async fn cancel_query_result_export(
         &self,
         job_id: String,
@@ -510,6 +507,16 @@ impl QueryService {
         *guard.entry(result_set_id.to_string()).or_insert(0) += 1;
     }
 
+    fn missing_result_set_error(&self, result_set_id: &str) -> AppError {
+        let error = AppError::retryable(
+            "query_result_set_missing",
+            "The requested query result no longer exists.",
+            Some(result_set_id.to_string()),
+        );
+        self.diagnostics.record_error(error.clone());
+        error
+    }
+
     async fn record_query_history(&self, request: &QueryExecutionRequest) {
         let repository = self.repository.clone();
         let sql = request.sql.clone();
@@ -533,100 +540,62 @@ impl QueryService {
     }
 }
 
-async fn clear_tab_result_cache(
-    repository: Arc<Repository>,
-    tab_id: &str,
-    preserved_result_set_ids: Vec<String>,
-) -> Result<(), AppError> {
-    let tab_id = tab_id.to_string();
-    task::spawn_blocking(move || {
-        repository.delete_query_result_sets_for_tab_except(&tab_id, &preserved_result_set_ids)
-    })
-    .await
-    .map_err(|error| {
-        AppError::internal(
-            "query_result_cleanup_join_failed",
-            "Failed to join query result cache cleanup.",
-            Some(error.to_string()),
-        )
-    })??;
+async fn store_query_result(
+    results: &QueryResultStore,
+    request: &QueryExecutionRequest,
+    result_set_id: &str,
+    result: ExecutedQueryResult,
+) -> Result<QueryExecutionResult, AppError> {
+    match result {
+        ExecutedQueryResult::Command {
+            command_tag,
+            rows_affected,
+        } => Ok(QueryExecutionResult::Command {
+            command_tag,
+            rows_affected,
+        }),
+        ExecutedQueryResult::ReplayableRows {
+            columns,
+            initial_total_row_count,
+        } => {
+            let handle = results
+                .insert(QueryResultHandle::Replayable(ReplayableQueryResultHandle {
+                    result_set_id: result_set_id.to_string(),
+                    tab_id: request.tab_id.clone(),
+                    connection_id: request.connection_id.clone(),
+                    sql: request.sql.clone(),
+                    columns,
+                    initial_total_row_count,
+                }))
+                .await;
 
-    Ok(())
-}
+            Ok(QueryExecutionResult::Rows {
+                summary: handle.summary(),
+            })
+        }
+        ExecutedQueryResult::BufferedRows { columns, rows } => {
+            enforce_buffered_result_limits(&columns, &rows)?;
+            let handle = results
+                .insert(QueryResultHandle::Buffered(BufferedQueryResultHandle {
+                    result_set_id: result_set_id.to_string(),
+                    tab_id: request.tab_id.clone(),
+                    columns,
+                    rows,
+                }))
+                .await;
 
-async fn finalize_failed_result_set(
-    repository: Arc<Repository>,
-    app: Option<AppHandle>,
-    context: &QueryResultStreamContext,
-    error: &AppError,
-) -> Result<(), AppError> {
-    let result_set_id = context.result_set_id.clone();
-    let record = task::spawn_blocking(move || repository.load_query_result_set(&result_set_id))
-        .await
-        .map_err(|join_error| {
-            AppError::internal(
-                "query_result_failure_lookup_join_failed",
-                "Failed to join cached query result failure lookup.",
-                Some(join_error.to_string()),
-            )
-        })??;
-
-    let Some(record) = record else {
-        return Ok(());
-    };
-    if record.status != QueryResultSetStatus::Running {
-        return Ok(());
+            Ok(QueryExecutionResult::Rows {
+                summary: handle.summary(),
+            })
+        }
     }
-
-    let repository = context.repository.clone();
-    let finalize_record = FinalizeQueryResultSetRecord {
-        result_set_id: record.result_set_id.clone(),
-        buffered_row_count: record.buffered_row_count,
-        total_row_count: None,
-        status: QueryResultSetStatus::Failed,
-        completed_at: Some(iso_timestamp()),
-        last_error: Some(error.clone()),
-    };
-    task::spawn_blocking(move || repository.finalize_query_result_set(finalize_record))
-        .await
-        .map_err(|join_error| {
-            AppError::internal(
-                "query_result_failure_finalize_join_failed",
-                "Failed to join cached query result failure finalization.",
-                Some(join_error.to_string()),
-            )
-        })??;
-
-    if let Some(app) = app.as_ref() {
-        emit_query_result_stream_event(
-            app,
-            &QueryResultStreamEvent {
-                job_id: context.job_id.clone(),
-                correlation_id: context.correlation_id.clone(),
-                tab_id: context.tab_id.clone(),
-                connection_id: context.connection_id.clone(),
-                result_set_id: record.result_set_id,
-                status: QueryResultStreamStatus::Failed,
-                buffered_row_count: record.buffered_row_count,
-                total_row_count: record.total_row_count,
-                chunk_row_count: 0,
-                columns: None,
-                message: error.message.clone(),
-                started_at: context.started_at.clone(),
-                timestamp: iso_timestamp(),
-                last_error: Some(error.clone()),
-            },
-        )?;
-    }
-
-    Ok(())
 }
 
 async fn run_query_result_export(
-    repository: Arc<Repository>,
+    connections: ConnectionService,
     app: Option<AppHandle>,
     accepted: QueryResultExportAccepted,
-    result_set: QueryResultSetRecord,
+    handle: Arc<QueryResultHandle>,
     request: QueryResultExportRequest,
     cancellation: CancellationToken,
 ) -> Result<(), AppError> {
@@ -640,7 +609,7 @@ async fn run_query_result_export(
                 output_path: accepted.output_path.clone(),
                 status: QueryResultExportStatus::Running,
                 rows_written: 0,
-                message: "Exporting cached query results to CSV.".to_string(),
+                message: "Exporting query results to CSV.".to_string(),
                 started_at: accepted.started_at.clone(),
                 finished_at: None,
                 last_error: None,
@@ -659,84 +628,43 @@ async fn run_query_result_export(
     let mut writer = BufWriter::new(file);
     write_csv_row(
         &mut writer,
-        result_set
-            .columns
+        handle
+            .columns()
             .iter()
             .map(|column| QueryResultCell::String(column.name.clone())),
     )?;
 
-    let mut rows_written = 0_usize;
-    let mut offset = 0_usize;
-    loop {
-        if cancellation.is_cancelled() {
-            let cancelled_error = AppError::retryable(
-                "query_result_export_cancelled",
-                "The CSV export was cancelled.",
-                Some(accepted.result_set_id.clone()),
-            );
-            drop(writer);
-            let _ = fs::remove_file(&request.output_path);
-            if let Some(app) = app.as_ref() {
-                emit_query_result_export_event(
-                    app,
-                    &QueryResultExportProgressEvent {
-                        job_id: accepted.job_id.clone(),
-                        correlation_id: accepted.correlation_id.clone(),
-                        result_set_id: accepted.result_set_id.clone(),
-                        output_path: accepted.output_path.clone(),
-                        status: QueryResultExportStatus::Cancelled,
-                        rows_written,
-                        message: "CSV export cancelled by user.".to_string(),
-                        started_at: accepted.started_at.clone(),
-                        finished_at: Some(iso_timestamp()),
-                        last_error: Some(cancelled_error.clone()),
-                    },
-                )?;
-            }
-            return Ok(());
-        }
-
-        let window = load_export_window(repository.clone(), &request, offset).await?;
-        if window.rows.is_empty() {
-            break;
-        }
-
-        for row in &window.rows {
-            write_csv_row(&mut writer, row.iter().cloned())?;
-        }
-        writer.flush().map_err(|error| {
-            AppError::internal(
-                "query_result_export_flush_failed",
-                "Failed to flush the CSV export file.",
-                Some(error.to_string()),
+    let mut export_result = match handle.as_ref() {
+        QueryResultHandle::Replayable(handle) => {
+            export_replayable_rows(
+                &connections,
+                &accepted,
+                handle,
+                &request,
+                &app,
+                writer,
+                &cancellation,
             )
-        })?;
-
-        rows_written += window.rows.len();
-        offset += window.rows.len();
-
-        if let Some(app) = app.as_ref() {
-            emit_query_result_export_event(
-                app,
-                &QueryResultExportProgressEvent {
-                    job_id: accepted.job_id.clone(),
-                    correlation_id: accepted.correlation_id.clone(),
-                    result_set_id: accepted.result_set_id.clone(),
-                    output_path: accepted.output_path.clone(),
-                    status: QueryResultExportStatus::Running,
-                    rows_written,
-                    message: format!("Wrote {rows_written} rows to the CSV export."),
-                    started_at: accepted.started_at.clone(),
-                    finished_at: None,
-                    last_error: None,
-                },
-            )?;
+            .await?
         }
-
-        if rows_written >= window.visible_row_count {
-            break;
+        QueryResultHandle::Buffered(handle) => {
+            export_buffered_rows(&accepted, handle, &request, &app, writer, &cancellation).await?
         }
+    };
+
+    if export_result.was_cancelled {
+        cancel_query_result_export(
+            &accepted,
+            &request,
+            app.as_ref(),
+            export_result.rows_written,
+            export_result.writer,
+        )?;
+        return Ok(());
     }
+
+    flush_export_writer(&mut export_result.writer)?;
+    let rows_written = export_result.rows_written;
 
     if let Some(app) = app.as_ref() {
         emit_query_result_export_event(
@@ -757,6 +685,244 @@ async fn run_query_result_export(
     }
 
     Ok(())
+}
+
+async fn export_replayable_rows(
+    connections: &ConnectionService,
+    accepted: &QueryResultExportAccepted,
+    handle: &ReplayableQueryResultHandle,
+    request: &QueryResultExportRequest,
+    app: &Option<AppHandle>,
+    mut writer: BufWriter<File>,
+    cancellation: &CancellationToken,
+) -> Result<QueryResultExportWriteResult, AppError> {
+    let session = connections
+        .active_session_runtime(handle.connection_id.as_str())
+        .await
+        .map_err(map_session_error)?;
+    let mut rows_written = 0_usize;
+    let mut offset = 0_usize;
+
+    loop {
+        if cancellation.is_cancelled() {
+            return Ok(QueryResultExportWriteResult::cancelled(
+                rows_written,
+                writer,
+            ));
+        }
+
+        let window = load_replayable_query_result_window(
+            session.clone(),
+            handle,
+            &QueryResultWindowRequest {
+                result_set_id: handle.result_set_id.clone(),
+                offset,
+                limit: EXPORT_WINDOW_SIZE,
+                sort: request.sort.clone(),
+                filters: request.filters.clone(),
+                quick_filter: request.quick_filter.clone(),
+            },
+        )
+        .await?;
+
+        if window.rows.is_empty() {
+            break;
+        }
+
+        for row in &window.rows {
+            write_csv_row(&mut writer, row.iter().cloned())?;
+        }
+        flush_export_writer(&mut writer)?;
+
+        rows_written += window.rows.len();
+        offset += window.rows.len();
+        emit_running_export_progress(app.as_ref(), accepted, rows_written)?;
+
+        if rows_written >= window.visible_row_count {
+            break;
+        }
+    }
+
+    Ok(QueryResultExportWriteResult::completed(
+        rows_written,
+        writer,
+    ))
+}
+
+async fn export_buffered_rows(
+    accepted: &QueryResultExportAccepted,
+    handle: &BufferedQueryResultHandle,
+    request: &QueryResultExportRequest,
+    app: &Option<AppHandle>,
+    mut writer: BufWriter<File>,
+    cancellation: &CancellationToken,
+) -> Result<QueryResultExportWriteResult, AppError> {
+    let rows = handle.rows_for_export(
+        request.sort.as_ref(),
+        &request.filters,
+        &request.quick_filter,
+    );
+    let mut rows_written = 0_usize;
+
+    for batch in rows.chunks(EXPORT_WINDOW_SIZE) {
+        if cancellation.is_cancelled() {
+            return Ok(QueryResultExportWriteResult::cancelled(
+                rows_written,
+                writer,
+            ));
+        }
+
+        for row in batch {
+            write_csv_row(&mut writer, row.iter().cloned())?;
+        }
+        flush_export_writer(&mut writer)?;
+
+        rows_written += batch.len();
+        emit_running_export_progress(app.as_ref(), accepted, rows_written)?;
+    }
+
+    Ok(QueryResultExportWriteResult::completed(
+        rows_written,
+        writer,
+    ))
+}
+
+fn emit_running_export_progress(
+    app: Option<&AppHandle>,
+    accepted: &QueryResultExportAccepted,
+    rows_written: usize,
+) -> Result<(), AppError> {
+    let Some(app) = app else {
+        return Ok(());
+    };
+
+    emit_query_result_export_event(
+        app,
+        &QueryResultExportProgressEvent {
+            job_id: accepted.job_id.clone(),
+            correlation_id: accepted.correlation_id.clone(),
+            result_set_id: accepted.result_set_id.clone(),
+            output_path: accepted.output_path.clone(),
+            status: QueryResultExportStatus::Running,
+            rows_written,
+            message: format!("Wrote {rows_written} rows to the CSV export."),
+            started_at: accepted.started_at.clone(),
+            finished_at: None,
+            last_error: None,
+        },
+    )
+}
+
+fn cancel_query_result_export(
+    accepted: &QueryResultExportAccepted,
+    request: &QueryResultExportRequest,
+    app: Option<&AppHandle>,
+    rows_written: usize,
+    mut writer: BufWriter<File>,
+) -> Result<usize, AppError> {
+    let cancelled_error = AppError::retryable(
+        "query_result_export_cancelled",
+        "The CSV export was cancelled.",
+        Some(accepted.result_set_id.clone()),
+    );
+    let flush_result = flush_export_writer(&mut writer);
+    drop(writer);
+    cleanup_cancelled_export_file(&request.output_path)?;
+    flush_result?;
+
+    if let Some(app) = app {
+        emit_query_result_export_event(
+            app,
+            &QueryResultExportProgressEvent {
+                job_id: accepted.job_id.clone(),
+                correlation_id: accepted.correlation_id.clone(),
+                result_set_id: accepted.result_set_id.clone(),
+                output_path: accepted.output_path.clone(),
+                status: QueryResultExportStatus::Cancelled,
+                rows_written,
+                message: "CSV export cancelled by user.".to_string(),
+                started_at: accepted.started_at.clone(),
+                finished_at: Some(iso_timestamp()),
+                last_error: Some(cancelled_error),
+            },
+        )?;
+    }
+
+    Ok(rows_written)
+}
+
+fn cleanup_cancelled_export_file(output_path: &str) -> Result<(), AppError> {
+    match fs::remove_file(output_path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::internal(
+            "query_result_export_cleanup_failed",
+            "Cancelled export could not remove the partial CSV file.",
+            Some(error.to_string()),
+        )),
+    }
+}
+
+fn enforce_buffered_result_limits(
+    columns: &[QueryResultColumn],
+    rows: &[Vec<QueryResultCell>],
+) -> Result<(), AppError> {
+    let metrics = buffered_result_metrics(columns, rows);
+    if metrics.row_count <= MAX_BUFFERED_RESULT_ROWS
+        && metrics.estimated_bytes <= MAX_BUFFERED_RESULT_BYTES
+    {
+        return Ok(());
+    }
+
+    Err(AppError::retryable(
+        "query_result_buffer_limit_exceeded",
+        "This non-replayable query returned too much data to keep in memory.",
+        Some(format!(
+            "Buffered fallback estimated {} rows and {} bytes; limit is {} rows or {} bytes. Add a LIMIT clause or re-run a replayable SELECT.",
+            metrics.row_count,
+            metrics.estimated_bytes,
+            MAX_BUFFERED_RESULT_ROWS,
+            MAX_BUFFERED_RESULT_BYTES,
+        )),
+    ))
+}
+
+fn buffered_result_metrics(
+    columns: &[QueryResultColumn],
+    rows: &[Vec<QueryResultCell>],
+) -> BufferedResultMetrics {
+    let estimated_bytes = columns
+        .iter()
+        .map(approximate_query_result_column_bytes)
+        .sum::<usize>()
+        + rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(approximate_query_result_cell_bytes)
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
+
+    BufferedResultMetrics {
+        row_count: rows.len(),
+        estimated_bytes,
+    }
+}
+
+fn approximate_query_result_column_bytes(column: &QueryResultColumn) -> usize {
+    std::mem::size_of::<QueryResultColumn>() + column.name.len() + column.postgres_type.len()
+}
+
+fn approximate_query_result_cell_bytes(cell: &QueryResultCell) -> usize {
+    std::mem::size_of::<QueryResultCell>()
+        + match cell {
+            QueryResultCell::String(value) => value.len(),
+            QueryResultCell::Integer(_)
+            | QueryResultCell::Float(_)
+            | QueryResultCell::Boolean(_)
+            | QueryResultCell::Null => 0,
+        }
 }
 
 fn emit_failed_query_result_export_event(
@@ -784,31 +950,6 @@ fn emit_failed_query_result_export_event(
             last_error: Some(error.clone()),
         },
     )
-}
-
-async fn load_export_window(
-    repository: Arc<Repository>,
-    request: &QueryResultExportRequest,
-    offset: usize,
-) -> Result<QueryResultWindow, AppError> {
-    let window_request = QueryResultWindowRequest {
-        result_set_id: request.result_set_id.clone(),
-        offset,
-        limit: EXPORT_WINDOW_SIZE,
-        sort: request.sort.clone(),
-        filters: request.filters.clone(),
-        quick_filter: request.quick_filter.clone(),
-    };
-
-    task::spawn_blocking(move || repository.load_query_result_window(&window_request))
-        .await
-        .map_err(|error| {
-            AppError::internal(
-                "query_result_export_window_join_failed",
-                "Failed to join cached query result window loading for export.",
-                Some(error.to_string()),
-            )
-        })?
 }
 
 fn write_csv_row<I>(writer: &mut BufWriter<File>, cells: I) -> Result<(), AppError>
@@ -859,6 +1000,16 @@ fn csv_write_error(error: std::io::Error) -> AppError {
     )
 }
 
+fn flush_export_writer(writer: &mut BufWriter<File>) -> Result<(), AppError> {
+    writer.flush().map_err(|error| {
+        AppError::internal(
+            "query_result_export_flush_failed",
+            "Failed to flush the CSV export file.",
+            Some(error.to_string()),
+        )
+    })
+}
+
 async fn clear_tab_job(tab_jobs: &Arc<Mutex<HashMap<String, String>>>, tab_id: &str, job_id: &str) {
     let mut guard = tab_jobs.lock().await;
     if guard.get(tab_id).map(String::as_str) == Some(job_id) {
@@ -886,12 +1037,12 @@ fn map_session_error(error: AppError) -> AppError {
     match error.code.as_str() {
         "schema_no_active_session" => AppError::retryable(
             "query_no_active_session",
-            "Run requires an active PostgreSQL connection.",
+            "Query operations require an active PostgreSQL connection.",
             error.detail,
         ),
         "schema_wrong_connection_selected" => AppError::retryable(
             "query_tab_target_mismatch",
-            "This tab targets a different saved connection than the active PostgreSQL session.",
+            "This query operation targets a different saved connection than the active PostgreSQL session.",
             error.detail,
         ),
         _ => error,
@@ -900,7 +1051,11 @@ fn map_session_error(error: AppError) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::Arc, time::Duration};
+    use std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+        time::Duration,
+    };
 
     use async_trait::async_trait;
     use tokio::time::{sleep, timeout};
@@ -911,8 +1066,8 @@ mod tests {
         foundation::{
             iso_timestamp, AppError, ConnectionSessionStatus, DatabaseEngine,
             DatabaseSessionSnapshot, DiagnosticsStore, QueryExecutionOrigin, QueryExecutionRequest,
-            QueryExecutionResult, QueryResultCell, QueryResultColumn,
-            QueryResultColumnSemanticType, QueryResultSetSummary, SslMode,
+            QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
+            QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindowRequest, SslMode,
         },
         persistence::Repository,
     };
@@ -931,9 +1086,8 @@ mod tests {
             &self,
             _session: ActiveSessionRuntime,
             sql: String,
-            stream_context: QueryResultStreamContext,
             cancellation: CancellationToken,
-        ) -> Result<(QueryExecutionResult, u64), AppError> {
+        ) -> Result<(ExecutedQueryResult, u64), AppError> {
             if self.delay_ms > 0 {
                 tokio::select! {
                     _ = sleep(Duration::from_millis(self.delay_ms)) => {}
@@ -946,21 +1100,11 @@ mod tests {
             }
 
             Ok((
-                QueryExecutionResult::Rows {
-                    summary: QueryResultSetSummary {
-                        result_set_id: stream_context.result_set_id,
-                        columns: vec![QueryResultColumn {
-                            name: "result".to_string(),
-                            postgres_type: "text".to_string(),
-                            semantic_type: QueryResultColumnSemanticType::Text,
-                            is_nullable: false,
-                        }],
-                        buffered_row_count: 1,
-                        total_row_count: Some(1),
-                        status: crate::foundation::QueryResultStatus::Completed,
-                    },
+                ExecutedQueryResult::BufferedRows {
+                    columns: vec![test_result_column()],
+                    rows: vec![vec![QueryResultCell::String(sql)]],
                 },
-                if sql.contains("select") { 7 } else { 3 },
+                7,
             ))
         }
     }
@@ -1030,6 +1174,46 @@ mod tests {
         }
     }
 
+    fn test_result_column() -> QueryResultColumn {
+        QueryResultColumn {
+            name: "result".to_string(),
+            postgres_type: "text".to_string(),
+            semantic_type: QueryResultColumnSemanticType::Text,
+            is_nullable: false,
+        }
+    }
+
+    fn test_export_request(path: &Path) -> QueryResultExportRequest {
+        QueryResultExportRequest {
+            result_set_id: "result-set-1".to_string(),
+            output_path: path.to_string_lossy().into_owned(),
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        }
+    }
+
+    fn test_window_request(result_set_id: &str) -> QueryResultWindowRequest {
+        QueryResultWindowRequest {
+            result_set_id: result_set_id.to_string(),
+            offset: 0,
+            limit: 10,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        }
+    }
+
+    fn test_export_accepted(path: &Path) -> QueryResultExportAccepted {
+        QueryResultExportAccepted {
+            job_id: "job-1".to_string(),
+            correlation_id: "corr-1".to_string(),
+            result_set_id: "result-set-1".to_string(),
+            output_path: path.to_string_lossy().into_owned(),
+            started_at: iso_timestamp(),
+        }
+    }
+
     #[tokio::test]
     async fn rejects_empty_sql() {
         let (service, _, connections) = test_service(
@@ -1088,6 +1272,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn records_missing_result_set_errors_for_window_requests() {
+        let (service, _, _) = test_service(
+            "records-missing-result-window.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+
+        let error = service
+            .get_query_result_window(test_window_request("missing-result"))
+            .await
+            .expect_err("missing result set should fail");
+
+        assert_eq!(error.code, "query_result_set_missing");
+        assert_eq!(
+            service
+                .diagnostics
+                .snapshot()
+                .last_error
+                .map(|value| value.code),
+            Some("query_result_set_missing".to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn rejects_target_mismatch() {
         let (service, _, connections) = test_service(
             "rejects-target-mismatch.sqlite3",
@@ -1135,6 +1342,30 @@ mod tests {
         })
         .await
         .expect("history should be recorded");
+    }
+
+    #[tokio::test]
+    async fn records_missing_result_set_errors_for_export_requests() {
+        let (service, _, _) = test_service(
+            "records-missing-result-export.sqlite3",
+            Arc::new(FakeQueryDriver::default()),
+        );
+        let output_path = test_database_path("missing-result-export.csv");
+
+        let error = service
+            .start_query_result_export(None, test_export_request(&output_path))
+            .await
+            .expect_err("missing export result set should fail");
+
+        assert_eq!(error.code, "query_result_set_missing");
+        assert_eq!(
+            service
+                .diagnostics
+                .snapshot()
+                .last_error
+                .map(|value| value.code),
+            Some("query_result_set_missing".to_string())
+        );
     }
 
     #[tokio::test]
@@ -1224,99 +1455,6 @@ mod tests {
         .expect("tab should clear after cancellation");
     }
 
-    #[tokio::test]
-    #[ignore = "requires explicit PostgreSQL environment variables"]
-    async fn postgres_query_smoke() {
-        let (service, repository, connections) = test_service(
-            "postgres-query-smoke.sqlite3",
-            Arc::new(crate::query::RuntimeQueryExecutionDriver),
-        );
-        let saved = save_real_connection(&connections).await;
-        let _session = connections
-            .connect_saved_connection(&saved.summary.id)
-            .await
-            .expect("connect should succeed");
-
-        let runtime = connections
-            .active_session_runtime(&saved.summary.id)
-            .await
-            .expect("active session runtime should exist");
-        let driver = crate::query::RuntimeQueryExecutionDriver;
-        let result_set_id = uuid::Uuid::new_v4().to_string();
-        let (result, _) = driver
-            .run_query(
-                runtime,
-                "select 1 as value".to_string(),
-                QueryResultStreamContext {
-                    repository,
-                    app: None,
-                    result_set_id: result_set_id.clone(),
-                    job_id: uuid::Uuid::new_v4().to_string(),
-                    correlation_id: uuid::Uuid::new_v4().to_string(),
-                    tab_id: "tab-1".to_string(),
-                    connection_id: saved.summary.id.clone(),
-                    sql: "select 1 as value".to_string(),
-                    started_at: iso_timestamp(),
-                },
-                CancellationToken::new(),
-            )
-            .await
-            .expect("query should execute");
-
-        match result {
-            QueryExecutionResult::Rows { summary } => {
-                assert_eq!(summary.columns[0].name, "value");
-                assert_eq!(summary.result_set_id, result_set_id);
-                assert_eq!(summary.total_row_count, Some(1));
-            }
-            other => panic!("expected row result, got {other:?}"),
-        }
-
-        service
-            .start_query(None, test_request("tab-1", &saved.summary.id, "select 1"))
-            .await
-            .expect("service query should start");
-    }
-
-    #[tokio::test]
-    #[ignore = "requires explicit PostgreSQL environment variables"]
-    async fn postgres_query_cancel_smoke() {
-        let (service, _, connections) = test_service(
-            "postgres-query-cancel-smoke.sqlite3",
-            Arc::new(crate::query::RuntimeQueryExecutionDriver),
-        );
-        let saved = save_real_connection(&connections).await;
-        let _session = connections
-            .connect_saved_connection(&saved.summary.id)
-            .await
-            .expect("connect should succeed");
-
-        let accepted = service
-            .start_query(
-                None,
-                test_request("tab-1", &saved.summary.id, "select pg_sleep(10)"),
-            )
-            .await
-            .expect("query should start");
-
-        sleep(Duration::from_millis(200)).await;
-        service
-            .cancel_query(accepted.job_id.clone())
-            .await
-            .expect("cancel should succeed");
-
-        timeout(Duration::from_secs(5), async {
-            loop {
-                if service.active_job_for_tab("tab-1").await.is_none() {
-                    break;
-                }
-                sleep(Duration::from_millis(50)).await;
-            }
-        })
-        .await
-        .expect("query should clear after cancellation");
-    }
-
     #[test]
     fn csv_field_for_cell_sanitizes_formula_prefixes_before_escaping() {
         assert_eq!(
@@ -1335,41 +1473,121 @@ mod tests {
         assert_eq!(csv_field_for_cell(QueryResultCell::Float(-1.5)), "-1.5");
     }
 
-    async fn save_real_connection(
-        connections: &ConnectionService,
-    ) -> crate::foundation::ConnectionDetails {
-        let host = std::env::var("SPAROW_PG_HOST").expect("SPAROW_PG_HOST is required");
-        let port = std::env::var("SPAROW_PG_PORT")
-            .ok()
-            .and_then(|value| value.parse::<u16>().ok())
-            .unwrap_or(5432);
-        let database = std::env::var("SPAROW_PG_DATABASE").expect("SPAROW_PG_DATABASE is required");
-        let username = std::env::var("SPAROW_PG_USERNAME").expect("SPAROW_PG_USERNAME is required");
-        let password = std::env::var("SPAROW_PG_PASSWORD").expect("SPAROW_PG_PASSWORD is required");
-        let ssl_mode = match std::env::var("SPAROW_PG_SSL_MODE")
-            .unwrap_or_else(|_| "prefer".to_string())
-            .as_str()
-        {
-            "disable" => SslMode::Disable,
-            "require" => SslMode::Require,
-            "insecure" => SslMode::Insecure,
-            _ => SslMode::Prefer,
-        };
+    #[tokio::test]
+    async fn rejects_buffered_results_that_exceed_row_limit() {
+        let error = store_query_result(
+            &QueryResultStore::default(),
+            &test_request("tab-1", "conn-1", "select 1"),
+            "result-set-1",
+            ExecutedQueryResult::BufferedRows {
+                columns: vec![test_result_column()],
+                rows: vec![vec![QueryResultCell::Null]; MAX_BUFFERED_RESULT_ROWS + 1],
+            },
+        )
+        .await
+        .expect_err("oversized buffered result should fail");
 
-        connections
-            .save_connection(crate::foundation::SaveConnectionRequest {
-                id: None,
-                draft: crate::foundation::ConnectionDraft {
-                    name: "Query smoke".to_string(),
-                    host,
-                    port,
-                    database,
-                    username,
-                    ssl_mode,
-                    password: Some(password),
-                },
-            })
-            .await
-            .expect("save should succeed")
+        assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[test]
+    fn rejects_buffered_results_that_exceed_byte_limit() {
+        let error = enforce_buffered_result_limits(
+            &[test_result_column()],
+            &[vec![QueryResultCell::String(
+                "x".repeat(MAX_BUFFERED_RESULT_BYTES + 1),
+            )]],
+        )
+        .expect_err("oversized buffered payload should fail");
+
+        assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[test]
+    fn query_result_cell_estimator_includes_enum_overhead() {
+        assert_eq!(
+            approximate_query_result_cell_bytes(&QueryResultCell::Null),
+            std::mem::size_of::<QueryResultCell>()
+        );
+
+        let text = "sparow".to_string();
+        assert_eq!(
+            approximate_query_result_cell_bytes(&QueryResultCell::String(text.clone())),
+            std::mem::size_of::<QueryResultCell>() + text.len()
+        );
+    }
+
+    #[test]
+    fn query_result_column_estimator_includes_struct_and_owned_strings() {
+        let column = test_result_column();
+        assert_eq!(
+            approximate_query_result_column_bytes(&column),
+            std::mem::size_of::<QueryResultColumn>()
+                + column.name.len()
+                + column.postgres_type.len()
+        );
+    }
+
+    #[test]
+    fn cancelled_export_removes_the_partial_file() {
+        let output_path = test_database_path("cancelled-export.csv");
+        let _ = std::fs::remove_file(&output_path);
+        let file = File::create(&output_path).expect("export file should open");
+        let mut writer = BufWriter::new(file);
+        write_csv_row(
+            &mut writer,
+            [QueryResultCell::String("partial".to_string())],
+        )
+        .expect("partial row should write");
+
+        cancel_query_result_export(
+            &test_export_accepted(&output_path),
+            &test_export_request(&output_path),
+            None,
+            0,
+            writer,
+        )
+        .expect("cancel should succeed");
+
+        assert!(
+            !output_path.exists(),
+            "cancelled export should remove the partial file"
+        );
+    }
+
+    #[test]
+    fn cancelled_export_cleanup_allows_missing_file() {
+        let output_path = test_database_path("missing-cancelled-export.csv");
+        let _ = std::fs::remove_file(&output_path);
+
+        cleanup_cancelled_export_file(
+            output_path
+                .to_str()
+                .expect("temporary path should stay valid unicode"),
+        )
+        .expect("missing file should be treated as cleaned up");
+    }
+
+    #[test]
+    fn map_session_error_uses_generic_query_operation_messages() {
+        let no_session = map_session_error(AppError::retryable(
+            "schema_no_active_session",
+            "irrelevant",
+            Some("detail".to_string()),
+        ));
+        assert_eq!(
+            no_session.message,
+            "Query operations require an active PostgreSQL connection."
+        );
+
+        let wrong_connection = map_session_error(AppError::retryable(
+            "schema_wrong_connection_selected",
+            "irrelevant",
+            Some("detail".to_string()),
+        ));
+        assert_eq!(
+            wrong_connection.message,
+            "This query operation targets a different saved connection than the active PostgreSQL session."
+        );
     }
 }

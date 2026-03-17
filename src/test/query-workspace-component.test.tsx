@@ -75,7 +75,6 @@ function createTab(id: string, title: string, sql: string): QueryTabState {
     execution: { ...baseExecution },
     result: {
       summary: null,
-      latestStreamEvent: null,
       window: null,
       windowStatus: 'idle',
       windowError: null,
@@ -266,7 +265,6 @@ describe('QueryWorkspace', () => {
         },
         result: {
           summary,
-          latestStreamEvent: null,
           window: {
             resultSetId,
             offset: 0,
@@ -394,7 +392,6 @@ describe('QueryWorkspace', () => {
       },
       result: {
         summary,
-        latestStreamEvent: null,
         window: {
           resultSetId: 'result-set-columns',
           offset: 0,
@@ -489,7 +486,6 @@ describe('QueryWorkspace', () => {
       },
       result: {
         summary,
-        latestStreamEvent: null,
         window: {
           resultSetId: 'result-set-stale-visible-count',
           offset: 0,
@@ -558,6 +554,6 @@ describe('QueryWorkspace', () => {
 
     expect(screen.getByTestId('result-row-0')).toBeInTheDocument();
     expect(screen.getByText('first@example.com')).toBeInTheDocument();
-    expect(screen.queryByText('The cached result contains no visible rows.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The query result contains no visible rows.')).not.toBeInTheDocument();
   });
 });

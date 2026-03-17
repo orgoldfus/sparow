@@ -33,7 +33,6 @@ pub fn run() {
 
             let repository = Arc::new(Repository::new(paths.database_path.clone())?);
             repository.seed_phase_one()?;
-            repository.purge_query_result_cache()?;
 
             let diagnostics = DiagnosticsStore::new();
             let connections = ConnectionService::new(
