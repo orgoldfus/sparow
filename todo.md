@@ -35,6 +35,14 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ❌
   - The first focused shell pass failed because a new assertion matched unrelated editor copy containing the words `saved target`; the expectation was narrowed before the next rerun.
 - 2026-03-17: Started a compact connection-rail polish pass to replace the oversized connection cards with slimmer name-first rows that only surface a connection label plus a live-status dot, matching the updated shell direction.
+- 2026-03-17: Completed the macOS keychain prompt fix by stopping saved-connection summaries/details from reading OS keychain entries during bootstrap, list, and edit flows. `hasStoredSecret` now reflects the persisted secret reference, and a focused Rust regression test locks that non-connect behavior in place.
+- 2026-03-17: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
+  - Rust formatting succeeded after the saved-connection summary change and new secret-store regression test.
+- 2026-03-17: `cargo test --manifest-path src-tauri/Cargo.toml list_and_get_saved_connections_do_not_read_secret_store` ✅
+  - The new focused regression passed and confirmed save, list, and get flows no longer call `load_password`, which removes the keychain read from app bootstrap.
+- 2026-03-17: `cargo test --manifest-path src-tauri/Cargo.toml tests_saved_connection_without_retyping_password` ✅
+  - The existing stored-secret test still passed, confirming deferred keychain reads still work when a connection test actually needs the saved password.
+- 2026-03-17: Started investigating the repeated macOS keychain password prompt during `npm run tauri dev`. The current bootstrap path loads saved connection summaries by reading the OS keychain to derive `hasStoredSecret`, so this pass is removing secret reads from non-connect flows and adding a regression test around saved-connection listing/details.
 - 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by recording missing-result-set early returns in `DiagnosticsStore` for both result-window and export requests, eliminating that observability gap.
 - 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
   - The Rust suite passed with 80 tests green and 2 expected PostgreSQL smoke tests still ignored. The new missing-result-set diagnostics assertions passed alongside the existing query-service coverage.
