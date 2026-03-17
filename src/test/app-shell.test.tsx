@@ -44,6 +44,28 @@ function expectDatabaseSessionSnapshot(value: unknown): DatabaseSessionSnapshot 
 const appBootstrap = expectAppBootstrap(appBootstrapFixture);
 const connectionDetails = expectConnectionDetails(connectionDetailsFixture);
 const databaseSession = expectDatabaseSessionSnapshot(databaseSessionSnapshotFixture);
+const stagingConnection: ConnectionSummary = {
+  id: 'conn-staging',
+  engine: 'postgresql',
+  name: 'Staging',
+  host: '10.0.0.10',
+  port: 5432,
+  database: 'app_staging',
+  username: 'sparow',
+  sslMode: 'prefer',
+  hasStoredSecret: true,
+  secretProvider: 'os-keychain',
+  lastTestedAt: null,
+  lastConnectedAt: null,
+  updatedAt: '2026-03-10T16:45:00.000Z',
+};
+const stagingSession: DatabaseSessionSnapshot = {
+  ...databaseSession,
+  connectionId: 'conn-staging',
+  name: 'Staging',
+  database: 'app_staging',
+  host: '10.0.0.10',
+};
 
 const rootSchemaChildrenFixture = {
   connectionId: databaseSession.connectionId,
@@ -166,6 +188,40 @@ describe('App shell', () => {
 
     expect(screen.queryByText(/Workspace graph/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Live target/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ saved target/i)).not.toBeInTheDocument();
+  });
+
+  it('renders compact connection rows with only the name and status dot', async () => {
+    render(<App />);
+
+    const connectionRow = await screen.findByTestId('connection-row-conn-local-postgres');
+
+    expect(screen.getByTestId('connection-status-conn-local-postgres')).toBeInTheDocument();
+    expect(connectionRow).toHaveTextContent('Local Postgres');
+    expect(connectionRow).not.toHaveTextContent(connectionDetails.host);
+    expect(connectionRow).not.toHaveTextContent(connectionDetails.database);
+    expect(connectionRow).not.toHaveTextContent(connectionDetails.username);
+    expect(connectionRow).not.toHaveTextContent(/live/i);
+    expect(connectionRow).not.toHaveTextContent(/open/i);
+  });
+
+  it('selects a clicked connection row without connecting immediately', async () => {
+    const bootstrapWithStaging: AppBootstrap = {
+      ...appBootstrap,
+      savedConnections: [...appBootstrap.savedConnections, stagingConnection],
+    };
+
+    bootstrapAppMock.mockResolvedValue(bootstrapWithStaging);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByTestId('connection-row-conn-staging'));
+
+    await waitFor(() => {
+      expect(getSavedConnectionMock).toHaveBeenLastCalledWith('conn-staging');
+    });
+
+    expect(connectSavedConnectionMock).not.toHaveBeenCalled();
   });
 
   it('opens the selected connection in the modal editor with saved profile details', async () => {
@@ -189,41 +245,49 @@ describe('App shell', () => {
     expect(screen.getByTestId('connection-host-input')).toHaveValue('');
   });
 
-  it('connects a clicked connection row directly from the rail', async () => {
-    const stagingConnection: ConnectionSummary = {
-      id: 'conn-staging',
-      engine: 'postgresql',
-      name: 'Staging',
-      host: '10.0.0.10',
-      port: 5432,
-      database: 'app_staging',
-      username: 'sparow',
-      sslMode: 'prefer',
-      hasStoredSecret: true,
-      secretProvider: 'os-keychain',
-      lastTestedAt: null,
-      lastConnectedAt: null,
-      updatedAt: '2026-03-10T16:45:00.000Z',
-    };
+  it('connects a double-clicked connection row directly from the rail', async () => {
     const bootstrapWithStaging: AppBootstrap = {
       ...appBootstrap,
       savedConnections: [...appBootstrap.savedConnections, stagingConnection],
     };
     bootstrapAppMock.mockResolvedValue(bootstrapWithStaging);
-    connectSavedConnectionMock.mockResolvedValue({
-      ...databaseSession,
-      connectionId: 'conn-staging',
-      name: 'Staging',
-      database: 'app_staging',
-      host: '10.0.0.10',
-    });
+    connectSavedConnectionMock.mockResolvedValue(stagingSession);
 
     render(<App />);
 
-    fireEvent.click(await screen.findByTestId('connection-row-conn-staging'));
+    fireEvent.doubleClick(await screen.findByTestId('connection-row-conn-staging'));
 
     await waitFor(() => {
       expect(connectSavedConnectionMock).toHaveBeenCalledWith('conn-staging');
+    });
+  });
+
+  it('shows an inline loader while a row is connecting', async () => {
+    let resolveConnection: ((value: DatabaseSessionSnapshot) => void) | undefined;
+    const bootstrapWithStaging: AppBootstrap = {
+      ...appBootstrap,
+      savedConnections: [...appBootstrap.savedConnections, stagingConnection],
+    };
+
+    bootstrapAppMock.mockResolvedValue(bootstrapWithStaging);
+
+    connectSavedConnectionMock.mockImplementation(
+      () =>
+        new Promise<DatabaseSessionSnapshot>((resolve) => {
+          resolveConnection = resolve;
+        }),
+    );
+
+    render(<App />);
+
+    fireEvent.doubleClick(await screen.findByTestId('connection-row-conn-staging'));
+
+    expect(await screen.findByTestId('connection-loader-conn-staging')).toBeInTheDocument();
+
+    resolveConnection?.(stagingSession);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('connection-loader-conn-staging')).not.toBeInTheDocument();
     });
   });
 
