@@ -417,14 +417,6 @@ impl ConnectionService {
     }
 
     fn to_summary(&self, record: SavedConnectionRecord) -> Result<ConnectionSummary, AppError> {
-        let has_stored_secret = match &record.secret_ref {
-            Some(secret_ref) => self
-                .secret_store
-                .load_password(&secret_ref.account)?
-                .is_some(),
-            None => false,
-        };
-
         Ok(ConnectionSummary {
             id: record.id,
             engine: parse_database_engine(&record.engine)?,
@@ -434,7 +426,7 @@ impl ConnectionService {
             database: record.database,
             username: record.username,
             ssl_mode: record.ssl_mode,
-            has_stored_secret,
+            has_stored_secret: record.secret_ref.is_some(),
             secret_provider: record
                 .secret_ref
                 .as_ref()
@@ -524,11 +516,14 @@ fn parse_database_engine(value: &str) -> Result<DatabaseEngine, AppError> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
     use async_trait::async_trait;
 
-    use super::ConnectionService;
+    use super::{ConnectionService, SecretStore};
     use crate::connections::driver::{
         build_tls_connector, normalize_driver_error, DriverConnectionInput,
         DriverConnectionMetadata, EstablishedSession, PostgresDriver,
@@ -536,8 +531,8 @@ mod tests {
     use crate::{
         connections::MemorySecretStore,
         foundation::{
-            ConnectionDraft, ConnectionSessionStatus, ConnectionTestStatus, SaveConnectionRequest,
-            SslMode, TestConnectionRequest,
+            AppError, ConnectionDraft, ConnectionSessionStatus, ConnectionTestStatus,
+            SaveConnectionRequest, SecretProvider, SslMode, TestConnectionRequest,
         },
         persistence::Repository,
     };
@@ -596,6 +591,48 @@ mod tests {
             Arc::new(MemorySecretStore::default()),
             Arc::new(MockPostgresDriver),
         )
+    }
+
+    #[derive(Default)]
+    struct RecordingSecretStore {
+        inner: MemorySecretStore,
+        load_count: AtomicUsize,
+    }
+
+    impl RecordingSecretStore {
+        fn load_count(&self) -> usize {
+            self.load_count.load(Ordering::SeqCst)
+        }
+    }
+
+    impl SecretStore for RecordingSecretStore {
+        fn provider(&self) -> SecretProvider {
+            self.inner.provider()
+        }
+
+        fn save_password(&self, account: &str, password: &str) -> Result<(), AppError> {
+            self.inner.save_password(account, password)
+        }
+
+        fn load_password(&self, account: &str) -> Result<Option<String>, AppError> {
+            let _ = self.load_count.fetch_add(1, Ordering::SeqCst);
+            self.inner.load_password(account)
+        }
+
+        fn delete_password(&self, account: &str) -> Result<(), AppError> {
+            self.inner.delete_password(account)
+        }
+    }
+
+    fn test_service_with_secret_store(
+        name: &str,
+        secret_store: Arc<dyn SecretStore>,
+    ) -> ConnectionService {
+        let database_path = test_database_path(name);
+        let _ = std::fs::remove_file(&database_path);
+        let repository =
+            Arc::new(Repository::new(database_path).expect("repository should initialize"));
+        ConnectionService::new(repository, secret_store, Arc::new(MockPostgresDriver))
     }
 
     #[tokio::test]
@@ -776,6 +813,49 @@ mod tests {
             .await;
 
         assert!(matches!(test_result.status, ConnectionTestStatus::Success));
+    }
+
+    #[tokio::test]
+    async fn list_and_get_saved_connections_do_not_read_secret_store() {
+        let secret_store = Arc::new(RecordingSecretStore::default());
+        let service = test_service_with_secret_store(
+            "list-and-get-skip-secret-load.sqlite3",
+            secret_store.clone(),
+        );
+
+        let saved = service
+            .save_connection(SaveConnectionRequest {
+                id: None,
+                draft: ConnectionDraft {
+                    name: "Local".to_string(),
+                    host: "127.0.0.1".to_string(),
+                    port: 5432,
+                    database: "app_dev".to_string(),
+                    username: "sparow".to_string(),
+                    ssl_mode: SslMode::Prefer,
+                    password: Some("secret".to_string()),
+                },
+            })
+            .await
+            .expect("save should succeed");
+
+        assert_eq!(secret_store.load_count(), 0);
+        assert!(saved.summary.has_stored_secret);
+
+        let listed = service
+            .list_saved_connections()
+            .await
+            .expect("list should succeed");
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].has_stored_secret);
+        assert_eq!(secret_store.load_count(), 0);
+
+        let fetched = service
+            .get_saved_connection(&saved.summary.id)
+            .await
+            .expect("get should succeed");
+        assert!(fetched.summary.has_stored_secret);
+        assert_eq!(secret_store.load_count(), 0);
     }
 
     #[test]
