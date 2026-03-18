@@ -10,9 +10,10 @@ use std::sync::Arc;
 use commands::{
     bootstrap_app, cancel_mock_job, cancel_query_execution, cancel_query_result_export,
     connect_saved_connection, delete_saved_connection, disconnect_active_connection,
-    get_query_result_window, get_saved_connection, list_saved_connections, list_schema_children,
-    refresh_schema_scope, save_connection, search_schema_cache, start_mock_job,
-    start_query_execution, start_query_result_export, test_connection,
+    get_query_result_count, get_query_result_window, get_saved_connection,
+    list_saved_connections, list_schema_children, refresh_schema_scope, save_connection,
+    search_schema_cache, start_mock_job, start_query_execution, start_query_result_export,
+    test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
 use foundation::{
@@ -89,6 +90,7 @@ pub fn run() {
             start_query_execution,
             cancel_query_execution,
             get_query_result_window,
+            get_query_result_count,
             start_query_result_export,
             cancel_query_result_export,
             start_mock_job,

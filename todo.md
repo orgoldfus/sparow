@@ -13,6 +13,26 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-18: Completed the async replayable-result count pass so large replayable `SELECT`s render the first page immediately, page more rows on demand, and backfill exact totals in the background.
+- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The full verification suite passed under Node `v24.13.0`: typecheck, ESLint, 94 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed, with 84 Rust tests green and 2 expected PostgreSQL smoke tests ignored. The longstanding React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- 2026-03-18: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ✅
+  - Clippy now passes cleanly after collapsing the replayable row-batch helper into a typed request struct.
+- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused contract/query workspace suites passed under Node `v24.13.0`: 3 Vitest files and 58 tests green, including the new automatic background-count regression coverage.
+- 2026-03-18: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ❌
+  - Clippy rejected the new replayable row-batch helper in `src-tauri/src/query/driver.rs` for exceeding the argument-count threshold, so that helper needs to be wrapped in a small request struct.
+- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint completed under Node `v24.13.0`. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
+- 2026-03-18: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - The Rust workspace now passes after the replayable first-page cache, async count command, and contract updates. Current result: 83 tests passed, 2 PostgreSQL smoke tests ignored, 0 failures.
+- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references compile cleanly under Node `v24.13.0` after wiring the new result-count IPC, count state, and nullable total-row semantics through the query workspace.
+- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ❌
+  - The first typecheck pass failed because `src/features/query/QueryWorkspace.tsx` referenced `QueryTabState` in the new row-count label helper without importing the type.
+- 2026-03-18: `cargo test --manifest-path src-tauri/Cargo.toml` ❌
+  - The first Rust pass failed because the `src-tauri/src/foundation/contracts.rs` fixture tests needed the new `QueryResultCountRequest` and `QueryResultCountResult` imports, and the replayable driver/store changes left a couple of warnings to clean up afterward.
+- 2026-03-18: Started the async replayable-result count pass to render the first query page immediately, page additional rows on scroll, and compute exact totals in the background without blocking the grid.
 - 2026-03-17: Completed the connection-rail UX pass by making single click selection-only, moving activation to double click, and showing an inline row loader for the connection currently being opened.
 - 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
   - ESLint completed under Node `v24.13.0` after the interaction change. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.

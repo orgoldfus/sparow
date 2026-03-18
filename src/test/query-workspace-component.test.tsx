@@ -79,6 +79,9 @@ function createTab(id: string, title: string, sql: string): QueryTabState {
       windowStatus: 'idle',
       windowError: null,
       requestedWindowSignature: null,
+      countStatus: 'idle',
+      countError: null,
+      requestedCountSignature: null,
       quickFilter: '',
       filters: [],
       sort: null,
@@ -253,6 +256,7 @@ describe('QueryWorkspace', () => {
         ],
         bufferedRowCount: totalRowCount,
         totalRowCount,
+        hasMoreRows: false,
         status: 'completed' as const,
       };
 
@@ -273,6 +277,7 @@ describe('QueryWorkspace', () => {
             visibleRowCount: totalRowCount,
             bufferedRowCount: totalRowCount,
             totalRowCount,
+            hasMoreRows: false,
             status: 'completed',
             sort: null,
             filters: [],
@@ -281,6 +286,9 @@ describe('QueryWorkspace', () => {
           windowStatus: 'ready',
           windowError: null,
           requestedWindowSignature: null,
+          countStatus: 'ready',
+          countError: null,
+          requestedCountSignature: JSON.stringify({ resultSetId, filters: [], quickFilter: '' }),
           quickFilter: '',
           filters: [],
           sort: null,
@@ -381,6 +389,7 @@ describe('QueryWorkspace', () => {
       ],
       bufferedRowCount: 2,
       totalRowCount: 2,
+      hasMoreRows: false,
       status: 'completed' as const,
     };
     const tab: QueryTabState = {
@@ -403,6 +412,7 @@ describe('QueryWorkspace', () => {
           visibleRowCount: 2,
           bufferedRowCount: 2,
           totalRowCount: 2,
+          hasMoreRows: false,
           status: 'completed',
           sort: null,
           filters: [],
@@ -411,6 +421,9 @@ describe('QueryWorkspace', () => {
         windowStatus: 'ready',
         windowError: null,
         requestedWindowSignature: null,
+        countStatus: 'ready',
+        countError: null,
+        requestedCountSignature: JSON.stringify({ resultSetId: 'result-set-columns', filters: [], quickFilter: '' }),
         quickFilter: '',
         filters: [],
         sort: null,
@@ -464,6 +477,97 @@ describe('QueryWorkspace', () => {
     expect(screen.getByTestId('result-row-0').className).toContain('w-max');
   });
 
+  it('shows a counting label while the exact row total is loading', () => {
+    const onActiveViewChange = vi.fn();
+    const summary = {
+      kind: 'rows' as const,
+      resultSetId: 'result-set-counting',
+      columns: [
+        { name: 'id', postgresType: 'int4', semanticType: 'number' as const, isNullable: false },
+      ],
+      bufferedRowCount: 1,
+      totalRowCount: null,
+      hasMoreRows: true,
+      status: 'completed' as const,
+    };
+    const tab: QueryTabState = {
+      ...createTab('tab-results', 'select * from metrics', 'select * from metrics'),
+      execution: {
+        ...baseExecution,
+        status: 'completed',
+        lastResult: summary,
+      },
+      result: {
+        summary,
+        window: {
+          resultSetId: 'result-set-counting',
+          offset: 0,
+          limit: 120,
+          rows: [[1]],
+          visibleRowCount: 1,
+          bufferedRowCount: 1,
+          totalRowCount: null,
+          hasMoreRows: true,
+          status: 'completed',
+          sort: null,
+          filters: [],
+          quickFilter: '',
+        },
+        windowStatus: 'ready',
+        windowError: null,
+        requestedWindowSignature: null,
+        countStatus: 'loading',
+        countError: null,
+        requestedCountSignature: JSON.stringify({ resultSetId: 'result-set-counting', filters: [], quickFilter: '' }),
+        quickFilter: '',
+        filters: [],
+        sort: null,
+        exportOutputPath: './sparow-result.csv',
+        exportJobId: null,
+        exportStatus: 'idle',
+        exportLastEvent: null,
+        exportLastError: null,
+      },
+    };
+
+    render(
+      <TooltipProvider>
+        <QueryResultsPanel
+          activeSession={activeSession}
+          activeView="results"
+          onActiveViewChange={onActiveViewChange}
+          workspace={{
+            activeTab: tab,
+            activeTabId: tab.id,
+            runDisabledReason: null,
+            tabs: [tab],
+            createTab: vi.fn(),
+            createNewTab: vi.fn(),
+            closeTab: vi.fn(),
+            selectTab: vi.fn(),
+            setTabSql: vi.fn(),
+            updateTabSql: vi.fn(),
+            setTabTargetConnection: vi.fn(),
+            updateTabTargetConnection: vi.fn(),
+            startTabQuery: vi.fn(() => Promise.resolve()),
+            runActiveTab: vi.fn(() => Promise.resolve()),
+            cancelTabQuery: vi.fn(() => Promise.resolve()),
+            cancelActiveTab: vi.fn(() => Promise.resolve()),
+            loadTabResultWindow: vi.fn(() => Promise.resolve()),
+            setTabQuickFilter: vi.fn(),
+            setTabColumnFilter: vi.fn(),
+            toggleTabSort: vi.fn(),
+            setTabExportOutputPath: vi.fn(),
+            startTabResultExport: vi.fn(() => Promise.resolve()),
+            cancelTabResultExport: vi.fn(() => Promise.resolve()),
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('1+ rows loaded - counting total...')).toBeInTheDocument();
+  });
+
   it('keeps rendering loaded rows when a fetched window reports zero visible rows', () => {
     const onActiveViewChange = vi.fn();
     const summary = {
@@ -475,6 +579,7 @@ describe('QueryWorkspace', () => {
       ],
       bufferedRowCount: 10,
       totalRowCount: 10,
+      hasMoreRows: false,
       status: 'completed' as const,
     };
     const tab: QueryTabState = {
@@ -497,6 +602,7 @@ describe('QueryWorkspace', () => {
           visibleRowCount: 0,
           bufferedRowCount: 10,
           totalRowCount: 10,
+          hasMoreRows: false,
           status: 'completed',
           sort: null,
           filters: [],
@@ -505,6 +611,9 @@ describe('QueryWorkspace', () => {
         windowStatus: 'ready',
         windowError: null,
         requestedWindowSignature: null,
+        countStatus: 'ready',
+        countError: null,
+        requestedCountSignature: JSON.stringify({ resultSetId: 'result-set-stale-visible-count', filters: [], quickFilter: '' }),
         quickFilter: '',
         filters: [],
         sort: null,

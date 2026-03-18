@@ -1,0 +1,11 @@
+{
+  "resultSetId": "result-set-2026",
+  "filters": [
+    {
+      "columnIndex": 1,
+      "mode": "contains",
+      "value": "@example.com"
+    }
+  ],
+  "quickFilter": "ada"
+}

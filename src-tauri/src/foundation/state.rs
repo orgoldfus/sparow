@@ -17,7 +17,8 @@ use super::{
     CancelQueryResultExportResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
     DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
     ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
-    QueryExecutionRequest, QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindow,
+    QueryExecutionRequest, QueryResultCountRequest, QueryResultCountResult,
+    QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindow,
     QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
     SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
 };
@@ -260,6 +261,17 @@ impl AppState {
         request: QueryResultWindowRequest,
     ) -> Result<QueryResultWindow, AppError> {
         let result = self.query.get_query_result_window(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn get_query_result_count(
+        &self,
+        request: QueryResultCountRequest,
+    ) -> Result<QueryResultCountResult, AppError> {
+        let result = self.query.get_query_result_count(request).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

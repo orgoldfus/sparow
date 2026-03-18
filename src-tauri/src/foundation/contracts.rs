@@ -463,6 +463,7 @@ pub struct QueryResultSetSummary {
     pub columns: Vec<QueryResultColumn>,
     pub buffered_row_count: usize,
     pub total_row_count: Option<usize>,
+    pub has_more_rows: bool,
     pub status: QueryResultStatus,
 }
 
@@ -526,6 +527,7 @@ pub struct QueryResultWindow {
     pub visible_row_count: usize,
     pub buffered_row_count: usize,
     pub total_row_count: Option<usize>,
+    pub has_more_rows: bool,
     pub status: QueryResultStatus,
     pub sort: Option<QueryResultSort>,
     pub filters: Vec<QueryResultFilter>,
@@ -542,6 +544,23 @@ pub struct QueryResultWindowRequest {
     pub sort: Option<QueryResultSort>,
     pub filters: Vec<QueryResultFilter>,
     pub quick_filter: String,
+}
+
+/// Request payload for counting the active query-result viewer shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultCountRequest {
+    pub result_set_id: String,
+    pub filters: Vec<QueryResultFilter>,
+    pub quick_filter: String,
+}
+
+/// Exact row-count payload for the active query-result viewer shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResultCountResult {
+    pub result_set_id: String,
+    pub total_row_count: usize,
 }
 
 /// Request payload for exporting a query result.
@@ -833,11 +852,12 @@ mod tests {
         ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
         DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
         QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-        QueryExecutionResult, QueryResultCell, QueryResultExportAccepted,
-        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
-        QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
-        SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-        SchemaSearchRequest, SchemaSearchResult, SslMode, TestConnectionRequest,
+        QueryExecutionResult, QueryResultCell, QueryResultCountRequest, QueryResultCountResult,
+        QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
+        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest,
+        RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
+        SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
+        TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -890,6 +910,10 @@ mod tests {
         include_str!("../../../fixtures/contracts/query-result-window-request.json");
     const QUERY_RESULT_WINDOW_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/query-result-window.json");
+    const QUERY_RESULT_COUNT_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-count-request.json");
+    const QUERY_RESULT_COUNT_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/query-result-count-result.json");
     const QUERY_RESULT_EXPORT_REQUEST_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/query-result-export-request.json");
     const QUERY_RESULT_EXPORT_ACCEPTED_FIXTURE: &str =
@@ -1087,6 +1111,7 @@ mod tests {
             QueryExecutionResult::Rows { summary } => {
                 assert_eq!(summary.result_set_id, "result-set-2026");
                 assert_eq!(summary.buffered_row_count, 2);
+                assert!(summary.has_more_rows);
             }
             other => panic!("expected rows result, got {other:?}"),
         }
@@ -1115,6 +1140,23 @@ mod tests {
             .expect("query result window fixture should deserialize");
         assert_eq!(fixture.rows.len(), 2);
         assert_eq!(fixture.status, QueryResultStatus::Completed);
+        assert!(fixture.has_more_rows);
+    }
+
+    #[test]
+    fn deserializes_query_result_count_request_fixture() {
+        let fixture: QueryResultCountRequest =
+            serde_json::from_str(QUERY_RESULT_COUNT_REQUEST_FIXTURE)
+                .expect("query result count request fixture should deserialize");
+        assert_eq!(fixture.filters.len(), 1);
+    }
+
+    #[test]
+    fn deserializes_query_result_count_result_fixture() {
+        let fixture: QueryResultCountResult =
+            serde_json::from_str(QUERY_RESULT_COUNT_RESULT_FIXTURE)
+                .expect("query result count result fixture should deserialize");
+        assert_eq!(fixture.total_row_count, 42);
     }
 
     #[test]

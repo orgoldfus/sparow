@@ -27,7 +27,8 @@
       }
     ],
     "bufferedRowCount": 2,
-    "totalRowCount": 2,
+    "totalRowCount": null,
+    "hasMoreRows": true,
     "status": "completed"
   }
 }

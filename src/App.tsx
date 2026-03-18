@@ -254,7 +254,9 @@ export default function App() {
   }, [activeQueryError, error, workspace.activeSession]);
   const activeResultSummary = queryWorkspace.activeTab?.result.summary ?? null;
   const resultRowsLabel = activeResultSummary
-    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.totalRowCount !== null ? ` / ${activeResultSummary.totalRowCount}` : ''} rows`
+    ? activeResultSummary.totalRowCount !== null
+      ? `${activeResultSummary.bufferedRowCount} / ${activeResultSummary.totalRowCount} rows`
+      : `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows loaded`
     : 'No result';
   const elapsedLabel = queryWorkspace.activeTab?.execution.lastEvent
     ? `${queryWorkspace.activeTab.execution.lastEvent.elapsedMs} ms`

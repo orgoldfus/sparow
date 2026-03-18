@@ -9,6 +9,7 @@ import type {
 import {
   cancelQueryExecution,
   cancelQueryResultExport,
+  getQueryResultCount,
   getQueryResultWindow,
   startQueryExecution,
   startQueryResultExport,
@@ -34,11 +35,18 @@ vi.mock('../lib/ipc', () => ({
       rows: [],
       visibleRowCount: 0,
       bufferedRowCount: 0,
-      totalRowCount: 0,
+      totalRowCount: null,
+      hasMoreRows: false,
       status: 'completed',
       sort: null,
       filters: [],
       quickFilter: '',
+    }),
+  ),
+  getQueryResultCount: vi.fn(() =>
+    Promise.resolve({
+      resultSetId: 'result-set-1',
+      totalRowCount: 0,
     }),
   ),
   startQueryResultExport: vi.fn(() =>
@@ -225,8 +233,10 @@ function Harness({
       <div data-testid="active-run-disabled">{workspace.runDisabledReason ?? 'enabled'}</div>
       <div data-testid="active-summary">{workspace.activeTab?.lastExecutionSummary ?? 'none'}</div>
       <div data-testid="active-summary-result-set">{workspace.activeTab?.result.summary?.resultSetId ?? 'none'}</div>
+      <div data-testid="active-total-row-count">{workspace.activeTab?.result.summary?.totalRowCount ?? 'none'}</div>
       <div data-testid="active-window-result-set">{workspace.activeTab?.result.window?.resultSetId ?? 'none'}</div>
       <div data-testid="active-window-row-width">{workspace.activeTab?.result.window?.rows[0]?.length ?? 0}</div>
+      <div data-testid="active-count-status">{workspace.activeTab?.result.countStatus ?? 'idle'}</div>
       <div data-testid="active-quick-filter">{workspace.activeTab?.result.quickFilter ?? ''}</div>
       <div data-testid="active-filter-count">{workspace.activeTab?.result.filters.length ?? 0}</div>
       <div data-testid="active-sort-column">{workspace.activeTab?.result.sort?.columnIndex ?? 'none'}</div>
@@ -244,6 +254,7 @@ describe('useQueryWorkspace', () => {
     vi.mocked(startQueryExecution).mockClear();
     vi.mocked(cancelQueryExecution).mockClear();
     vi.mocked(getQueryResultWindow).mockClear();
+    vi.mocked(getQueryResultCount).mockClear();
     vi.mocked(startQueryResultExport).mockClear();
     vi.mocked(cancelQueryResultExport).mockClear();
   });
@@ -426,6 +437,7 @@ describe('useQueryWorkspace', () => {
       visibleRowCount: 1,
       bufferedRowCount: 1,
       totalRowCount: 1,
+      hasMoreRows: false,
       status: 'completed',
       sort: null,
       filters: [],
@@ -457,6 +469,7 @@ describe('useQueryWorkspace', () => {
               columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
               bufferedRowCount: 1,
               totalRowCount: 1,
+              hasMoreRows: false,
               status: 'completed',
             },
           },
@@ -496,6 +509,7 @@ describe('useQueryWorkspace', () => {
               columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
               bufferedRowCount: 1,
               totalRowCount: 1,
+              hasMoreRows: false,
               status: 'completed',
             },
           },
@@ -519,6 +533,7 @@ describe('useQueryWorkspace', () => {
               ],
               bufferedRowCount: 2,
               totalRowCount: 2,
+              hasMoreRows: false,
               status: 'completed',
             },
           },
@@ -571,6 +586,7 @@ describe('useQueryWorkspace', () => {
               ],
               bufferedRowCount: 10,
               totalRowCount: 10,
+              hasMoreRows: false,
               status: 'completed',
             },
           },
@@ -584,5 +600,72 @@ describe('useQueryWorkspace', () => {
       expect(screen.getByTestId('active-filter-count')).toHaveTextContent('0');
       expect(screen.getByTestId('active-sort-column')).toHaveTextContent('none');
     });
+  });
+
+  it('automatically counts rows after loading a window with an unknown total', async () => {
+    const onError = vi.fn();
+    vi.mocked(getQueryResultWindow).mockResolvedValueOnce({
+      resultSetId: 'result-set-async-count',
+      offset: 0,
+      limit: 120,
+      rows: [[1]],
+      visibleRowCount: 1,
+      bufferedRowCount: 1,
+      totalRowCount: null,
+      hasMoreRows: true,
+      status: 'completed',
+      sort: null,
+      filters: [],
+      quickFilter: '',
+    });
+    vi.mocked(getQueryResultCount).mockResolvedValueOnce({
+      resultSetId: 'result-set-async-count',
+      totalRowCount: 42,
+    });
+
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+    const tabId = await screen.findByTestId('active-tab-id').then((element) => element.textContent ?? 'none');
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-count',
+            correlationId: 'query-corr-count',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 18,
+            message: 'Query completed.',
+            startedAt: '2026-03-10T16:46:00.000Z',
+            finishedAt: '2026-03-10T16:46:00.018Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-async-count',
+              columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+              bufferedRowCount: 1,
+              totalRowCount: null,
+              hasMoreRows: true,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('load-window'));
+
+    await waitFor(() => {
+      expect(getQueryResultCount).toHaveBeenCalledWith({
+        resultSetId: 'result-set-async-count',
+        filters: [],
+        quickFilter: '',
+      });
+      expect(screen.getByTestId('active-count-status')).toHaveTextContent('ready');
+      expect(screen.getByTestId('active-total-row-count')).toHaveTextContent('42');
+    });
+    expect(onError).not.toHaveBeenCalled();
   });
 });

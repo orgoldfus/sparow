@@ -31,6 +31,8 @@ import type {
   QueryResultSortDirection,
   QueryResultColumn,
   QueryResultColumnSemanticType,
+  QueryResultCountRequest,
+  QueryResultCountResult,
   QueryResultWindow,
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
@@ -607,6 +609,7 @@ export function isQueryResultSetSummary(value: unknown): value is QueryResultSet
     value.columns.every(isQueryResultColumn) &&
     isNonNegativeInteger(value.bufferedRowCount) &&
     isNullableNonNegativeInteger(value.totalRowCount) &&
+    typeof value.hasMoreRows === 'boolean' &&
     isQueryResultStatus(value.status)
   );
 }
@@ -661,11 +664,30 @@ export function isQueryResultWindow(value: unknown): value is QueryResultWindow 
     isNonNegativeInteger(value.visibleRowCount) &&
     isNonNegativeInteger(value.bufferedRowCount) &&
     isNullableNonNegativeInteger(value.totalRowCount) &&
+    typeof value.hasMoreRows === 'boolean' &&
     isQueryResultStatus(value.status) &&
     (value.sort === null || isQueryResultSort(value.sort)) &&
     Array.isArray(value.filters) &&
     value.filters.every(isQueryResultFilter) &&
     typeof value.quickFilter === 'string'
+  );
+}
+
+export function isQueryResultCountRequest(value: unknown): value is QueryResultCountRequest {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    Array.isArray(value.filters) &&
+    value.filters.every(isQueryResultFilter) &&
+    typeof value.quickFilter === 'string'
+  );
+}
+
+export function isQueryResultCountResult(value: unknown): value is QueryResultCountResult {
+  return (
+    isRecord(value) &&
+    typeof value.resultSetId === 'string' &&
+    isNonNegativeInteger(value.totalRowCount)
   );
 }
 

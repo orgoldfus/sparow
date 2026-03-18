@@ -1,6 +1,10 @@
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::foundation::{
     QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType, QueryResultFilter,
@@ -8,17 +12,34 @@ use crate::foundation::{
     QueryResultWindow, QueryResultWindowRequest,
 };
 
+#[derive(Debug)]
+struct ReplayableQueryResultCache {
+    descriptor_signature: String,
+    count_signature: String,
+    rows: Vec<Vec<QueryResultCell>>,
+    total_row_count: Option<usize>,
+    has_more_rows: bool,
+}
+
 #[derive(Debug, Clone)]
+pub(crate) struct ReplayableQueryCacheSnapshot {
+    pub descriptor_signature: String,
+    pub loaded_row_count: usize,
+    pub has_more_rows: bool,
+}
+
+#[derive(Debug)]
 pub(crate) struct ReplayableQueryResultHandle {
     pub result_set_id: String,
     pub tab_id: String,
     pub connection_id: String,
     pub sql: String,
     pub columns: Vec<QueryResultColumn>,
-    pub initial_total_row_count: usize,
+    cache: Mutex<ReplayableQueryResultCache>,
+    query_lock: AsyncMutex<()>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct BufferedQueryResultHandle {
     pub result_set_id: String,
     pub tab_id: String,
@@ -26,10 +47,143 @@ pub(crate) struct BufferedQueryResultHandle {
     pub rows: Vec<Vec<QueryResultCell>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum QueryResultHandle {
     Replayable(ReplayableQueryResultHandle),
     Buffered(BufferedQueryResultHandle),
+}
+
+impl ReplayableQueryResultHandle {
+    pub(crate) fn new(
+        result_set_id: String,
+        tab_id: String,
+        connection_id: String,
+        sql: String,
+        columns: Vec<QueryResultColumn>,
+        initial_rows: Vec<Vec<QueryResultCell>>,
+        has_more_rows: bool,
+    ) -> Self {
+        Self {
+            result_set_id,
+            tab_id,
+            connection_id,
+            sql,
+            columns,
+            cache: Mutex::new(ReplayableQueryResultCache {
+                descriptor_signature: build_replayable_descriptor_signature(
+                    None,
+                    &[],
+                    "",
+                ),
+                count_signature: build_replayable_count_signature(&[], ""),
+                rows: initial_rows,
+                total_row_count: None,
+                has_more_rows,
+            }),
+            query_lock: AsyncMutex::new(()),
+        }
+    }
+
+    pub(crate) async fn lock_query(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.query_lock.lock().await
+    }
+
+    pub(crate) fn cache_snapshot(&self) -> ReplayableQueryCacheSnapshot {
+        let cache = self.cache.lock().expect("replayable cache lock poisoned");
+        ReplayableQueryCacheSnapshot {
+            descriptor_signature: cache.descriptor_signature.clone(),
+            loaded_row_count: cache.rows.len(),
+            has_more_rows: cache.has_more_rows,
+        }
+    }
+
+    pub(crate) fn replace_cached_rows(
+        &self,
+        descriptor_signature: String,
+        count_signature: String,
+        rows: Vec<Vec<QueryResultCell>>,
+        has_more_rows: bool,
+    ) {
+        let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
+        let total_row_count = if cache.count_signature == count_signature {
+            cache.total_row_count
+        } else {
+            None
+        };
+        *cache = ReplayableQueryResultCache {
+            descriptor_signature,
+            count_signature,
+            rows,
+            total_row_count,
+            has_more_rows,
+        };
+    }
+
+    pub(crate) fn append_cached_rows(
+        &self,
+        descriptor_signature: &str,
+        rows: Vec<Vec<QueryResultCell>>,
+        has_more_rows: bool,
+    ) -> bool {
+        let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
+        if cache.descriptor_signature != descriptor_signature {
+            return false;
+        }
+
+        cache.rows.extend(rows);
+        cache.has_more_rows = has_more_rows;
+        true
+    }
+
+    pub(crate) fn set_total_row_count_if_current(
+        &self,
+        count_signature: &str,
+        total_row_count: usize,
+    ) -> bool {
+        let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
+        if cache.count_signature != count_signature {
+            return false;
+        }
+
+        cache.total_row_count = Some(total_row_count);
+        true
+    }
+
+    pub(crate) fn summary(&self) -> QueryResultSetSummary {
+        let cache = self.cache.lock().expect("replayable cache lock poisoned");
+        QueryResultSetSummary {
+            result_set_id: self.result_set_id.clone(),
+            columns: self.columns.clone(),
+            buffered_row_count: cache.rows.len(),
+            total_row_count: cache.total_row_count,
+            has_more_rows: cache.has_more_rows,
+            status: QueryResultStatus::Completed,
+        }
+    }
+
+    pub(crate) fn load_window(&self, request: &QueryResultWindowRequest) -> QueryResultWindow {
+        let cache = self.cache.lock().expect("replayable cache lock poisoned");
+        let start = request.offset.min(cache.rows.len());
+        let end = request
+            .offset
+            .saturating_add(request.limit)
+            .min(cache.rows.len());
+
+        QueryResultWindow {
+            result_set_id: self.result_set_id.clone(),
+            offset: request.offset,
+            limit: request.limit,
+            rows: cache.rows[start..end].to_vec(),
+            visible_row_count: cache.total_row_count.unwrap_or(cache.rows.len()),
+            buffered_row_count: cache.rows.len(),
+            total_row_count: cache.total_row_count,
+            has_more_rows: cache.has_more_rows,
+            status: QueryResultStatus::Completed,
+            sort: request.sort.clone(),
+            filters: request.filters.clone(),
+            quick_filter: request.quick_filter.clone(),
+        }
+    }
 }
 
 impl QueryResultHandle {
@@ -56,13 +210,7 @@ impl QueryResultHandle {
 
     pub(crate) fn summary(&self) -> QueryResultSetSummary {
         match self {
-            Self::Replayable(handle) => QueryResultSetSummary {
-                result_set_id: handle.result_set_id.clone(),
-                columns: handle.columns.clone(),
-                buffered_row_count: handle.initial_total_row_count,
-                total_row_count: Some(handle.initial_total_row_count),
-                status: QueryResultStatus::Completed,
-            },
+            Self::Replayable(handle) => handle.summary(),
             Self::Buffered(handle) => {
                 let row_count = handle.rows.len();
                 QueryResultSetSummary {
@@ -70,6 +218,7 @@ impl QueryResultHandle {
                     columns: handle.columns.clone(),
                     buffered_row_count: row_count,
                     total_row_count: Some(row_count),
+                    has_more_rows: false,
                     status: QueryResultStatus::Completed,
                 }
             }
@@ -79,7 +228,7 @@ impl QueryResultHandle {
 
 #[derive(Clone, Default)]
 pub(crate) struct QueryResultStore {
-    handles: Arc<Mutex<HashMap<String, Arc<QueryResultHandle>>>>,
+    handles: Arc<AsyncMutex<HashMap<String, Arc<QueryResultHandle>>>>,
 }
 
 impl QueryResultStore {
@@ -109,7 +258,6 @@ impl QueryResultStore {
 
 impl BufferedQueryResultHandle {
     pub(crate) fn load_window(&self, request: &QueryResultWindowRequest) -> QueryResultWindow {
-        let total_row_count = self.rows.len();
         let filtered_indexes = matching_row_indexes(
             &self.rows,
             &self.columns,
@@ -130,15 +278,17 @@ impl BufferedQueryResultHandle {
             .take(request.limit)
             .map(|index| self.rows[*index].clone())
             .collect();
+        let visible_row_count = visible_indexes.len();
 
         QueryResultWindow {
             result_set_id: self.result_set_id.clone(),
             offset: request.offset,
             limit: request.limit,
             rows,
-            visible_row_count: visible_indexes.len(),
-            buffered_row_count: total_row_count,
-            total_row_count: Some(total_row_count),
+            visible_row_count,
+            buffered_row_count: visible_row_count,
+            total_row_count: Some(visible_row_count),
+            has_more_rows: false,
             status: QueryResultStatus::Completed,
             sort: request.sort.clone(),
             filters: request.filters.clone(),
@@ -161,6 +311,23 @@ impl BufferedQueryResultHandle {
             .map(|index| self.rows[index].as_slice())
             .collect()
     }
+}
+
+pub(crate) fn build_replayable_descriptor_signature(
+    sort: Option<&QueryResultSort>,
+    filters: &[QueryResultFilter],
+    quick_filter: &str,
+) -> String {
+    serde_json::to_string(&(sort, filters, quick_filter))
+        .expect("replayable descriptor signature should serialize")
+}
+
+pub(crate) fn build_replayable_count_signature(
+    filters: &[QueryResultFilter],
+    quick_filter: &str,
+) -> String {
+    serde_json::to_string(&(filters, quick_filter))
+        .expect("replayable count signature should serialize")
 }
 
 fn matching_row_indexes(
@@ -263,10 +430,10 @@ where
     T: Ord,
 {
     match (left, right) {
-        (Some(left), Some(right)) => left.cmp(&right),
         (None, None) => Ordering::Equal,
         (None, Some(_)) => Ordering::Greater,
         (Some(_), None) => Ordering::Less,
+        (Some(left), Some(right)) => left.cmp(&right),
     }
 }
 

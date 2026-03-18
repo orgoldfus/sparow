@@ -447,6 +447,7 @@ function loadScenarioWindow(tab: QueryTabState, visibleRows: QueryResultCell[][]
         visibleRowCount: visibleRows.length,
         bufferedRowCount: tab.result.summary?.bufferedRowCount ?? visibleRows.length,
         totalRowCount: tab.result.summary?.totalRowCount ?? null,
+        hasMoreRows: false,
         status: tab.result.summary?.status ?? 'running',
         sort: tab.result.sort,
         filters: tab.result.filters,
@@ -546,6 +547,9 @@ function emptyResultState(): QueryTabResultState {
     windowStatus: 'idle',
     windowError: null,
     requestedWindowSignature: null,
+    countStatus: 'idle',
+    countError: null,
+    requestedCountSignature: null,
     quickFilter: '',
     filters: [],
     sort: null,
@@ -568,6 +572,7 @@ function buildSummary(
     columns: [...baseColumns],
     bufferedRowCount,
     totalRowCount,
+    hasMoreRows: false,
     status,
   };
 }

@@ -237,6 +237,7 @@ export type QueryResultSetSummary = {
   columns: QueryResultColumn[];
   bufferedRowCount: number;
   totalRowCount: number | null;
+  hasMoreRows: boolean;
   status: QueryResultStatus;
 };
 
@@ -316,10 +317,22 @@ export type QueryResultWindow = {
   visibleRowCount: number;
   bufferedRowCount: number;
   totalRowCount: number | null;
+  hasMoreRows: boolean;
   status: QueryResultStatus;
   sort: QueryResultSort | null;
   filters: QueryResultFilter[];
   quickFilter: string;
+};
+
+export type QueryResultCountRequest = {
+  resultSetId: string;
+  filters: QueryResultFilter[];
+  quickFilter: string;
+};
+
+export type QueryResultCountResult = {
+  resultSetId: string;
+  totalRowCount: number;
 };
 
 export type QueryResultExportRequest = {

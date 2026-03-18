@@ -543,6 +543,9 @@ function buildTab(id: string, title: string, connectionId: string | null): Query
       windowStatus: 'idle',
       windowError: null,
       requestedWindowSignature: null,
+      countStatus: 'idle',
+      countError: null,
+      requestedCountSignature: null,
       quickFilter: '',
       filters: [],
       sort: null,
@@ -561,6 +564,7 @@ function buildSummary(id: string, rowCount: number): QueryResultSetSummary {
     columns,
     bufferedRowCount: rowCount,
     totalRowCount: rowCount,
+    hasMoreRows: false,
     status: 'completed',
   };
 }
@@ -633,6 +637,7 @@ function buildWindow(
     visibleRowCount: rows.length,
     bufferedRowCount: rows.length,
     totalRowCount: rows.length,
+    hasMoreRows: false,
     status: 'completed',
     sort,
     filters,
