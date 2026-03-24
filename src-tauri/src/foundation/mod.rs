@@ -21,9 +21,9 @@ pub use contracts::{
     QueryResultSortDirection, QueryResultStatus, QueryResultWindow, QueryResultWindowRequest,
     RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaCacheStatus, SchemaNode,
     SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-    SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult,
-    SecretProvider, SslMode, TestConnectionRequest, BACKGROUND_JOB_EVENT,
-    QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT, SCHEMA_REFRESH_EVENT,
+    SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult, SecretProvider,
+    SslMode, TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT,
+    QUERY_RESULT_EXPORT_EVENT, SCHEMA_REFRESH_EVENT,
 };
 pub use error::AppError;
 pub use jobs::JobRegistry;

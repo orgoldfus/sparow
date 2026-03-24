@@ -854,10 +854,9 @@ mod tests {
         QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
         QueryExecutionResult, QueryResultCell, QueryResultCountRequest, QueryResultCountResult,
         QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest,
-        RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted,
-        SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult, SslMode,
-        TestConnectionRequest,
+        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
+        SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
+        SchemaSearchRequest, SchemaSearchResult, SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
