@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
 };
 
@@ -13,19 +13,39 @@ use crate::foundation::{
 };
 
 #[derive(Debug)]
+struct ReplayableQueryResultPage {
+    rows: Vec<Vec<QueryResultCell>>,
+    has_more_rows_after: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ReplayablePageRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl ReplayablePageRange {
+    pub(crate) fn with_margin(self, margin: usize) -> Self {
+        Self {
+            start: self.start.saturating_sub(margin),
+            end: self.end.saturating_add(margin),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct ReplayableQueryResultCache {
     descriptor_signature: String,
     count_signature: String,
-    rows: Vec<Vec<QueryResultCell>>,
+    page_size: usize,
+    pages: BTreeMap<usize, ReplayableQueryResultPage>,
     total_row_count: Option<usize>,
-    has_more_rows: bool,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReplayableQueryCacheSnapshot {
     pub descriptor_signature: String,
-    pub loaded_row_count: usize,
-    pub has_more_rows: bool,
+    pub cached_page_indexes: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -37,6 +57,17 @@ pub(crate) struct ReplayableQueryResultHandle {
     pub columns: Vec<QueryResultColumn>,
     cache: Mutex<ReplayableQueryResultCache>,
     query_lock: AsyncMutex<()>,
+}
+
+pub(crate) struct ReplayableQueryResultHandleInit {
+    pub result_set_id: String,
+    pub tab_id: String,
+    pub connection_id: String,
+    pub sql: String,
+    pub columns: Vec<QueryResultColumn>,
+    pub page_size: usize,
+    pub initial_rows: Vec<Vec<QueryResultCell>>,
+    pub has_more_rows: bool,
 }
 
 #[derive(Debug)]
@@ -54,31 +85,19 @@ pub(crate) enum QueryResultHandle {
 }
 
 impl ReplayableQueryResultHandle {
-    pub(crate) fn new(
-        result_set_id: String,
-        tab_id: String,
-        connection_id: String,
-        sql: String,
-        columns: Vec<QueryResultColumn>,
-        initial_rows: Vec<Vec<QueryResultCell>>,
-        has_more_rows: bool,
-    ) -> Self {
+    pub(crate) fn new(init: ReplayableQueryResultHandleInit) -> Self {
         Self {
-            result_set_id,
-            tab_id,
-            connection_id,
-            sql,
-            columns,
+            result_set_id: init.result_set_id,
+            tab_id: init.tab_id,
+            connection_id: init.connection_id,
+            sql: init.sql,
+            columns: init.columns,
             cache: Mutex::new(ReplayableQueryResultCache {
-                descriptor_signature: build_replayable_descriptor_signature(
-                    None,
-                    &[],
-                    "",
-                ),
+                descriptor_signature: build_replayable_descriptor_signature(None, &[], ""),
                 count_signature: build_replayable_count_signature(&[], ""),
-                rows: initial_rows,
+                page_size: init.page_size,
+                pages: build_cached_pages(init.page_size, 0, init.initial_rows, init.has_more_rows),
                 total_row_count: None,
-                has_more_rows,
             }),
             query_lock: AsyncMutex::new(()),
         }
@@ -92,17 +111,24 @@ impl ReplayableQueryResultHandle {
         let cache = self.cache.lock().expect("replayable cache lock poisoned");
         ReplayableQueryCacheSnapshot {
             descriptor_signature: cache.descriptor_signature.clone(),
-            loaded_row_count: cache.rows.len(),
-            has_more_rows: cache.has_more_rows,
+            cached_page_indexes: cache.pages.keys().copied().collect(),
         }
     }
 
-    pub(crate) fn replace_cached_rows(
+    pub(crate) fn page_size(&self) -> usize {
+        self.cache
+            .lock()
+            .expect("replayable cache lock poisoned")
+            .page_size
+    }
+
+    pub(crate) fn replace_cached_page_batch(
         &self,
         descriptor_signature: String,
         count_signature: String,
+        page_start_index: usize,
         rows: Vec<Vec<QueryResultCell>>,
-        has_more_rows: bool,
+        has_more_rows_after_batch: bool,
     ) {
         let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
         let total_row_count = if cache.count_signature == count_signature {
@@ -113,25 +139,39 @@ impl ReplayableQueryResultHandle {
         *cache = ReplayableQueryResultCache {
             descriptor_signature,
             count_signature,
-            rows,
+            page_size: cache.page_size,
+            pages: build_cached_pages(
+                cache.page_size,
+                page_start_index,
+                rows,
+                has_more_rows_after_batch,
+            ),
             total_row_count,
-            has_more_rows,
         };
     }
 
-    pub(crate) fn append_cached_rows(
+    pub(crate) fn store_cached_page_batch(
         &self,
         descriptor_signature: &str,
+        page_start_index: usize,
         rows: Vec<Vec<QueryResultCell>>,
-        has_more_rows: bool,
+        has_more_rows_after_batch: bool,
+        anchor_range: ReplayablePageRange,
     ) -> bool {
         let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
         if cache.descriptor_signature != descriptor_signature {
             return false;
         }
 
-        cache.rows.extend(rows);
-        cache.has_more_rows = has_more_rows;
+        for (page_index, page) in build_cached_pages(
+            cache.page_size,
+            page_start_index,
+            rows,
+            has_more_rows_after_batch,
+        ) {
+            cache.pages.insert(page_index, page);
+        }
+        evict_cached_pages(&mut cache.pages, anchor_range);
         true
     }
 
@@ -154,30 +194,52 @@ impl ReplayableQueryResultHandle {
         QueryResultSetSummary {
             result_set_id: self.result_set_id.clone(),
             columns: self.columns.clone(),
-            buffered_row_count: cache.rows.len(),
+            buffered_row_count: buffered_row_count(&cache.pages),
             total_row_count: cache.total_row_count,
-            has_more_rows: cache.has_more_rows,
+            has_more_rows: cache_has_more_rows(&cache),
             status: QueryResultStatus::Completed,
         }
     }
 
     pub(crate) fn load_window(&self, request: &QueryResultWindowRequest) -> QueryResultWindow {
         let cache = self.cache.lock().expect("replayable cache lock poisoned");
-        let start = request.offset.min(cache.rows.len());
-        let end = request
-            .offset
-            .saturating_add(request.limit)
-            .min(cache.rows.len());
+        let requested_range =
+            replayable_page_range_for_window(request.offset, request.limit, cache.page_size);
+        let request_end = request.offset.saturating_add(request.limit);
+        let mut rows = Vec::with_capacity(request.limit);
+
+        for page_index in requested_range.start..=requested_range.end {
+            let Some(page) = cache.pages.get(&page_index) else {
+                continue;
+            };
+            let page_offset = page_index.saturating_mul(cache.page_size);
+            let start = request
+                .offset
+                .saturating_sub(page_offset)
+                .min(page.rows.len());
+            let end = request_end.saturating_sub(page_offset).min(page.rows.len());
+            if start >= end {
+                continue;
+            }
+            rows.extend(page.rows[start..end].iter().cloned());
+        }
+
+        let visible_row_count = cache_visible_row_count_for_request(
+            &cache,
+            requested_range,
+            request.offset,
+            rows.len(),
+        );
 
         QueryResultWindow {
             result_set_id: self.result_set_id.clone(),
             offset: request.offset,
             limit: request.limit,
-            rows: cache.rows[start..end].to_vec(),
-            visible_row_count: cache.total_row_count.unwrap_or(cache.rows.len()),
-            buffered_row_count: cache.rows.len(),
+            rows,
+            visible_row_count,
+            buffered_row_count: buffered_row_count(&cache.pages),
             total_row_count: cache.total_row_count,
-            has_more_rows: cache.has_more_rows,
+            has_more_rows: cache_has_more_rows(&cache),
             status: QueryResultStatus::Completed,
             sort: request.sort.clone(),
             filters: request.filters.clone(),
@@ -311,6 +373,17 @@ impl BufferedQueryResultHandle {
             .map(|index| self.rows[index].as_slice())
             .collect()
     }
+}
+
+pub(crate) fn replayable_page_range_for_window(
+    offset: usize,
+    limit: usize,
+    page_size: usize,
+) -> ReplayablePageRange {
+    let start = offset / page_size;
+    let end = offset.saturating_add(limit).saturating_sub(1) / page_size;
+
+    ReplayablePageRange { start, end }
 }
 
 pub(crate) fn build_replayable_descriptor_signature(
@@ -469,5 +542,255 @@ fn normalized_cell_text(cell: &QueryResultCell) -> String {
         QueryResultCell::Float(value) => value.to_string(),
         QueryResultCell::Boolean(value) => value.to_string(),
         QueryResultCell::Null => String::new(),
+    }
+}
+
+fn build_cached_pages(
+    page_size: usize,
+    page_start_index: usize,
+    rows: Vec<Vec<QueryResultCell>>,
+    has_more_rows_after_batch: bool,
+) -> BTreeMap<usize, ReplayableQueryResultPage> {
+    rows.chunks(page_size)
+        .enumerate()
+        .map(|(index, chunk)| {
+            let page_index = page_start_index + index;
+            let has_more_rows_after =
+                index < rows.len().saturating_sub(1) / page_size || has_more_rows_after_batch;
+
+            (
+                page_index,
+                ReplayableQueryResultPage {
+                    rows: chunk.to_vec(),
+                    has_more_rows_after,
+                },
+            )
+        })
+        .collect()
+}
+
+fn buffered_row_count(pages: &BTreeMap<usize, ReplayableQueryResultPage>) -> usize {
+    pages.values().map(|page| page.rows.len()).sum()
+}
+
+fn cache_has_more_rows(cache: &ReplayableQueryResultCache) -> bool {
+    if let Some(total_row_count) = cache.total_row_count {
+        return buffered_row_count(&cache.pages) < total_row_count;
+    }
+
+    cache
+        .pages
+        .first_key_value()
+        .map(|(page_index, _)| *page_index > 0)
+        .unwrap_or(false)
+        || cache.pages.values().any(|page| page.has_more_rows_after)
+}
+
+fn cache_visible_row_count_for_request(
+    cache: &ReplayableQueryResultCache,
+    requested_range: ReplayablePageRange,
+    request_offset: usize,
+    rows_in_window: usize,
+) -> usize {
+    if let Some(total_row_count) = cache.total_row_count {
+        return total_row_count;
+    }
+
+    let current_end = request_offset.saturating_add(rows_in_window);
+    let highest_known_row_exclusive = cache
+        .pages
+        .iter()
+        .map(|(page_index, page)| page_index.saturating_mul(cache.page_size) + page.rows.len())
+        .max()
+        .unwrap_or(0);
+    let has_more_beyond_current_window = cache
+        .pages
+        .range((requested_range.end + 1)..)
+        .next()
+        .is_some()
+        || cache
+            .pages
+            .get(&requested_range.end)
+            .map(|page| page.has_more_rows_after)
+            .unwrap_or(false);
+
+    highest_known_row_exclusive
+        .max(current_end.saturating_add(usize::from(has_more_beyond_current_window)))
+}
+
+fn evict_cached_pages(
+    pages: &mut BTreeMap<usize, ReplayableQueryResultPage>,
+    anchor_range: ReplayablePageRange,
+) {
+    const MAX_CACHED_PAGES: usize = 4;
+
+    if pages.len() <= MAX_CACHED_PAGES {
+        return;
+    }
+
+    let mut page_indexes = pages.keys().copied().collect::<Vec<_>>();
+    page_indexes.sort_by_key(|page_index| {
+        let distance = if *page_index < anchor_range.start {
+            anchor_range.start - *page_index
+        } else {
+            page_index.saturating_sub(anchor_range.end)
+        };
+
+        (distance, *page_index)
+    });
+
+    for page_index in page_indexes.into_iter().skip(MAX_CACHED_PAGES) {
+        pages.remove(&page_index);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_replayable_count_signature, build_replayable_descriptor_signature,
+        replayable_page_range_for_window, ReplayablePageRange, ReplayableQueryResultHandle,
+        ReplayableQueryResultHandleInit,
+    };
+    use crate::foundation::{
+        QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType, QueryResultWindowRequest,
+    };
+
+    #[test]
+    fn replayable_window_uses_visible_row_estimate_for_deep_cached_pages() {
+        let handle = test_handle(3, vec![vec![QueryResultCell::Integer(0)]], true);
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+        let count_signature = build_replayable_count_signature(&[], "");
+
+        handle.replace_cached_page_batch(
+            descriptor_signature,
+            count_signature,
+            4,
+            vec![
+                vec![QueryResultCell::Integer(12)],
+                vec![QueryResultCell::Integer(13)],
+                vec![QueryResultCell::Integer(14)],
+            ],
+            false,
+        );
+
+        let window = handle.load_window(&QueryResultWindowRequest {
+            result_set_id: "result-1".to_string(),
+            offset: 12,
+            limit: 3,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        });
+
+        assert_eq!(window.rows.len(), 3);
+        assert_eq!(window.buffered_row_count, 3);
+        assert_eq!(window.visible_row_count, 15);
+        assert!(window.has_more_rows);
+    }
+
+    #[test]
+    fn replayable_window_reads_rows_across_cached_pages() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+
+        assert!(handle.store_cached_page_batch(
+            &descriptor_signature,
+            1,
+            vec![
+                vec![QueryResultCell::Integer(3)],
+                vec![QueryResultCell::Integer(4)],
+                vec![QueryResultCell::Integer(5)],
+            ],
+            false,
+            ReplayablePageRange { start: 0, end: 1 },
+        ));
+
+        let window = handle.load_window(&QueryResultWindowRequest {
+            result_set_id: "result-1".to_string(),
+            offset: 2,
+            limit: 4,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        });
+
+        assert_eq!(
+            window.rows,
+            vec![
+                vec![QueryResultCell::Integer(2)],
+                vec![QueryResultCell::Integer(3)],
+                vec![QueryResultCell::Integer(4)],
+                vec![QueryResultCell::Integer(5)],
+            ]
+        );
+    }
+
+    #[test]
+    fn replayable_page_cache_evicts_pages_farthest_from_current_viewport() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+
+        assert!(handle.store_cached_page_batch(
+            &descriptor_signature,
+            1,
+            (3..15)
+                .map(|value| vec![QueryResultCell::Integer(value)])
+                .collect(),
+            false,
+            ReplayablePageRange { start: 2, end: 4 },
+        ));
+
+        let snapshot = handle.cache_snapshot();
+        assert_eq!(snapshot.cached_page_indexes, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn replayable_page_range_maps_window_offsets_to_page_indexes() {
+        assert_eq!(
+            replayable_page_range_for_window(290, 40, 300),
+            ReplayablePageRange { start: 0, end: 1 }
+        );
+    }
+
+    fn test_result_column() -> QueryResultColumn {
+        QueryResultColumn {
+            name: "value".to_string(),
+            postgres_type: "int4".to_string(),
+            semantic_type: QueryResultColumnSemanticType::Number,
+            is_nullable: false,
+        }
+    }
+
+    fn test_handle(
+        page_size: usize,
+        initial_rows: Vec<Vec<QueryResultCell>>,
+        has_more_rows: bool,
+    ) -> ReplayableQueryResultHandle {
+        ReplayableQueryResultHandle::new(ReplayableQueryResultHandleInit {
+            result_set_id: "result-1".to_string(),
+            tab_id: "tab-1".to_string(),
+            connection_id: "conn-1".to_string(),
+            sql: "select 1".to_string(),
+            columns: vec![test_result_column()],
+            page_size,
+            initial_rows,
+            has_more_rows,
+        })
     }
 }

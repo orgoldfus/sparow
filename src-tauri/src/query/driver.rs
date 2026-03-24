@@ -18,10 +18,13 @@ use crate::{
     },
 };
 
-use super::result_store::ReplayableQueryResultHandle;
+use super::result_store::{
+    replayable_page_range_for_window, ReplayablePageRange, ReplayableQueryResultHandle,
+};
 
 const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
 pub(crate) const REPLAYABLE_PAGE_SIZE: usize = 300;
+const REPLAYABLE_PREFETCH_PAGE_MARGIN: usize = 1;
 
 enum ReplayQueryParam {
     Text(String),
@@ -208,66 +211,96 @@ pub(crate) async fn load_replayable_query_result_window(
         &request.filters,
         &request.quick_filter,
     );
-    let required_end = request.offset.saturating_add(request.limit);
+    let anchor_page_range =
+        replayable_page_range_for_window(request.offset, request.limit, handle.page_size());
+    let fetch_page_range = anchor_page_range.with_margin(REPLAYABLE_PREFETCH_PAGE_MARGIN);
     let _guard = handle.lock_query().await;
 
     let snapshot = handle.cache_snapshot();
     if snapshot.descriptor_signature != descriptor_signature {
-        let batch_size = required_end.max(REPLAYABLE_PAGE_SIZE);
-        let rows = query_replayable_row_batch(
-            &checkout_replayable_client(&session).await?,
-            ReplayableRowBatchRequest {
-                sql: &handle.sql,
-                columns: &handle.columns,
-                sort: request.sort.as_ref(),
-                quick_filter: &request.quick_filter,
-                filters: &request.filters,
-                offset: 0,
-                limit: batch_size + 1,
-            },
-        )
-        .await?;
-        let (rows, has_more_rows) = split_replayable_batch(rows, batch_size);
-        handle.replace_cached_rows(
+        let (rows, has_more_rows_after_batch) =
+            query_replayable_page_range(&session, handle, request, fetch_page_range).await?;
+        handle.replace_cached_page_batch(
             descriptor_signature.clone(),
             count_signature,
+            fetch_page_range.start,
             rows,
-            has_more_rows,
+            has_more_rows_after_batch,
         );
-    }
-
-    loop {
-        let snapshot = handle.cache_snapshot();
-        if snapshot.descriptor_signature != descriptor_signature
-            || !snapshot.has_more_rows
-            || snapshot.loaded_row_count >= required_end
-        {
-            break;
-        }
-
-        let batch_size = required_end
-            .saturating_sub(snapshot.loaded_row_count)
-            .max(REPLAYABLE_PAGE_SIZE);
-        let rows = query_replayable_row_batch(
-            &checkout_replayable_client(&session).await?,
-            ReplayableRowBatchRequest {
-                sql: &handle.sql,
-                columns: &handle.columns,
-                sort: request.sort.as_ref(),
-                quick_filter: &request.quick_filter,
-                filters: &request.filters,
-                offset: snapshot.loaded_row_count,
-                limit: batch_size + 1,
-            },
-        )
-        .await?;
-        let (rows, has_more_rows) = split_replayable_batch(rows, batch_size);
-        if !handle.append_cached_rows(&descriptor_signature, rows, has_more_rows) {
-            continue;
+    } else {
+        for missing_range in missing_page_ranges(&snapshot.cached_page_indexes, fetch_page_range) {
+            let (rows, has_more_rows_after_batch) =
+                query_replayable_page_range(&session, handle, request, missing_range).await?;
+            if !handle.store_cached_page_batch(
+                &descriptor_signature,
+                missing_range.start,
+                rows,
+                has_more_rows_after_batch,
+                anchor_page_range,
+            ) {
+                continue;
+            }
         }
     }
 
     Ok(handle.load_window(request))
+}
+
+async fn query_replayable_page_range(
+    session: &ActiveSessionRuntime,
+    handle: &ReplayableQueryResultHandle,
+    request: &QueryResultWindowRequest,
+    page_range: ReplayablePageRange,
+) -> Result<(Vec<Vec<QueryResultCell>>, bool), AppError> {
+    let page_count = page_range.end.saturating_sub(page_range.start) + 1;
+    let batch_size = page_count.saturating_mul(handle.page_size());
+    let rows = query_replayable_row_batch(
+        &checkout_replayable_client(session).await?,
+        ReplayableRowBatchRequest {
+            sql: &handle.sql,
+            columns: &handle.columns,
+            sort: request.sort.as_ref(),
+            quick_filter: &request.quick_filter,
+            filters: &request.filters,
+            offset: page_range.start.saturating_mul(handle.page_size()),
+            limit: batch_size + 1,
+        },
+    )
+    .await?;
+
+    Ok(split_replayable_batch(rows, batch_size))
+}
+
+fn missing_page_ranges(
+    cached_page_indexes: &[usize],
+    required_range: ReplayablePageRange,
+) -> Vec<ReplayablePageRange> {
+    let mut missing_ranges = Vec::new();
+    let mut range_start = None;
+
+    for page_index in required_range.start..=required_range.end {
+        let is_cached = cached_page_indexes.binary_search(&page_index).is_ok();
+        match (is_cached, range_start) {
+            (false, None) => range_start = Some(page_index),
+            (true, Some(start)) => {
+                missing_ranges.push(ReplayablePageRange {
+                    start,
+                    end: page_index.saturating_sub(1),
+                });
+                range_start = None;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(start) = range_start {
+        missing_ranges.push(ReplayablePageRange {
+            start,
+            end: required_range.end,
+        });
+    }
+
+    missing_ranges
 }
 
 pub(crate) async fn count_replayable_query_rows(

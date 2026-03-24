@@ -31,11 +31,11 @@ use super::{
     driver::{
         cancelled_query_error, count_replayable_query_rows, load_replayable_query_result_window,
         query_replayable_row_batch, ExecutedQueryResult, QueryExecutionDriver,
-        ReplayableRowBatchRequest,
+        ReplayableRowBatchRequest, REPLAYABLE_PAGE_SIZE,
     },
     result_store::{
         build_replayable_count_signature, BufferedQueryResultHandle, QueryResultHandle,
-        QueryResultStore, ReplayableQueryResultHandle,
+        QueryResultStore, ReplayableQueryResultHandle, ReplayableQueryResultHandleInit,
     },
 };
 
@@ -607,15 +607,18 @@ async fn store_query_result(
             has_more_rows,
         } => {
             let handle = results
-                .insert(QueryResultHandle::Replayable(ReplayableQueryResultHandle::new(
-                    result_set_id.to_string(),
-                    request.tab_id.clone(),
-                    request.connection_id.clone(),
-                    request.sql.clone(),
-                    columns,
-                    initial_rows,
-                    has_more_rows,
-                )))
+                .insert(QueryResultHandle::Replayable(
+                    ReplayableQueryResultHandle::new(ReplayableQueryResultHandleInit {
+                        result_set_id: result_set_id.to_string(),
+                        tab_id: request.tab_id.clone(),
+                        connection_id: request.connection_id.clone(),
+                        sql: request.sql.clone(),
+                        columns,
+                        page_size: REPLAYABLE_PAGE_SIZE,
+                        initial_rows,
+                        has_more_rows,
+                    }),
+                ))
                 .await;
 
             Ok(QueryExecutionResult::Rows {

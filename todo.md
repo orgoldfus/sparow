@@ -13,6 +13,34 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-24: Started the commit, push, and PR packaging pass for the current branch.
+  - The current worktree includes query execution, result-viewer, test, and repo tooling updates plus untracked support files. The goal is to package the full branch state into one commit and open a PR without dropping any tracked or untracked changes.
+- 2026-03-24: Completed the results-pane scroll fix.
+  - The cached result grid now uses the results pane height as its scroll boundary again, and the browser smoke harnesses now fail explicitly if the grid loses real vertical overflow.
+- 2026-03-24: Started the results-pane scroll fix after the cached result grid stopped scrolling in the shell UI.
+  - The active investigation is focused on the results-grid scroll boundary and parent height containment so large result sets stay browseable without clipping or UI freezes.
+- 2026-03-24: Completed the test-runner follow-up. Vitest now extends its default excludes and adds `.agents/**`, so full verification only exercises repo tests instead of agent scratch space or dependency test suites.
+- 2026-03-24: The first Vitest exclusion pass replaced the default exclude list, which accidentally let `node_modules/**` tests into `vitest run`.
+  - The resulting verify run failed on 13 dependency test suites from `node_modules` even though the product tests passed, so the fix was to switch `vite.config.ts` to `exclude: [...configDefaults.exclude, '.agents/**']` instead of a bare custom array.
+- 2026-03-24: Started the Vitest follow-up to exclude `.agents/**` from test discovery so full repo verification only exercises product tests.
+- 2026-03-24: Excluding `.agents` from ESLint fixed the lint blocker, but full `npm run verify` still runs `.agents/skills/octocode-research/**` through Vitest.
+  - The rerun cleared `typecheck` and `lint` with only the longstanding React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`, then failed in `npm run test` because Vitest discovered 10 failing `.agents` suites with missing `express`/`supertest`/`octocode-mcp` dependencies plus one flaky PID assertion.
+- 2026-03-24: Started the ESLint follow-up to exclude the local `.agents` workspace from repo linting so `npm run verify` is not blocked by agent-scratch files outside the product code.
+- 2026-03-23: `npm run verify` is currently blocked by repo-wide ESLint scanning the untracked `.agents/skills/octocode-research` workspace files.
+  - The verify run reached `npm run lint` and failed on 1,371 lint errors plus 3 project-service parsing errors inside `.agents/skills/octocode-research/**`, along with the existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`. The bounded page-cache changes were not the failing surface.
+- 2026-03-23: Started a full post-change verification run with `npm run verify` to validate the bounded replayable page-cache pass against the repo’s standard gate.
+- 2026-03-23: Completed the query-execution follow-up. Replayable results now keep a bounded Rust page cache with viewport-local eviction, page-range fetches with a small prefetch margin, and a scroll-depth estimate driven by `visibleRowCount` instead of the cache size.
+- 2026-03-23: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ❌
+  - Clippy rejected the first bounded-cache pass because `ReplayableQueryResultHandle::new` grew to 8 parameters. The fix was to replace the constructor argument list with a typed `ReplayableQueryResultHandleInit` payload instead of suppressing the lint.
+- 2026-03-23: Started the query-execution follow-up to replace the replayable append-only row cache with a bounded page cache and align the result-window semantics with the 2026-03-22 architecture research note.
+- 2026-03-22: Documented the query-execution research and recommendation in [docs/architecture/query-execution-research.md](docs/architecture/query-execution-research.md) so the implementation follow-up can work from a stable in-repo decision record.
+- 2026-03-22: `sed -n '1,260p' docs/architecture/query-execution-research.md` ✅
+  - Readback verification confirmed the new architecture note is present in-repo with the benchmark repo findings, Sparow-specific analysis, and the recommended bounded page-cache direction. No code verification run was needed because this task only added documentation.
+- 2026-03-22: Started writing a permanent architecture note for the query-execution research so the GitHub benchmark findings and recommended Sparow direction are captured in-repo before implementation work begins.
+- 2026-03-22: Completed the GitHub research pass on query execution strategy.
+  - DBeaver, pgAdmin, Beekeeper Studio, DbGate, and DB Browser for SQLite all keep result rows ephemeral and favor some mix of segment fetches, server cursors/streams, or explicit paged `LIMIT/OFFSET` queries over a persistent local result cache.
+  - Recommendation for Sparow: keep the no-SQLite-result-cache direction, keep replayable queries database-backed, avoid rewriting every ad-hoc query with a hard SQL limit, keep exact counts async/on-demand, and replace the current append-only replayable row cache with a bounded page/window cache so deep scrolling does not turn into unbounded Rust memory growth.
+- 2026-03-22: Started architecture research on database query execution strategy by comparing Sparow's direct-query/current-cache posture against high-star OSS database tools (DBeaver, Beekeeper Studio, DBGate, and similar candidates) before recommending a query path for the product.
 - 2026-03-18: Completed the async replayable-result count pass so large replayable `SELECT`s render the first page immediately, page more rows on demand, and backfill exact totals in the background.
 - 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The full verification suite passed under Node `v24.13.0`: typecheck, ESLint, 94 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed, with 84 Rust tests green and 2 expected PostgreSQL smoke tests ignored. The longstanding React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
@@ -169,6 +197,30 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
+  - The shell harness smoke now asserts the result grid has real vertical overflow before scrolling, and it wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png) after the scroll-fix patch.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
+  - The result-viewer smoke now asserts the grid is vertically scrollable before it drives the large-result scenario, and it wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 16 tests green. The existing jsdom-only React `flushSync` warnings from the TanStack Virtual tests remain unchanged.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The 2026-03-24 rerun passes end-to-end under Node `v24.14.0`: `typecheck`, `lint`, 9 Vitest files / 94 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The first 2026-03-24 Vitest exclusion attempt accidentally replaced Vitest's default exclude list, so `vitest run` started discovering `node_modules/**` tests and failed on 13 dependency suites.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The 2026-03-24 rerun now clears `typecheck` and `lint`, which confirms `.agents` is excluded from ESLint. It still fails in `npm run test` because Vitest discovers `.agents/skills/octocode-research/**` tests and reports 10 failing suites there.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
+  - ESLint now ignores `.agents/**` and exits successfully. The only remaining output is the existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The full verify run used Node `v24.14.0`, cleared `typecheck`, then failed in `npm run lint` because ESLint scanned `.agents/skills/octocode-research/**` and reported 1,371 errors plus 3 project-service parsing errors there. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` also remained present.
+- `cargo test --manifest-path src-tauri/Cargo.toml query::` ✅
+  - The focused Rust query suite passes after the bounded page-cache refactor: 23 tests green, including new result-store regressions for cross-page windows, deep-scroll `visible_row_count`, and viewport-distance eviction.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ✅
+  - Clippy is clean after replacing the replayable-handle constructor argument list with a typed init struct.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
+  - TypeScript project references still compile under Node `v24.14.0` after the result-grid row-count estimate switched to `window.visibleRowCount`.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 15 tests green. The existing React `flushSync` warnings from the component tests remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - Full repo verification passes again after the wide-grid body-width fix: frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅

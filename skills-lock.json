@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "69876e154d9fc72702a0844ee944b1bba4f05d2d4c247ae1248d247d3190b162"
     },
+    "octocode-research": {
+      "source": "bgauryy/octocode-mcp",
+      "sourceType": "github",
+      "computedHash": "588273c16aed7840ab226a6e715c0da0b5cd1a624406a1c8dc1e41422f9ef724"
+    },
     "rust-async-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",

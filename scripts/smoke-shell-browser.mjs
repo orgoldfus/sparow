@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
+import { assertScrollableResultGrid } from './result-grid-smoke-helpers.mjs';
 
 const port = 4175;
 const url = `http://127.0.0.1:${port}/?harness=shell`;
@@ -44,7 +45,8 @@ try {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('shell-harness').waitFor();
     await page.getByTestId('connection-row-conn-local').click();
-    await page.getByTestId('query-result-grid-scroll').evaluate((element) => {
+    const gridScroll = await assertScrollableResultGrid(page);
+    await gridScroll.evaluate((element) => {
       element.scrollTop = 1400;
       element.dispatchEvent(new Event('scroll'));
     });

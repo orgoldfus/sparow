@@ -459,7 +459,7 @@ function resolveVisibleResultRowCount(
     return summary.totalRowCount ?? summary.bufferedRowCount + (summary.hasMoreRows ? 1 : 0);
   }
 
-  return window.totalRowCount ?? window.bufferedRowCount + (window.hasMoreRows ? 1 : 0);
+  return window.totalRowCount ?? window.visibleRowCount;
 }
 
 function formatRowCountLabel(

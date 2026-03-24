@@ -378,6 +378,106 @@ describe('QueryWorkspace', () => {
     dispatchEventSpy.mockRestore();
   });
 
+  it('uses the results pane height as the scroll boundary', () => {
+    const onActiveViewChange = vi.fn();
+    const summary = {
+      kind: 'rows' as const,
+      resultSetId: 'result-set-scroll-boundary',
+      columns: [
+        { name: 'id', postgresType: 'int4', semanticType: 'number' as const, isNullable: false },
+        { name: 'email', postgresType: 'varchar', semanticType: 'text' as const, isNullable: false },
+      ],
+      bufferedRowCount: 200,
+      totalRowCount: 200,
+      hasMoreRows: false,
+      status: 'completed' as const,
+    };
+    const tab: QueryTabState = {
+      ...createTab('tab-results', 'select * from users', 'select * from users'),
+      execution: {
+        ...baseExecution,
+        status: 'completed',
+        lastResult: summary,
+      },
+      result: {
+        summary,
+        window: {
+          resultSetId: 'result-set-scroll-boundary',
+          offset: 0,
+          limit: 120,
+          rows: [
+            [1, 'first@example.com'],
+            [2, 'second@example.com'],
+          ],
+          visibleRowCount: 200,
+          bufferedRowCount: 200,
+          totalRowCount: 200,
+          hasMoreRows: false,
+          status: 'completed',
+          sort: null,
+          filters: [],
+          quickFilter: '',
+        },
+        windowStatus: 'ready',
+        windowError: null,
+        requestedWindowSignature: null,
+        countStatus: 'ready',
+        countError: null,
+        requestedCountSignature: JSON.stringify({
+          resultSetId: 'result-set-scroll-boundary',
+          filters: [],
+          quickFilter: '',
+        }),
+        quickFilter: '',
+        filters: [],
+        sort: null,
+        exportOutputPath: './sparow-result.csv',
+        exportJobId: null,
+        exportStatus: 'idle',
+        exportLastEvent: null,
+        exportLastError: null,
+      },
+    };
+    const workspace: QueryWorkspaceState = {
+      activeTab: tab,
+      activeTabId: tab.id,
+      runDisabledReason: null,
+      tabs: [tab],
+      createTab: vi.fn(),
+      createNewTab: vi.fn(),
+      closeTab: vi.fn(),
+      selectTab: vi.fn(),
+      setTabSql: vi.fn(),
+      updateTabSql: vi.fn(),
+      setTabTargetConnection: vi.fn(),
+      updateTabTargetConnection: vi.fn(),
+      startTabQuery: vi.fn(() => Promise.resolve()),
+      runActiveTab: vi.fn(() => Promise.resolve()),
+      cancelTabQuery: vi.fn(() => Promise.resolve()),
+      cancelActiveTab: vi.fn(() => Promise.resolve()),
+      loadTabResultWindow: vi.fn(() => Promise.resolve()),
+      setTabQuickFilter: vi.fn(),
+      setTabColumnFilter: vi.fn(),
+      toggleTabSort: vi.fn(),
+      setTabExportOutputPath: vi.fn(),
+      startTabResultExport: vi.fn(() => Promise.resolve()),
+      cancelTabResultExport: vi.fn(() => Promise.resolve()),
+    };
+
+    render(
+      <TooltipProvider>
+        <QueryResultsPanel
+          activeSession={activeSession}
+          activeView="results"
+          onActiveViewChange={onActiveViewChange}
+          workspace={workspace}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('query-result-grid-scroll')).toHaveClass('h-full', 'overflow-auto');
+  });
+
   it('removes the redundant column-summary strip and labels the row filter correctly', () => {
     const onActiveViewChange = vi.fn();
     const summary = {
