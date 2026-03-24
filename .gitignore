@@ -9,3 +9,5 @@ src-tauri/gen/
 *.tsbuildinfo
 tmp/
 artifacts/
+.agents/
+.codex/
