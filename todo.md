@@ -13,6 +13,8 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-24: Completed the commit, push, and PR packaging pass for the current branch.
+  - Commit `c1fbe30` is pushed to `origin/limit-large-queries`, and PR [#13](https://github.com/orgoldfus/sparow/pull/13) is open against `main`.
 - 2026-03-24: Started the commit, push, and PR packaging pass for the current branch.
   - The current worktree includes query execution, result-viewer, test, and repo tooling updates plus untracked support files. The goal is to package the full branch state into one commit and open a PR without dropping any tracked or untracked changes.
 - 2026-03-24: Completed the results-pane scroll fix.
