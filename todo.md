@@ -13,6 +13,11 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-24: Completed the scoped CodeRabbit autofix pass outside the skill workspace.
+  - Fixed the unresolved bounded-cache, terminal-row-count, stale-count-error, and todo-history issues on `limit-large-queries`. Per user instruction, anything under `.agents/skills/**` was explicitly left untouched in this pass.
+- 2026-03-24: The current CodeRabbit follow-up excludes anything under the skill workspace by user instruction.
+  - Only unresolved review comments outside `.agents/skills/**` are being fixed in this pass; skill-folder comments are intentionally left untouched.
+- 2026-03-24: Started another CodeRabbit autofix pass on `limit-large-queries` to pick up any newly unresolved review comments, apply the requested fixes, and push a follow-up commit if needed.
 - 2026-03-24: Completed the latest CodeRabbit autofix pass for PR #13 without additional code changes.
   - The only remaining unresolved CodeRabbit thread on `limit-large-queries` was stale against the current `src-tauri/src/query/result_store.rs` implementation and its existing terminal-page regression test, so the follow-up was to verify the behavior, resolve the thread on GitHub, and package the required todo/audit updates.
 - 2026-03-24: Started another CodeRabbit autofix pass for the current PR on `limit-large-queries`.
@@ -216,6 +221,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
+  - The focused Rust replayable-result-store suite passed: 7 tests green, including the new bounded replacement-batch and terminal visible-row-count regressions.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 18 tests green, including the new stale count-error regression. The existing jsdom `flushSync` warnings from the component tests remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The full repo gate passes under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 96 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
 - `cargo test --manifest-path src-tauri/Cargo.toml query::` ✅
@@ -227,7 +236,7 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
   - The result-viewer smoke now asserts the grid is vertically scrollable before it drives the large-result scenario, and it wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 16 tests green. The existing jsdom-only React `flushSync` warnings from the TanStack Virtual tests remain unchanged.
+  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 16 tests green. This run predates the later stale-window-count regression that raised the same focused scope to 17 tests. The existing jsdom-only React `flushSync` warnings from the TanStack Virtual tests remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The 2026-03-24 rerun passes end-to-end under Node `v24.14.0`: `typecheck`, `lint`, 9 Vitest files / 94 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌

@@ -129,6 +129,7 @@ impl ReplayableQueryResultHandle {
         page_start_index: usize,
         rows: Vec<Vec<QueryResultCell>>,
         has_more_rows_after_batch: bool,
+        anchor_range: ReplayablePageRange,
     ) {
         let mut cache = self.cache.lock().expect("replayable cache lock poisoned");
         let total_row_count = if cache.count_signature == count_signature {
@@ -136,16 +137,19 @@ impl ReplayableQueryResultHandle {
         } else {
             None
         };
+        let mut pages = build_cached_pages(
+            cache.page_size,
+            page_start_index,
+            rows,
+            has_more_rows_after_batch,
+        );
+        evict_cached_pages(&mut pages, anchor_range);
+
         *cache = ReplayableQueryResultCache {
             descriptor_signature,
             count_signature,
             page_size: cache.page_size,
-            pages: build_cached_pages(
-                cache.page_size,
-                page_start_index,
-                rows,
-                has_more_rows_after_batch,
-            ),
+            pages,
             total_row_count,
         };
     }
@@ -626,8 +630,11 @@ fn cache_visible_row_count_for_request(
             .map(|page| page.has_more_rows_after)
             .unwrap_or(false);
 
-    highest_known_row_exclusive
-        .max(current_end.saturating_add(usize::from(has_more_beyond_current_window)))
+    if has_more_beyond_current_window {
+        highest_known_row_exclusive.max(current_end.saturating_add(1))
+    } else {
+        highest_known_row_exclusive
+    }
 }
 
 fn evict_cached_pages(
@@ -683,6 +690,7 @@ mod tests {
                 vec![QueryResultCell::Integer(14)],
             ],
             false,
+            ReplayablePageRange { start: 4, end: 4 },
         );
 
         let window = handle.load_window(&QueryResultWindowRequest {
@@ -746,6 +754,35 @@ mod tests {
     }
 
     #[test]
+    fn replayable_replace_cached_page_batch_stays_bounded() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+        let count_signature = build_replayable_count_signature(&[], "");
+
+        handle.replace_cached_page_batch(
+            descriptor_signature,
+            count_signature,
+            1,
+            (3..18)
+                .map(|value| vec![QueryResultCell::Integer(value)])
+                .collect(),
+            false,
+            ReplayablePageRange { start: 2, end: 3 },
+        );
+
+        let snapshot = handle.cache_snapshot();
+        assert_eq!(snapshot.cached_page_indexes, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
     fn replayable_window_does_not_report_more_rows_for_terminal_cached_page() {
         let handle = test_handle(
             3,
@@ -779,6 +816,44 @@ mod tests {
         });
 
         assert_eq!(window.rows.len(), 5);
+        assert!(!window.has_more_rows);
+    }
+
+    #[test]
+    fn replayable_window_caps_visible_row_count_for_terminal_cached_page() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+
+        assert!(handle.store_cached_page_batch(
+            &descriptor_signature,
+            1,
+            vec![
+                vec![QueryResultCell::Integer(3)],
+                vec![QueryResultCell::Integer(4)],
+            ],
+            false,
+            ReplayablePageRange { start: 0, end: 1 },
+        ));
+
+        let window = handle.load_window(&QueryResultWindowRequest {
+            result_set_id: "result-1".to_string(),
+            offset: 12,
+            limit: 3,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        });
+
+        assert!(window.rows.is_empty());
+        assert_eq!(window.visible_row_count, 5);
         assert!(!window.has_more_rows);
     }
 

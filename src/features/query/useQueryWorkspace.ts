@@ -718,6 +718,14 @@ export function useQueryWorkspace({
       );
     } catch (caught) {
       const error = logger.asAppError(caught, 'get_query_result_count');
+      const currentTab = tabsRef.current.find((entry) => entry.id === tabId);
+      if (
+        !currentTab ||
+        currentTab.result.requestedCountSignature !== signature ||
+        currentTab.result.summary?.resultSetId !== resultSetId
+      ) {
+        return;
+      }
       onError(error);
       commitTabs((currentTabs) =>
         currentTabs.map((entry) =>

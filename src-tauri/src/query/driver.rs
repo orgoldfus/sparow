@@ -226,6 +226,7 @@ pub(crate) async fn load_replayable_query_result_window(
             fetch_page_range.start,
             rows,
             has_more_rows_after_batch,
+            anchor_page_range,
         );
     } else {
         for missing_range in missing_page_ranges(&snapshot.cached_page_indexes, fetch_page_range) {

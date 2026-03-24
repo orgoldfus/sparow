@@ -738,4 +738,84 @@ describe('useQueryWorkspace', () => {
     });
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it('ignores errors from superseded count requests', async () => {
+    const onError = vi.fn();
+    type CountResponse = Awaited<ReturnType<typeof getQueryResultCount>>;
+    let rejectCount: ((reason?: unknown) => void) | undefined;
+
+    vi.mocked(getQueryResultWindow).mockResolvedValueOnce({
+      resultSetId: 'result-set-stale-count-error',
+      offset: 0,
+      limit: 120,
+      rows: [[1]],
+      visibleRowCount: 1,
+      bufferedRowCount: 1,
+      totalRowCount: null,
+      hasMoreRows: true,
+      status: 'completed',
+      sort: null,
+      filters: [],
+      quickFilter: '',
+    });
+    vi.mocked(getQueryResultCount).mockImplementationOnce(
+      () =>
+        new Promise<CountResponse>((_resolve, reject) => {
+          rejectCount = reject;
+        }),
+    );
+
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+    const tabId = await screen.findByTestId('active-tab-id').then((element) => element.textContent ?? 'none');
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-stale-count-error',
+            correlationId: 'query-corr-stale-count-error',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 18,
+            message: 'Query completed.',
+            startedAt: '2026-03-10T16:46:00.000Z',
+            finishedAt: '2026-03-10T16:46:00.018Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-stale-count-error',
+              columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+              bufferedRowCount: 1,
+              totalRowCount: null,
+              hasMoreRows: true,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('load-window'));
+
+    await waitFor(() => {
+      expect(getQueryResultCount).toHaveBeenCalledWith({
+        resultSetId: 'result-set-stale-count-error',
+        filters: [],
+        quickFilter: '',
+      });
+      expect(screen.getByTestId('active-count-status')).toHaveTextContent('loading');
+    });
+
+    fireEvent.click(screen.getByText('set-quick-filter'));
+    rejectCount?.(new Error('stale count failed'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-quick-filter')).toHaveTextContent('hidden-filter');
+      expect(screen.getByTestId('active-count-status')).toHaveTextContent('idle');
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
