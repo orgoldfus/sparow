@@ -14,6 +14,8 @@ vi.mock('../../mcpCache.js', () => ({
   }),
   initializeMcpContent: vi.fn().mockResolvedValue({}),
   isMcpInitialized: vi.fn().mockReturnValue(true),
+  isServerReady: vi.fn().mockReturnValue(true),
+  setServerReady: vi.fn(),
 }));
 
 vi.mock('../../index.js', () => {
@@ -133,9 +135,9 @@ describe('Server HTTP Flows', () => {
       expect(memory.heapUsed).toBeGreaterThan(0);
     });
 
-    it('returns initializing when MCP not ready', async () => {
-      const { isMcpInitialized } = await import('../../mcpCache.js');
-      vi.mocked(isMcpInitialized).mockReturnValueOnce(false);
+    it('returns initializing when the server is not ready', async () => {
+      const { isServerReady } = await import('../../mcpCache.js');
+      vi.mocked(isServerReady).mockReturnValueOnce(false);
       const res = await request(app).get('/health');
       expect(res.body.status).toBe('initializing');
     });

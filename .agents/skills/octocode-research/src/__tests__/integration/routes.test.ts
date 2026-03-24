@@ -25,6 +25,8 @@ vi.mock('../../mcpCache.js', () => ({
   }),
   initializeMcpContent: vi.fn().mockResolvedValue({}),
   isMcpInitialized: vi.fn().mockReturnValue(true),
+  isServerReady: vi.fn().mockReturnValue(true),
+  setServerReady: vi.fn(),
 }));
 
 // Mock the MCP tools
@@ -349,8 +351,20 @@ describe('Route Validation', () => {
             mainResearchGoal: 'test',
             researchGoal: 'test',
             reasoning: 'test',
-          });
+        });
         expect(res.status).toBe(200);
+      });
+
+      it('rejects batched package search requests on the GET route', async () => {
+        const res = await request(createApp())
+          .get('/packageSearch')
+          .query({
+            queries: JSON.stringify([
+              { name: 'express', ecosystem: 'npm', mainResearchGoal: 'test', researchGoal: 'test', reasoning: 'test' },
+              { name: 'requests', ecosystem: 'python', mainResearchGoal: 'test', researchGoal: 'test', reasoning: 'test' },
+            ]),
+          });
+        expect(res.status).toBe(400);
       });
     });
   });

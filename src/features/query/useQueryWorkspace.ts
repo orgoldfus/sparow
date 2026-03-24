@@ -427,6 +427,15 @@ export function useQueryWorkspace({
         quickFilter: tab.result.quickFilter,
       });
 
+      const currentTab = tabsRef.current.find((entry) => entry.id === tabId);
+      if (
+        !currentTab ||
+        currentTab.result.requestedWindowSignature !== signature ||
+        currentTab.result.summary?.resultSetId !== window.resultSetId
+      ) {
+        return;
+      }
+
       commitTabs((currentTabs) =>
         currentTabs.map((entry) =>
           entry.id === tabId && entry.result.requestedWindowSignature === signature
@@ -445,7 +454,12 @@ export function useQueryWorkspace({
       );
 
       if (window.totalRowCount === null) {
-        void loadTabResultCount(tabId, window.resultSetId, tab.result.filters, tab.result.quickFilter);
+        void loadTabResultCount(
+          tabId,
+          window.resultSetId,
+          currentTab.result.filters,
+          currentTab.result.quickFilter,
+        );
       }
     } catch (caught) {
       const error = logger.asAppError(caught, 'get_query_result_window');
@@ -693,7 +707,6 @@ export function useQueryWorkspace({
                       ? {
                           ...entry.result.window,
                           totalRowCount: count.totalRowCount,
-                          visibleRowCount: count.totalRowCount,
                         }
                       : entry.result.window,
                   countStatus: 'ready',

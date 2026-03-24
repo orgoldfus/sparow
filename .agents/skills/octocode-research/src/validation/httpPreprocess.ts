@@ -8,7 +8,6 @@
  */
 
 import { z } from 'zod/v4';
-import path from 'path';
 import os from 'os';
 
 // =============================================================================
@@ -88,9 +87,8 @@ export const safePath = z.string().refine(
     // Check for null bytes
     if (p.includes('\0')) return false;
 
-    // Normalize and check for traversal
-    const normalized = path.normalize(p);
-    if (normalized.includes('..')) return false;
+    // Reject parent-directory segments without blocking filenames like foo..bar.ts
+    if (p.split(/[\\/]+/).some((segment) => segment === '..')) return false;
 
     // Reject Windows backslashes on non-Windows (can bypass checks)
     if (os.platform() !== 'win32' && p.includes('\\')) return false;

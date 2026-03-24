@@ -32,6 +32,8 @@ vi.mock('../../mcpCache.js', () => ({
   }),
   initializeMcpContent: vi.fn().mockResolvedValue({}),
   isMcpInitialized: vi.fn().mockReturnValue(true),
+  isServerReady: vi.fn().mockReturnValue(true),
+  setServerReady: vi.fn(),
 }));
 
 vi.mock('../../index.js', () => ({
@@ -416,8 +418,18 @@ describe('Tools Routes', () => {
               { id: 'q3', researchGoal: 't', reasoning: 't', pattern: 'c', path: '/p' },
               { id: 'q4', researchGoal: 't', reasoning: 't', pattern: 'd', path: '/p' },
             ],
+        });
+        expect(res.status).toBe(400);
+      });
+
+      it('returns 400 for tool-specific query validation failures', async () => {
+        const res = await request(app)
+          .post('/tools/call/localSearchCode')
+          .send({
+            queries: [{ id: 'q1', researchGoal: 't', reasoning: 't' }],
           });
         expect(res.status).toBe(400);
+        expect(res.body.success).toBe(false);
       });
 
       it('lists available tools in 404 response', async () => {
@@ -466,36 +478,36 @@ describe('Tools Routes', () => {
   // =========================================================================
   describe('Readiness gate', () => {
     it('returns 503 for /tools/list when not initialized', async () => {
-      const { isMcpInitialized } = await import('../../mcpCache.js');
-      vi.mocked(isMcpInitialized).mockReturnValue(false);
+      const { isServerReady } = await import('../../mcpCache.js');
+      vi.mocked(isServerReady).mockReturnValue(false);
 
       const res = await request(app).get('/tools/list');
       expect(res.status).toBe(503);
       expect(res.body.error.code).toBe('SERVER_INITIALIZING');
 
-      vi.mocked(isMcpInitialized).mockReturnValue(true);
+      vi.mocked(isServerReady).mockReturnValue(true);
     });
 
     it('returns 503 for POST /tools/call when not initialized', async () => {
-      const { isMcpInitialized } = await import('../../mcpCache.js');
-      vi.mocked(isMcpInitialized).mockReturnValue(false);
+      const { isServerReady } = await import('../../mcpCache.js');
+      vi.mocked(isServerReady).mockReturnValue(false);
 
       const res = await request(app)
         .post('/tools/call/localSearchCode')
         .send({ queries: [{ id: 'q1', researchGoal: 't', reasoning: 't', pattern: 'a', path: '/p' }] });
       expect(res.status).toBe(503);
 
-      vi.mocked(isMcpInitialized).mockReturnValue(true);
+      vi.mocked(isServerReady).mockReturnValue(true);
     });
 
     it('returns 503 for /tools/schemas when not initialized', async () => {
-      const { isMcpInitialized } = await import('../../mcpCache.js');
-      vi.mocked(isMcpInitialized).mockReturnValue(false);
+      const { isServerReady } = await import('../../mcpCache.js');
+      vi.mocked(isServerReady).mockReturnValue(false);
 
       const res = await request(app).get('/tools/schemas');
       expect(res.status).toBe(503);
 
-      vi.mocked(isMcpInitialized).mockReturnValue(true);
+      vi.mocked(isServerReady).mockReturnValue(true);
     });
   });
 });

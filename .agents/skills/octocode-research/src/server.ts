@@ -8,7 +8,7 @@ import { promptsRoutes } from './routes/prompts.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { initializeProviders, initializeSession, logSessionInit } from './index.js';
-import { initializeMcpContent, isMcpInitialized } from './mcpCache.js';
+import { initializeMcpContent, isServerReady, setServerReady } from './mcpCache.js';
 import { getLogsPath, initializeLogger } from './utils/logger.js';
 import { getAllCircuitStates, clearAllCircuits, stopCircuitCleanup } from './utils/circuitBreaker.js';
 import { agentLog, successLog, errorLog, dimLog, warnLog } from './utils/colors.js';
@@ -128,11 +128,11 @@ export async function createServer(): Promise<Express> {
   app.get('/health', (_req: Request, res: Response) => {
     const memoryUsage = process.memoryUsage();
     const recentErrors = errorQueue.getRecent(5);
-    const initialized = isMcpInitialized();
+    const ready = isServerReady();
     const idleTimeMs = Date.now() - lastRequestTime;
 
     res.json({
-      status: initialized ? 'ok' : 'initializing',
+      status: ready ? 'ok' : 'initializing',
       host: HOST,
       port: PORT,
       version: __PACKAGE_VERSION__,
@@ -208,6 +208,7 @@ function gracefulShutdown(signal: string): void {
     return;
   }
   isShuttingDown = true;
+  setServerReady(false);
 
   console.log(agentLog(`\n🛑 Received ${signal}. Starting graceful shutdown...`));
 
@@ -247,11 +248,41 @@ function gracefulShutdown(signal: string): void {
   }
 }
 
+function rejectInitializationFailure(
+  error: unknown,
+  reject: (reason?: unknown) => void
+): void {
+  const initError = error instanceof Error ? error : new Error(String(error));
+
+  console.error(errorLog('❌ Initialization failed:'), initError);
+  setServerReady(false);
+  removePidFile();
+  stopIdleCheck();
+  stopCircuitCleanup();
+  clearAllCircuits();
+
+  if (!server) {
+    reject(initError);
+    return;
+  }
+
+  const activeServer = server;
+  server = null;
+  activeServer.close((closeError) => {
+    reject(closeError ?? initError);
+  });
+}
+
 export async function startServer(): Promise<void> {
   const app = await createServer();
+  setServerReady(false);
   
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    const onListenError = (error: Error) => {
+      reject(error);
+    };
     const httpServer = app.listen(PORT, HOST, () => {
+      httpServer.off('error', onListenError);
       server = httpServer;
       writePidFile();
       console.log(agentLog(`🔍 Octocode Research Server running on http://${HOST}:${PORT} (pid: ${process.pid})`));
@@ -261,6 +292,7 @@ export async function startServer(): Promise<void> {
       initializeMcpContent()
         .then(() => initializeProviders())
         .then(() => {
+          setServerReady(true);
           console.log(successLog('✅ Context initialized - Server Ready'));
           
           // Reset idle timer after init (prevents early timeout)
@@ -289,13 +321,14 @@ export async function startServer(): Promise<void> {
             5000,
             'logSessionInit'
           );
+
+          resolve();
         })
         .catch((err) => {
-          console.error(errorLog('❌ Initialization failed:'), err);
+          rejectInitializationFailure(err, reject);
         });
-
-      resolve();
     });
+    httpServer.once('error', onListenError);
   });
 }
 

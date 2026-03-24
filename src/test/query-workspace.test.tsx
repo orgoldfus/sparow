@@ -236,6 +236,7 @@ function Harness({
       <div data-testid="active-total-row-count">{workspace.activeTab?.result.summary?.totalRowCount ?? 'none'}</div>
       <div data-testid="active-window-result-set">{workspace.activeTab?.result.window?.resultSetId ?? 'none'}</div>
       <div data-testid="active-window-row-width">{workspace.activeTab?.result.window?.rows[0]?.length ?? 0}</div>
+      <div data-testid="active-visible-row-count">{workspace.activeTab?.result.window?.visibleRowCount ?? 'none'}</div>
       <div data-testid="active-count-status">{workspace.activeTab?.result.countStatus ?? 'idle'}</div>
       <div data-testid="active-quick-filter">{workspace.activeTab?.result.quickFilter ?? ''}</div>
       <div data-testid="active-filter-count">{workspace.activeTab?.result.filters.length ?? 0}</div>
@@ -665,6 +666,75 @@ describe('useQueryWorkspace', () => {
       });
       expect(screen.getByTestId('active-count-status')).toHaveTextContent('ready');
       expect(screen.getByTestId('active-total-row-count')).toHaveTextContent('42');
+      expect(screen.getByTestId('active-visible-row-count')).toHaveTextContent('1');
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not start a count request from a stale window response', async () => {
+    const onError = vi.fn();
+    type WindowResponse = Awaited<ReturnType<typeof getQueryResultWindow>>;
+    let resolveWindow: ((value: WindowResponse) => void) | undefined;
+    vi.mocked(getQueryResultWindow).mockImplementationOnce(
+      () =>
+        new Promise<WindowResponse>((resolve) => {
+          resolveWindow = resolve;
+        }),
+    );
+
+    const { rerender } = render(<Harness onError={onError} queryEvents={[]} />);
+    const tabId = await screen.findByTestId('active-tab-id').then((element) => element.textContent ?? 'none');
+
+    rerender(
+      <Harness
+        onError={onError}
+        queryEvents={[
+          {
+            jobId: 'query-job-stale-count',
+            correlationId: 'query-corr-stale-count',
+            tabId,
+            connectionId: 'conn-local-postgres',
+            status: 'completed',
+            elapsedMs: 18,
+            message: 'Query completed.',
+            startedAt: '2026-03-10T16:46:00.000Z',
+            finishedAt: '2026-03-10T16:46:00.018Z',
+            lastError: null,
+            result: {
+              kind: 'rows',
+              resultSetId: 'result-set-stale-count',
+              columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
+              bufferedRowCount: 1,
+              totalRowCount: null,
+              hasMoreRows: true,
+              status: 'completed',
+            },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('load-window'));
+    fireEvent.click(screen.getByText('set-quick-filter'));
+
+    resolveWindow?.({
+      resultSetId: 'result-set-stale-count',
+      offset: 0,
+      limit: 120,
+      rows: [[1]],
+      visibleRowCount: 1,
+      bufferedRowCount: 1,
+      totalRowCount: null,
+      hasMoreRows: true,
+      status: 'completed',
+      sort: null,
+      filters: [],
+      quickFilter: '',
+    });
+
+    await waitFor(() => {
+      expect(getQueryResultCount).not.toHaveBeenCalled();
+      expect(screen.getByTestId('active-quick-filter')).toHaveTextContent('hidden-filter');
     });
     expect(onError).not.toHaveBeenCalled();
   });

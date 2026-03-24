@@ -13,6 +13,15 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-24: Completed the CodeRabbit autofix pass for PR #13.
+  - Fixed the repo-side result-grid, replayable-query, and query-workspace issues that were still valid on `limit-large-queries`, and fixed the matching tracked `.agents/skills/octocode-research` source issues that could be verified safely in the current workspace.
+  - The `.agents/skills/octocode-research` integration test/build follow-up is environment-limited in this repo checkout: `express`, `supertest`, and `tsdown` are not installed for that workspace, so only the source-only unit coverage that does not require those missing packages could be rerun locally.
+- 2026-03-24: `npm test -- src/__tests__/unit/logger.test.ts src/__tests__/unit/httpPreprocess.test.ts src/__tests__/unit/readiness.test.ts src/__tests__/integration/routes.test.ts src/__tests__/integration/toolsRoutes.test.ts src/__tests__/integration/promptsRoutes.test.ts src/__tests__/integration/serverHttp.test.ts` inside `.agents/skills/octocode-research` ❌
+  - The logger and HTTP preprocess suites passed, but the broader `.agents` run is blocked in this checkout because the workspace does not have `express` and `supertest` installed, so Vitest cannot import those integration test dependencies.
+- 2026-03-24: `npm run build` inside `.agents/skills/octocode-research` ❌
+  - The build cannot run in this checkout because `tsdown` is not installed for that workspace, so the tracked generated `scripts/` bundle could not be regenerated locally.
+- 2026-03-24: Started a CodeRabbit autofix pass for the current PR on `limit-large-queries`.
+  - Goal: fetch unresolved CodeRabbit review threads, apply the requested fixes against the current branch state, then re-run verification before committing and pushing the autofix commit.
 - 2026-03-24: Completed the commit, push, and PR packaging pass for the current branch.
   - Commit `c1fbe30` is pushed to `origin/limit-large-queries`, and PR [#13](https://github.com/orgoldfus/sparow/pull/13) is open against `main`.
 - 2026-03-24: Started the commit, push, and PR packaging pass for the current branch.
@@ -199,6 +208,12 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The full repo gate passes under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 96 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
+- `cargo test --manifest-path src-tauri/Cargo.toml query::` ✅
+  - The focused Rust query suite passes with the new replayable-order and cache-more-rows regressions: 25 tests green, including the new deterministic-order fallback and terminal-page `has_more_rows` coverage.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 17 tests green, including the stale-window-count guard and the `visibleRowCount` preservation assertion. The existing jsdom `flushSync` warnings remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
   - The shell harness smoke now asserts the result grid has real vertical overflow before scrolling, and it wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png) after the scroll-fix patch.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅

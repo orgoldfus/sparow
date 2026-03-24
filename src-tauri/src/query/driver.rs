@@ -491,7 +491,11 @@ fn build_replayable_order_clause(
     sort: Option<&QueryResultSort>,
 ) -> String {
     let Some(sort) = sort else {
-        return String::new();
+        let Some(column) = columns.first() else {
+            return String::new();
+        };
+        let expression = replayable_sort_expression(column);
+        return format!(" order by {expression} asc nulls last, to_jsonb(sparow_source)::text asc");
     };
     let Some(column) = columns.get(sort.column_index) else {
         return String::new();
@@ -501,7 +505,13 @@ fn build_replayable_order_clause(
         QueryResultSortDirection::Asc => "asc",
         QueryResultSortDirection::Desc => "desc",
     };
-    let expression = match column.semantic_type {
+    let expression = replayable_sort_expression(column);
+
+    format!(" order by {expression} {direction} nulls last, to_jsonb(sparow_source)::text asc")
+}
+
+fn replayable_sort_expression(column: &QueryResultColumn) -> String {
+    match column.semantic_type {
         QueryResultColumnSemanticType::Number => {
             format!(
                 "cast(nullif({}, '') as double precision)",
@@ -518,9 +528,7 @@ fn build_replayable_order_clause(
             "lower(coalesce({}, ''))",
             replayable_text_expression(&column.name)
         ),
-    };
-
-    format!(" order by {expression} {direction} nulls last, to_jsonb(sparow_source)::text asc")
+    }
 }
 
 fn replayable_text_expression(column_name: &str) -> String {
@@ -809,4 +817,27 @@ fn normalize_query_error(error: tokio_postgres::Error) -> AppError {
 
 pub(crate) fn cancelled_query_error() -> AppError {
     AppError::retryable("query_cancelled", "The running query was cancelled.", None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_replayable_order_clause;
+    use crate::foundation::{QueryResultColumn, QueryResultColumnSemanticType};
+
+    #[test]
+    fn replayable_order_clause_falls_back_to_first_column_when_unsorted() {
+        let columns = vec![QueryResultColumn {
+            name: "id".to_string(),
+            postgres_type: "int4".to_string(),
+            semantic_type: QueryResultColumnSemanticType::Number,
+            is_nullable: false,
+        }];
+
+        let clause = build_replayable_order_clause(&columns, None);
+
+        assert_eq!(
+            clause,
+            " order by cast(nullif(to_jsonb(sparow_source) ->> 'id', '') as double precision) asc nulls last, to_jsonb(sparow_source)::text asc"
+        );
+    }
 }

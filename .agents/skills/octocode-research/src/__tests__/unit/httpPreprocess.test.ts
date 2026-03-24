@@ -107,6 +107,7 @@ describe('safePath', () => {
   it('rejects directory traversal', () => {
     expect(safePath.safeParse('../../../etc/passwd').success).toBe(false);
     expect(safePath.safeParse('src/../../etc/passwd').success).toBe(false);
+    expect(safePath.safeParse('/repo/../secret.txt').success).toBe(false);
   });
 
   it('rejects URL-encoded traversal', () => {
@@ -118,6 +119,10 @@ describe('safePath', () => {
     if (process.platform !== 'win32') {
       expect(safePath.safeParse('path\\to\\file').success).toBe(false);
     }
+  });
+
+  it('allows filenames containing double dots when they are not traversal segments', () => {
+    expect(safePath.safeParse('src/foo..bar.ts').success).toBe(true);
   });
 });
 

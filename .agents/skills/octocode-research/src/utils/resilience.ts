@@ -99,7 +99,8 @@ type ResilienceCategory = keyof typeof RESILIENCE_CONFIGS;
 async function withResilience<T>(
   category: ResilienceCategory,
   operation: () => Promise<T>,
-  context?: { tool: string }
+  context?: { tool: string },
+  signal?: AbortSignal
 ): Promise<T> {
   const config = RESILIENCE_CONFIGS[category];
   const timeoutMs = TIMEOUT_CONFIGS[category] || DEFAULT_TOOL_TIMEOUT_MS;
@@ -114,7 +115,8 @@ async function withResilience<T>(
       return withRetry(operation, config.retry, context);
     }),
     timeoutMs,
-    `${toolName}:timeout`
+    `${toolName}:timeout`,
+    signal
   );
 }
 
@@ -123,9 +125,10 @@ async function withResilience<T>(
  */
 export async function withGitHubResilience<T>(
   operation: () => Promise<T>,
-  toolName: string
+  toolName: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  return withResilience('github', operation, { tool: toolName });
+  return withResilience('github', operation, { tool: toolName }, signal);
 }
 
 /**
@@ -133,9 +136,10 @@ export async function withGitHubResilience<T>(
  */
 export async function withLspResilience<T>(
   operation: () => Promise<T>,
-  toolName: string
+  toolName: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  return withResilience('lsp', operation, { tool: toolName });
+  return withResilience('lsp', operation, { tool: toolName }, signal);
 }
 
 /**
@@ -143,9 +147,10 @@ export async function withLspResilience<T>(
  */
 export async function withLocalResilience<T>(
   operation: () => Promise<T>,
-  toolName: string
+  toolName: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  return withResilience('local', operation, { tool: toolName });
+  return withResilience('local', operation, { tool: toolName }, signal);
 }
 
 /**
@@ -153,7 +158,8 @@ export async function withLocalResilience<T>(
  */
 export async function withPackageResilience<T>(
   operation: () => Promise<T>,
-  toolName: string
+  toolName: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  return withResilience('package', operation, { tool: toolName });
+  return withResilience('package', operation, { tool: toolName }, signal);
 }

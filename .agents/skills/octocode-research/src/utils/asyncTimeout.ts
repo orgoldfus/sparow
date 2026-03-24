@@ -94,23 +94,50 @@ export function fireAndForgetWithTimeout(
 export async function withTimeout<T>(
   operation: () => Promise<T>,
   timeoutMs: number,
-  context = 'withTimeout'
+  context = 'withTimeout',
+  signal?: AbortSignal
 ): Promise<T> {
-  const controller = new AbortController();
-  const { signal } = controller;
+  let timeoutId: NodeJS.Timeout | null = null;
+  let abortListener: (() => void) | null = null;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timeoutId = setTimeout(() => {
-      controller.abort();
+    timeoutId = setTimeout(() => {
       reject(new Error(`${context}: Operation timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
+    if (signal?.aborted) {
+      clearTimeout(timeoutId);
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error(`${context}: Operation aborted`)
+      );
+      return;
+    }
+
+    if (signal) {
+      abortListener = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new Error(`${context}: Operation aborted`)
+        );
+      };
+      signal.addEventListener('abort', abortListener, { once: true });
+    }
   });
 
   try {
     return await Promise.race([operation(), timeoutPromise]);
   } finally {
-    controller.abort(); // Clean up if operation completed
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    if (signal && abortListener) {
+      signal.removeEventListener('abort', abortListener);
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { MAX_QUERIES } from '../validation/toolCallSchema.js';
 
 /**
  * Custom error class for validation failures.
@@ -36,18 +37,18 @@ export function parseAndValidate<T>(
     try {
       const parsed = JSON.parse(query.queries);
       if (Array.isArray(parsed)) {
-        // Validate each item in the array
-        const validated = parsed.map((item, index) => {
-          const result = schema.safeParse(item);
-          if (!result.success) {
-            throw new ValidationError(
-              `Validation failed for query[${index}]: ${formatZodError(result.error)}`,
-              result.error.issues
-            );
-          }
-          return result.data;
-        });
-        return validated;
+        const batchResult = z
+          .array(schema)
+          .min(1, 'At least one query is required')
+          .max(MAX_QUERIES, `Maximum ${MAX_QUERIES} queries per request`)
+          .safeParse(parsed);
+        if (!batchResult.success) {
+          throw new ValidationError(
+            formatZodError(batchResult.error),
+            batchResult.error.issues
+          );
+        }
+        return batchResult.data;
       }
     } catch (e) {
       if (e instanceof ValidationError) throw e;
@@ -86,4 +87,3 @@ function formatZodError(error: z.ZodError): string {
     })
     .join('; ');
 }
-

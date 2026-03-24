@@ -444,7 +444,11 @@ toolsRoutes.get('/initContext', async (
 // Tool Registry - Maps tool names to functions and resilience wrappers
 // ============================================================================
 
-type ResilienceFn = <T>(fn: () => Promise<T>, toolName: string) => Promise<T>;
+type ResilienceFn = <T>(
+  fn: () => Promise<T>,
+  toolName: string,
+  signal?: AbortSignal
+) => Promise<T>;
 
 /**
  * Tool registry entry for dynamic dispatch.
@@ -452,7 +456,7 @@ type ResilienceFn = <T>(fn: () => Promise<T>, toolName: string) => Promise<T>;
  */
 interface ToolEntry {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (params: any) => Promise<any>;
+  fn: (params: any, options?: { signal?: AbortSignal }) => Promise<any>;
   resilience: ResilienceFn;
   category: 'github' | 'local' | 'lsp' | 'package';
 }
@@ -601,22 +605,57 @@ toolsRoutes.post('/call/:toolName', async (
     }
 
     const { queries } = validation.data!;
+    const toolSchema = TOOL_ZOD_SCHEMAS[toolName];
+    if (!toolSchema) {
+      res.status(500).json({
+        tool: toolName,
+        success: false,
+        data: null,
+        hints: [
+          `No validation schema is registered for ${toolName}.`,
+          'This is a server configuration error.',
+        ],
+      });
+      return;
+    }
+    const parsedQueries: unknown[] = [];
+    for (const query of queries) {
+      const parsedQuery = toolSchema.safeParse(query);
+      if (!parsedQuery.success) {
+        const schemaError = {
+          message: parsedQuery.error.issues[0]?.message || 'Invalid query payload',
+          details: parsedQuery.error.issues,
+        };
+        res.status(400).json({
+          tool: toolName,
+          success: false,
+          data: null,
+          hints: getValidationHints(toolName, schemaError),
+        });
+        return;
+      }
+      parsedQueries.push(parsedQuery.data);
+    }
 
     // Check if request was aborted before execution
     if (isAborted) return;
 
     // Execute tool with resilience (includes timeout + circuit breaker + retry)
     const rawResult = await toolEntry.resilience(
-      () => toolEntry.fn({ queries }),
-      toolName
+      () => toolEntry.fn(
+        { queries: parsedQueries },
+        { signal: abortController.signal }
+      ),
+      toolName,
+      abortController.signal
     );
 
     // Check if request was aborted after execution
     if (isAborted) return;
 
     // Log tool call for session telemetry
-    const repos = extractReposFromQueries(queries);
-    const researchParams = extractResearchParams(queries);
+    const repos = extractReposFromQueries(parsedQueries);
+    const researchParams = extractResearchParams(parsedQueries);
     fireAndForgetWithTimeout(
       () => logToolCall(
         toolName,
@@ -632,7 +671,7 @@ toolsRoutes.post('/call/:toolName', async (
     const mcpResponse = rawResult as { content: Array<{ type: string; text: string }> };
 
     // For multiple queries, return bulk response format
-    if (queries.length > 1) {
+    if (parsedQueries.length > 1) {
       const bulkParsed = parseToolResponseBulk(mcpResponse);
 
       res.status(bulkParsed.isError ? 500 : 200).json({

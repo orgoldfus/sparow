@@ -37,6 +37,8 @@ vi.mock('../../mcpCache.js', () => ({
   }),
   initializeMcpContent: vi.fn().mockResolvedValue({}),
   isMcpInitialized: vi.fn().mockReturnValue(true),
+  isServerReady: vi.fn().mockReturnValue(true),
+  setServerReady: vi.fn(),
 }));
 
 vi.mock('../../index.js', () => ({
@@ -167,14 +169,14 @@ describe('Prompts Routes', () => {
 
   describe('Readiness gate', () => {
     it('returns 503 when not initialized', async () => {
-      const { isMcpInitialized } = await import('../../mcpCache.js');
-      vi.mocked(isMcpInitialized).mockReturnValue(false);
+      const { isServerReady } = await import('../../mcpCache.js');
+      vi.mocked(isServerReady).mockReturnValue(false);
 
       const res = await request(app).get('/prompts/list');
       expect(res.status).toBe(503);
       expect(res.body.error.code).toBe('SERVER_INITIALIZING');
 
-      vi.mocked(isMcpInitialized).mockReturnValue(true);
+      vi.mocked(isServerReady).mockReturnValue(true);
     });
   });
 });

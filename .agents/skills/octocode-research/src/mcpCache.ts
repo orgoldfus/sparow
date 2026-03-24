@@ -10,6 +10,7 @@ import { initialize, loadToolContent } from 'octocode-mcp/public';
 
 let mcpContent: CompleteMetadata | null = null;
 let initPromise: Promise<CompleteMetadata> | null = null;
+let serverReady = false;
 
 /**
  * Initialize mcpContent - call ONCE at server startup
@@ -21,10 +22,15 @@ export async function initializeMcpContent(): Promise<CompleteMetadata> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    await initialize();
-    const content = await loadToolContent();
-    mcpContent = content;
-    return content;
+    try {
+      await initialize();
+      const content = await loadToolContent();
+      mcpContent = content;
+      return content;
+    } catch (error) {
+      initPromise = null;
+      throw error;
+    }
   })();
 
   return initPromise;
@@ -46,4 +52,12 @@ export function getMcpContent(): CompleteMetadata {
  */
 export function isMcpInitialized(): boolean {
   return mcpContent !== null;
+}
+
+export function setServerReady(ready: boolean): void {
+  serverReady = ready;
+}
+
+export function isServerReady(): boolean {
+  return serverReady && mcpContent !== null;
 }

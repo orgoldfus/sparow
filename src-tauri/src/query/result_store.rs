@@ -578,12 +578,24 @@ fn cache_has_more_rows(cache: &ReplayableQueryResultCache) -> bool {
         return buffered_row_count(&cache.pages) < total_row_count;
     }
 
-    cache
+    let has_rows_before = cache
         .pages
         .first_key_value()
         .map(|(page_index, _)| *page_index > 0)
-        .unwrap_or(false)
-        || cache.pages.values().any(|page| page.has_more_rows_after)
+        .unwrap_or(false);
+    let has_gap = cache
+        .pages
+        .keys()
+        .copied()
+        .zip(cache.pages.keys().copied().skip(1))
+        .any(|(left, right)| right != left.saturating_add(1));
+    let has_rows_after = cache
+        .pages
+        .last_key_value()
+        .map(|(_, page)| page.has_more_rows_after)
+        .unwrap_or(false);
+
+    has_rows_before || has_gap || has_rows_after
 }
 
 fn cache_visible_row_count_for_request(
@@ -731,6 +743,43 @@ mod tests {
                 vec![QueryResultCell::Integer(5)],
             ]
         );
+    }
+
+    #[test]
+    fn replayable_window_does_not_report_more_rows_for_terminal_cached_page() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+
+        assert!(handle.store_cached_page_batch(
+            &descriptor_signature,
+            1,
+            vec![
+                vec![QueryResultCell::Integer(3)],
+                vec![QueryResultCell::Integer(4)],
+            ],
+            false,
+            ReplayablePageRange { start: 0, end: 1 },
+        ));
+
+        let window = handle.load_window(&QueryResultWindowRequest {
+            result_set_id: "result-1".to_string(),
+            offset: 0,
+            limit: 5,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        });
+
+        assert_eq!(window.rows.len(), 5);
+        assert!(!window.has_more_rows);
     }
 
     #[test]

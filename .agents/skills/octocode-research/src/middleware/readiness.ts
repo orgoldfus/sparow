@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import { isMcpInitialized } from '../mcpCache.js';
+import { isServerReady } from '../mcpCache.js';
 
 export const checkReadiness: RequestHandler = (_req: Request, res: Response, next: NextFunction) => {
-  if (!isMcpInitialized()) {
+  if (!isServerReady()) {
     res.status(503).json({
       success: false,
       error: {

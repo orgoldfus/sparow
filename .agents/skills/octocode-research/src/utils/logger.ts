@@ -150,6 +150,10 @@ function safeStringify(data: unknown): string {
 
     // Custom replacer that tracks size and detects circular refs
     const replacer = (_key: string, value: unknown): unknown => {
+      if (truncated) {
+        return undefined;
+      }
+
       // Check for circular references
       if (value !== null && typeof value === 'object') {
         if (seen.has(value)) {
@@ -165,6 +169,7 @@ function safeStringify(data: unknown): string {
       // If we've exceeded limit, mark as truncated and return placeholder
       if (size > MAX_LOG_DATA_SIZE && !truncated) {
         truncated = true;
+        return '[Data truncated - size limit exceeded]';
       }
 
       return value;
@@ -301,16 +306,51 @@ export function initializeLogger(): void {
 
 const SENSITIVE_KEYS = ['token', 'key', 'secret', 'password', 'auth', 'credential', 'api_key', 'apikey'];
 
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEYS.some((sensitiveKey) =>
+    key.toLowerCase().includes(sensitiveKey)
+  );
+}
+
+function sanitizeValue(
+  key: string,
+  value: unknown,
+  seen: WeakSet<object>
+): unknown {
+  if (isSensitiveKey(key)) {
+    return '[REDACTED]';
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeValue(key, entry, seen));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    seen.add(value);
+
+    const sanitized: Record<string, unknown> = {};
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      sanitized[nestedKey] = sanitizeValue(nestedKey, nestedValue, seen);
+    }
+    return sanitized;
+  }
+
+  return value;
+}
+
 /**
  * Sanitize query parameters by redacting sensitive values.
  * Prevents accidental exposure of secrets in logs.
  */
 export function sanitizeQueryParams(query: Record<string, unknown>): Record<string, unknown> {
+  const seen = new WeakSet<object>();
   const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(query)) {
-    const isSensitive = SENSITIVE_KEYS.some((s) => key.toLowerCase().includes(s));
-    sanitized[key] = isSensitive ? '[REDACTED]' : value;
+    sanitized[key] = sanitizeValue(key, value, seen);
   }
 
   return sanitized;

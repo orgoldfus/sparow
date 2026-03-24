@@ -20,6 +20,17 @@ packageRoutes.get(
         req.query as Record<string, unknown>,
         packageSearchSchema
       );
+      if (queries.length > 1) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          hints: [
+            'Batch packageSearch requests are not supported on GET /packageSearch.',
+            'Use POST /tools/call/packageSearch for batched requests.',
+          ],
+        });
+        return;
+      }
       type PackageSearchParams = Parameters<typeof packageSearch>[0];
       const rawResult = await withPackageResilience(
         () => packageSearch({ queries } as PackageSearchParams),

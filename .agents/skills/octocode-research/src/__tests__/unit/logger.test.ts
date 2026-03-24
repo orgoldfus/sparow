@@ -118,15 +118,14 @@ describe('sanitizeQueryParams', () => {
     });
   });
 
-  it('handles nested values without redacting them', () => {
+  it('redacts sensitive keys inside nested values', () => {
     const query = {
       config: { token: 'nested' },
       path: '/src',
     };
     const result = sanitizeQueryParams(query);
 
-    // Only top-level keys are checked
-    expect(result.config).toEqual({ token: 'nested' });
+    expect(result.config).toEqual({ token: '[REDACTED]' });
     expect(result.path).toBe('/src');
   });
 
