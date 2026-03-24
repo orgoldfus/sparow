@@ -13,6 +13,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-24: Completed the latest CodeRabbit autofix pass for PR #13 without additional code changes.
+  - The only remaining unresolved CodeRabbit thread on `limit-large-queries` was stale against the current `src-tauri/src/query/result_store.rs` implementation and its existing terminal-page regression test, so the follow-up was to verify the behavior, resolve the thread on GitHub, and package the required todo/audit updates.
+- 2026-03-24: Started another CodeRabbit autofix pass for the current PR on `limit-large-queries`.
+  - Goal: fetch the latest unresolved CodeRabbit review threads, apply the requested fixes against the current branch state, then rerun verification, commit, and push the autofix changes.
 - 2026-03-24: Completed the CodeRabbit autofix pass for PR #13.
   - Fixed the repo-side result-grid, replayable-query, and query-workspace issues that were still valid on `limit-large-queries`, and fixed the matching tracked `.agents/skills/octocode-research` source issues that could be verified safely in the current workspace.
   - The `.agents/skills/octocode-research` integration test/build follow-up is environment-limited in this repo checkout: `express`, `supertest`, and `tsdown` are not installed for that workspace, so only the source-only unit coverage that does not require those missing packages could be rerun locally.
@@ -20,6 +24,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
   - The logger and HTTP preprocess suites passed, but the broader `.agents` run is blocked in this checkout because the workspace does not have `express` and `supertest` installed, so Vitest cannot import those integration test dependencies.
 - 2026-03-24: `npm run build` inside `.agents/skills/octocode-research` ❌
   - The build cannot run in this checkout because `tsdown` is not installed for that workspace, so the tracked generated `scripts/` bundle could not be regenerated locally.
+- `cargo test --manifest-path src-tauri/Cargo.toml replayable_window_does_not_report_more_rows_for_terminal_cached_page -- --exact` ✅
+  - The command completed successfully but matched 0 tests because the exact namespaced test name differs from the bare function name; no product code was exercised by this attempt.
+- `cargo test --manifest-path src-tauri/Cargo.toml replayable_window_does_not_report_more_rows_for_terminal_cached_page` ✅
+  - The focused Rust regression passed on `src-tauri/src/query/result_store.rs`: `query::result_store::tests::replayable_window_does_not_report_more_rows_for_terminal_cached_page` stayed green, which confirms the current cache logic already suppresses `has_more_rows` for a fully cached terminal page.
 - 2026-03-24: Started a CodeRabbit autofix pass for the current PR on `limit-large-queries`.
   - Goal: fetch unresolved CodeRabbit review threads, apply the requested fixes against the current branch state, then re-run verification before committing and pushing the autofix commit.
 - 2026-03-24: Completed the commit, push, and PR packaging pass for the current branch.
