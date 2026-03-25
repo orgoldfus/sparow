@@ -21,6 +21,8 @@ import type {
   QueryResultExportAccepted,
   QueryResultExportProgressEvent,
   QueryResultExportRequest,
+  QueryResultCountRequest,
+  QueryResultCountResult,
   QueryResultWindow,
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
@@ -47,6 +49,8 @@ import {
   isQueryResultExportAccepted,
   isQueryResultExportProgressEvent,
   isQueryResultExportRequest,
+  isQueryResultCountRequest,
+  isQueryResultCountResult,
   isQueryResultWindow,
   isQueryResultWindowRequest,
   isSchemaRefreshAccepted,
@@ -166,6 +170,17 @@ export async function getQueryResultWindow(
 
   const payload = await invoke<unknown>('get_query_result_window', { request });
   return assertContract(isQueryResultWindow, payload, 'get_query_result_window');
+}
+
+export async function getQueryResultCount(
+  request: QueryResultCountRequest,
+): Promise<QueryResultCountResult> {
+  if (!isQueryResultCountRequest(request)) {
+    throw new Error('Invalid QueryResultCountRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('get_query_result_count', { request });
+  return assertContract(isQueryResultCountResult, payload, 'get_query_result_count');
 }
 
 export async function startQueryResultExport(

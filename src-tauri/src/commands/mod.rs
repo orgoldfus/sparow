@@ -6,8 +6,9 @@ use crate::foundation::{
     ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
     DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
     QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-    QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-    QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
+    QueryResultCountRequest, QueryResultCountResult, QueryResultExportAccepted,
+    QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultWindow,
+    QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
     SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
     BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT,
 };
@@ -120,6 +121,14 @@ pub async fn get_query_result_window(
     request: QueryResultWindowRequest,
 ) -> Result<QueryResultWindow, AppError> {
     state.get_query_result_window(request).await
+}
+
+#[tauri::command]
+pub async fn get_query_result_count(
+    state: State<'_, AppState>,
+    request: QueryResultCountRequest,
+) -> Result<QueryResultCountResult, AppError> {
+    state.get_query_result_count(request).await
 }
 
 #[tauri::command]

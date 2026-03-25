@@ -14,13 +14,17 @@ use crate::{
     foundation::{
         AppError, QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
         QueryResultFilter, QueryResultFilterMode, QueryResultSort, QueryResultSortDirection,
-        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest, SslMode,
+        QueryResultWindow, QueryResultWindowRequest, SslMode,
     },
 };
 
-use super::result_store::ReplayableQueryResultHandle;
+use super::result_store::{
+    replayable_page_range_for_window, ReplayablePageRange, ReplayableQueryResultHandle,
+};
 
 const MAX_SAFE_JS_INTEGER: i64 = 9_007_199_254_740_991;
+pub(crate) const REPLAYABLE_PAGE_SIZE: usize = 300;
+const REPLAYABLE_PREFETCH_PAGE_MARGIN: usize = 1;
 
 enum ReplayQueryParam {
     Text(String),
@@ -36,6 +40,16 @@ impl ReplayQueryParam {
     }
 }
 
+pub(crate) struct ReplayableRowBatchRequest<'a> {
+    pub sql: &'a str,
+    pub columns: &'a [QueryResultColumn],
+    pub sort: Option<&'a QueryResultSort>,
+    pub quick_filter: &'a str,
+    pub filters: &'a [QueryResultFilter],
+    pub offset: usize,
+    pub limit: usize,
+}
+
 pub(crate) enum ExecutedQueryResult {
     Command {
         command_tag: String,
@@ -43,7 +57,8 @@ pub(crate) enum ExecutedQueryResult {
     },
     ReplayableRows {
         columns: Vec<QueryResultColumn>,
-        initial_total_row_count: usize,
+        initial_rows: Vec<Vec<QueryResultCell>>,
+        has_more_rows: bool,
     },
     BufferedRows {
         columns: Vec<QueryResultColumn>,
@@ -114,17 +129,31 @@ impl QueryExecutionDriver for RuntimeQueryExecutionDriver {
         }
 
         let result = if is_replayable_sql(&sql) {
-            let initial_total_row_count = tokio::select! {
-                result = count_replayable_query_rows(&client, &sql, &result_columns, "", &[]) => result,
+            let initial_rows = tokio::select! {
+                result = query_replayable_row_batch(
+                    &client,
+                    ReplayableRowBatchRequest {
+                        sql: &sql,
+                        columns: &result_columns,
+                        sort: None,
+                        quick_filter: "",
+                        filters: &[],
+                        offset: 0,
+                        limit: REPLAYABLE_PAGE_SIZE + 1,
+                    },
+                ) => result,
                 _ = cancellation.cancelled() => {
                     cancel_active_query(&cancel_token, session.ssl_mode).await?;
                     Err(cancelled_query_error())
                 }
             }?;
+            let (initial_rows, has_more_rows) =
+                split_replayable_batch(initial_rows, REPLAYABLE_PAGE_SIZE);
 
             ExecutedQueryResult::ReplayableRows {
                 columns: result_columns,
-                initial_total_row_count,
+                initial_rows,
+                has_more_rows,
             }
         } else {
             let row_stream = tokio::select! {
@@ -173,55 +202,126 @@ pub(crate) async fn load_replayable_query_result_window(
     handle: &ReplayableQueryResultHandle,
     request: &QueryResultWindowRequest,
 ) -> Result<QueryResultWindow, AppError> {
-    let pool = session.pool.ok_or_else(|| {
-        AppError::internal(
-            "query_missing_active_pool",
-            "The active PostgreSQL session does not have a live runtime pool.",
-            Some(session.snapshot.connection_id.clone()),
-        )
-    })?;
-    let client = pool.get().await.map_err(|error| {
-        AppError::internal(
-            "query_client_checkout_failed",
-            "Failed to borrow a PostgreSQL client for query execution.",
-            Some(error.to_string()),
-        )
-    })?;
+    let descriptor_signature = super::result_store::build_replayable_descriptor_signature(
+        request.sort.as_ref(),
+        &request.filters,
+        &request.quick_filter,
+    );
+    let count_signature = super::result_store::build_replayable_count_signature(
+        &request.filters,
+        &request.quick_filter,
+    );
+    let anchor_page_range =
+        replayable_page_range_for_window(request.offset, request.limit, handle.page_size());
+    let fetch_page_range = anchor_page_range.with_margin(REPLAYABLE_PREFETCH_PAGE_MARGIN);
+    let _guard = handle.lock_query().await;
 
-    let total_row_count =
-        count_replayable_query_rows(&client, &handle.sql, &handle.columns, "", &[]).await?;
-    let visible_row_count = if request.quick_filter.trim().is_empty() && request.filters.is_empty()
-    {
-        total_row_count
+    let snapshot = handle.cache_snapshot();
+    if snapshot.descriptor_signature != descriptor_signature {
+        let (rows, has_more_rows_after_batch) =
+            query_replayable_page_range(&session, handle, request, fetch_page_range).await?;
+        handle.replace_cached_page_batch(
+            descriptor_signature.clone(),
+            count_signature,
+            fetch_page_range.start,
+            rows,
+            has_more_rows_after_batch,
+            anchor_page_range,
+        );
     } else {
-        count_replayable_query_rows(
-            &client,
-            &handle.sql,
-            &handle.columns,
-            &request.quick_filter,
-            &request.filters,
-        )
-        .await?
-    };
+        for missing_range in missing_page_ranges(&snapshot.cached_page_indexes, fetch_page_range) {
+            let (rows, has_more_rows_after_batch) =
+                query_replayable_page_range(&session, handle, request, missing_range).await?;
+            if !handle.store_cached_page_batch(
+                &descriptor_signature,
+                missing_range.start,
+                rows,
+                has_more_rows_after_batch,
+                anchor_page_range,
+            ) {
+                continue;
+            }
+        }
+    }
 
-    let rows = query_replayable_rows(&client, handle, request).await?;
-
-    Ok(QueryResultWindow {
-        result_set_id: handle.result_set_id.clone(),
-        offset: request.offset,
-        limit: request.limit,
-        rows,
-        visible_row_count,
-        buffered_row_count: total_row_count,
-        total_row_count: Some(total_row_count),
-        status: QueryResultStatus::Completed,
-        sort: request.sort.clone(),
-        filters: request.filters.clone(),
-        quick_filter: request.quick_filter.clone(),
-    })
+    Ok(handle.load_window(request))
 }
 
-async fn count_replayable_query_rows(
+async fn query_replayable_page_range(
+    session: &ActiveSessionRuntime,
+    handle: &ReplayableQueryResultHandle,
+    request: &QueryResultWindowRequest,
+    page_range: ReplayablePageRange,
+) -> Result<(Vec<Vec<QueryResultCell>>, bool), AppError> {
+    let page_count = page_range.end.saturating_sub(page_range.start) + 1;
+    let batch_size = page_count.saturating_mul(handle.page_size());
+    let rows = query_replayable_row_batch(
+        &checkout_replayable_client(session).await?,
+        ReplayableRowBatchRequest {
+            sql: &handle.sql,
+            columns: &handle.columns,
+            sort: request.sort.as_ref(),
+            quick_filter: &request.quick_filter,
+            filters: &request.filters,
+            offset: page_range.start.saturating_mul(handle.page_size()),
+            limit: batch_size + 1,
+        },
+    )
+    .await?;
+
+    Ok(split_replayable_batch(rows, batch_size))
+}
+
+fn missing_page_ranges(
+    cached_page_indexes: &[usize],
+    required_range: ReplayablePageRange,
+) -> Vec<ReplayablePageRange> {
+    let mut missing_ranges = Vec::new();
+    let mut range_start = None;
+
+    for page_index in required_range.start..=required_range.end {
+        let is_cached = cached_page_indexes.binary_search(&page_index).is_ok();
+        match (is_cached, range_start) {
+            (false, None) => range_start = Some(page_index),
+            (true, Some(start)) => {
+                missing_ranges.push(ReplayablePageRange {
+                    start,
+                    end: page_index.saturating_sub(1),
+                });
+                range_start = None;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(start) = range_start {
+        missing_ranges.push(ReplayablePageRange {
+            start,
+            end: required_range.end,
+        });
+    }
+
+    missing_ranges
+}
+
+pub(crate) async fn count_replayable_query_rows(
+    session: ActiveSessionRuntime,
+    handle: &ReplayableQueryResultHandle,
+    quick_filter: &str,
+    filters: &[QueryResultFilter],
+) -> Result<usize, AppError> {
+    let client = checkout_replayable_client(&session).await?;
+    count_replayable_query_rows_with_client(
+        &client,
+        &handle.sql,
+        &handle.columns,
+        quick_filter,
+        filters,
+    )
+    .await
+}
+
+async fn count_replayable_query_rows_with_client(
     client: &Client,
     sql: &str,
     columns: &[QueryResultColumn],
@@ -247,24 +347,23 @@ async fn count_replayable_query_rows(
     Ok(count.max(0) as usize)
 }
 
-async fn query_replayable_rows(
+pub(crate) async fn query_replayable_row_batch(
     client: &Client,
-    handle: &ReplayableQueryResultHandle,
-    request: &QueryResultWindowRequest,
+    request: ReplayableRowBatchRequest<'_>,
 ) -> Result<Vec<Vec<QueryResultCell>>, AppError> {
     let mut params = Vec::new();
     let where_clause = build_replayable_where_clause(
-        &handle.columns,
-        &request.quick_filter,
-        &request.filters,
+        request.columns,
+        request.quick_filter,
+        request.filters,
         &mut params,
     );
-    let order_clause = build_replayable_order_clause(&handle.columns, request.sort.as_ref());
+    let order_clause = build_replayable_order_clause(request.columns, request.sort);
     let limit_placeholder = push_integer_param(&mut params, request.limit as i64);
     let offset_placeholder = push_integer_param(&mut params, request.offset as i64);
     let query = format!(
         "select * from ({}) as sparow_source{where_clause}{order_clause} limit {limit_placeholder} offset {offset_placeholder}",
-        trimmed_statement(&handle.sql)
+        trimmed_statement(request.sql)
     );
 
     let rows = query_rows(client, &query, &params).await.map_err(|error| {
@@ -277,8 +376,37 @@ async fn query_replayable_rows(
 
     Ok(rows
         .iter()
-        .map(|row| read_query_result_row(row, &handle.columns))
+        .map(|row| read_query_result_row(row, request.columns))
         .collect())
+}
+
+fn split_replayable_batch(
+    mut rows: Vec<Vec<QueryResultCell>>,
+    keep_limit: usize,
+) -> (Vec<Vec<QueryResultCell>>, bool) {
+    let has_more_rows = rows.len() > keep_limit;
+    rows.truncate(keep_limit);
+    (rows, has_more_rows)
+}
+
+pub(crate) async fn checkout_replayable_client(
+    session: &ActiveSessionRuntime,
+) -> Result<Client, AppError> {
+    let pool = session.pool.clone().ok_or_else(|| {
+        AppError::internal(
+            "query_missing_active_pool",
+            "The active PostgreSQL session does not have a live runtime pool.",
+            Some(session.snapshot.connection_id.clone()),
+        )
+    })?;
+
+    pool.get().await.map_err(|error| {
+        AppError::internal(
+            "query_client_checkout_failed",
+            "Failed to borrow a PostgreSQL client for query execution.",
+            Some(error.to_string()),
+        )
+    })
 }
 
 async fn query_single_i64(
@@ -364,7 +492,11 @@ fn build_replayable_order_clause(
     sort: Option<&QueryResultSort>,
 ) -> String {
     let Some(sort) = sort else {
-        return String::new();
+        let Some(column) = columns.first() else {
+            return String::new();
+        };
+        let expression = replayable_sort_expression(column);
+        return format!(" order by {expression} asc nulls last, to_jsonb(sparow_source)::text asc");
     };
     let Some(column) = columns.get(sort.column_index) else {
         return String::new();
@@ -374,7 +506,13 @@ fn build_replayable_order_clause(
         QueryResultSortDirection::Asc => "asc",
         QueryResultSortDirection::Desc => "desc",
     };
-    let expression = match column.semantic_type {
+    let expression = replayable_sort_expression(column);
+
+    format!(" order by {expression} {direction} nulls last, to_jsonb(sparow_source)::text asc")
+}
+
+fn replayable_sort_expression(column: &QueryResultColumn) -> String {
+    match column.semantic_type {
         QueryResultColumnSemanticType::Number => {
             format!(
                 "cast(nullif({}, '') as double precision)",
@@ -391,9 +529,7 @@ fn build_replayable_order_clause(
             "lower(coalesce({}, ''))",
             replayable_text_expression(&column.name)
         ),
-    };
-
-    format!(" order by {expression} {direction} nulls last, to_jsonb(sparow_source)::text asc")
+    }
 }
 
 fn replayable_text_expression(column_name: &str) -> String {
@@ -682,4 +818,27 @@ fn normalize_query_error(error: tokio_postgres::Error) -> AppError {
 
 pub(crate) fn cancelled_query_error() -> AppError {
     AppError::retryable("query_cancelled", "The running query was cancelled.", None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_replayable_order_clause;
+    use crate::foundation::{QueryResultColumn, QueryResultColumnSemanticType};
+
+    #[test]
+    fn replayable_order_clause_falls_back_to_first_column_when_unsorted() {
+        let columns = vec![QueryResultColumn {
+            name: "id".to_string(),
+            postgres_type: "int4".to_string(),
+            semantic_type: QueryResultColumnSemanticType::Number,
+            is_nullable: false,
+        }];
+
+        let clause = build_replayable_order_clause(&columns, None);
+
+        assert_eq!(
+            clause,
+            " order by cast(nullif(to_jsonb(sparow_source) ->> 'id', '') as double precision) asc nulls last, to_jsonb(sparow_source)::text asc"
+        );
+    }
 }

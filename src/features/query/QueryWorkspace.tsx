@@ -18,7 +18,7 @@ import type {
 import { resolveExecutionSlice } from './executionSlice';
 import { EmptyPanel, QueryResultsTable } from './QueryResultsTable';
 import { formatResultColumns, registerSqlCompletionProvider } from './sqlAutocomplete';
-import type { QueryWorkspaceState } from './useQueryWorkspace';
+import type { QueryTabState, QueryWorkspaceState } from './useQueryWorkspace';
 
 type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
@@ -319,11 +319,7 @@ export function QueryResultsPanel({
             <TabsTrigger value="messages">Messages</TabsTrigger>
           </TabsList>
           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
-            <span>
-              {summary
-                ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''} rows`
-                : 'No rows'}
-            </span>
+            <span>{summary && tab ? formatRowCountLabel(summary, tab.result.countStatus) : 'No rows'}</span>
             <span>{tab?.execution.lastEvent ? `${tab.execution.lastEvent.elapsedMs} ms` : 'n/a'}</span>
           </div>
         </div>
@@ -405,8 +401,7 @@ export function QueryResultsPanel({
                 <p>Result set: {summary?.resultSetId ?? 'none'}</p>
                 <p>Columns: {summary ? formatResultColumns(summary.columns) : 'n/a'}</p>
                 <p>
-                  Rows available:{' '}
-                  {summary ? `${summary.bufferedRowCount}${summary.totalRowCount !== null ? ` / ${summary.totalRowCount}` : ''}` : 'n/a'}
+                  Rows available: {summary && tab ? formatRowCountLabel(summary, tab.result.countStatus) : 'n/a'}
                 </p>
                 <p>Window state: {tab?.result.windowStatus ?? 'idle'}</p>
               </div>
@@ -461,15 +456,26 @@ function resolveVisibleResultRowCount(
   }
 
   if (!window || window.resultSetId !== summary.resultSetId) {
-    return summary.bufferedRowCount;
+    return summary.totalRowCount ?? summary.bufferedRowCount + (summary.hasMoreRows ? 1 : 0);
   }
 
-  const loadedRowCount = window.offset + window.rows.length;
-  if (window.visibleRowCount === 0 && window.rows.length > 0) {
-    return Math.max(summary.bufferedRowCount, loadedRowCount);
+  return window.totalRowCount ?? window.visibleRowCount;
+}
+
+function formatRowCountLabel(
+  summary: QueryResultSetSummary,
+  countStatus: QueryTabState['result']['countStatus'],
+): string {
+  if (summary.totalRowCount !== null) {
+    return `${summary.bufferedRowCount} / ${summary.totalRowCount} rows`;
   }
 
-  return Math.max(window.visibleRowCount, loadedRowCount);
+  const loadedLabel = `${summary.bufferedRowCount}${summary.hasMoreRows ? '+' : ''} rows loaded`;
+  if (countStatus === 'loading') {
+    return `${loadedLabel} - counting total...`;
+  }
+
+  return loadedLabel;
 }
 
 function resultStatusBadgeVariant(status: QueryResultStatus): 'accent' | 'success' | 'warning' | 'danger' {

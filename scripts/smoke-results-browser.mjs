@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
+import { assertScrollableResultGrid } from './result-grid-smoke-helpers.mjs';
 
 const port = 4174;
 const url = `http://127.0.0.1:${port}/?harness=results`;
@@ -44,7 +45,8 @@ try {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('result-viewer-harness').waitFor();
     await page.getByTestId('harness-scenario-select').selectOption('large-complete');
-    await page.getByTestId('query-result-grid-scroll').evaluate((element) => {
+    const gridScroll = await assertScrollableResultGrid(page);
+    await gridScroll.evaluate((element) => {
       element.scrollTop = 2_400;
       element.dispatchEvent(new Event('scroll'));
     });

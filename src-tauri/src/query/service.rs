@@ -19,20 +19,23 @@ use crate::{
         ensure_parent_directory, iso_timestamp, AppError, CancelQueryExecutionResult,
         CancelQueryResultExportResult, DiagnosticsStore, QueryExecutionAccepted,
         QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
-        QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultExportAccepted,
-        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultExportStatus,
-        QueryResultWindow, QueryResultWindowRequest,
+        QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultCountRequest,
+        QueryResultCountResult, QueryResultExportAccepted, QueryResultExportProgressEvent,
+        QueryResultExportRequest, QueryResultExportStatus, QueryResultWindow,
+        QueryResultWindowRequest,
     },
     persistence::Repository,
 };
 
 use super::{
     driver::{
-        cancelled_query_error, load_replayable_query_result_window, ExecutedQueryResult,
-        QueryExecutionDriver,
+        cancelled_query_error, count_replayable_query_rows, load_replayable_query_result_window,
+        query_replayable_row_batch, ExecutedQueryResult, QueryExecutionDriver,
+        ReplayableRowBatchRequest, REPLAYABLE_PAGE_SIZE,
     },
     result_store::{
-        BufferedQueryResultHandle, QueryResultHandle, QueryResultStore, ReplayableQueryResultHandle,
+        build_replayable_count_signature, BufferedQueryResultHandle, QueryResultHandle,
+        QueryResultStore, ReplayableQueryResultHandle, ReplayableQueryResultHandleInit,
     },
 };
 
@@ -356,6 +359,50 @@ impl QueryService {
         }
     }
 
+    /// Counts the active viewer shape for one result set without blocking grid rendering.
+    pub(crate) async fn get_query_result_count(
+        &self,
+        request: QueryResultCountRequest,
+    ) -> Result<QueryResultCountResult, AppError> {
+        let handle = self
+            .results
+            .load(&request.result_set_id)
+            .await
+            .ok_or_else(|| self.missing_result_set_error(&request.result_set_id))?;
+
+        match handle.as_ref() {
+            QueryResultHandle::Replayable(handle) => {
+                let session = self
+                    .connections
+                    .active_session_runtime(handle.connection_id.as_str())
+                    .await
+                    .map_err(map_session_error)?;
+                let total_row_count = count_replayable_query_rows(
+                    session,
+                    handle,
+                    &request.quick_filter,
+                    &request.filters,
+                )
+                .await?;
+
+                let count_signature =
+                    build_replayable_count_signature(&request.filters, &request.quick_filter);
+                let _ = handle.set_total_row_count_if_current(&count_signature, total_row_count);
+
+                Ok(QueryResultCountResult {
+                    result_set_id: request.result_set_id,
+                    total_row_count,
+                })
+            }
+            QueryResultHandle::Buffered(handle) => Ok(QueryResultCountResult {
+                result_set_id: request.result_set_id,
+                total_row_count: handle
+                    .rows_for_export(None, &request.filters, &request.quick_filter)
+                    .len(),
+            }),
+        }
+    }
+
     /// Starts a background CSV export for a completed query result.
     pub(crate) async fn start_query_result_export(
         &self,
@@ -556,17 +603,22 @@ async fn store_query_result(
         }),
         ExecutedQueryResult::ReplayableRows {
             columns,
-            initial_total_row_count,
+            initial_rows,
+            has_more_rows,
         } => {
             let handle = results
-                .insert(QueryResultHandle::Replayable(ReplayableQueryResultHandle {
-                    result_set_id: result_set_id.to_string(),
-                    tab_id: request.tab_id.clone(),
-                    connection_id: request.connection_id.clone(),
-                    sql: request.sql.clone(),
-                    columns,
-                    initial_total_row_count,
-                }))
+                .insert(QueryResultHandle::Replayable(
+                    ReplayableQueryResultHandle::new(ReplayableQueryResultHandleInit {
+                        result_set_id: result_set_id.to_string(),
+                        tab_id: request.tab_id.clone(),
+                        connection_id: request.connection_id.clone(),
+                        sql: request.sql.clone(),
+                        columns,
+                        page_size: REPLAYABLE_PAGE_SIZE,
+                        initial_rows,
+                        has_more_rows,
+                    }),
+                ))
                 .await;
 
             Ok(QueryExecutionResult::Rows {
@@ -711,34 +763,36 @@ async fn export_replayable_rows(
             ));
         }
 
-        let window = load_replayable_query_result_window(
-            session.clone(),
-            handle,
-            &QueryResultWindowRequest {
-                result_set_id: handle.result_set_id.clone(),
+        let mut rows = query_replayable_row_batch(
+            &crate::query::driver::checkout_replayable_client(&session).await?,
+            ReplayableRowBatchRequest {
+                sql: &handle.sql,
+                columns: &handle.columns,
+                sort: request.sort.as_ref(),
+                quick_filter: &request.quick_filter,
+                filters: &request.filters,
                 offset,
-                limit: EXPORT_WINDOW_SIZE,
-                sort: request.sort.clone(),
-                filters: request.filters.clone(),
-                quick_filter: request.quick_filter.clone(),
+                limit: EXPORT_WINDOW_SIZE + 1,
             },
         )
         .await?;
+        let has_more_rows = rows.len() > EXPORT_WINDOW_SIZE;
+        rows.truncate(EXPORT_WINDOW_SIZE);
 
-        if window.rows.is_empty() {
+        if rows.is_empty() {
             break;
         }
 
-        for row in &window.rows {
+        for row in &rows {
             write_csv_row(&mut writer, row.iter().cloned())?;
         }
         flush_export_writer(&mut writer)?;
 
-        rows_written += window.rows.len();
-        offset += window.rows.len();
+        rows_written += rows.len();
+        offset += rows.len();
         emit_running_export_progress(app.as_ref(), accepted, rows_written)?;
 
-        if rows_written >= window.visible_row_count {
+        if !has_more_rows {
             break;
         }
     }
@@ -1488,6 +1542,31 @@ mod tests {
         .expect_err("oversized buffered result should fail");
 
         assert_eq!(error.code, "query_result_buffer_limit_exceeded");
+    }
+
+    #[tokio::test]
+    async fn stores_replayable_results_with_unknown_totals_until_counting_finishes() {
+        let result = store_query_result(
+            &QueryResultStore::default(),
+            &test_request("tab-1", "conn-1", "select 1"),
+            "result-set-1",
+            ExecutedQueryResult::ReplayableRows {
+                columns: vec![test_result_column()],
+                initial_rows: vec![vec![QueryResultCell::Integer(1)]],
+                has_more_rows: true,
+            },
+        )
+        .await
+        .expect("replayable result should store");
+
+        match result {
+            QueryExecutionResult::Rows { summary } => {
+                assert_eq!(summary.buffered_row_count, 1);
+                assert_eq!(summary.total_row_count, None);
+                assert!(summary.has_more_rows);
+            }
+            other => panic!("expected rows result, got {other:?}"),
+        }
     }
 
     #[test]

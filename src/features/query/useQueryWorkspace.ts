@@ -17,6 +17,7 @@ import type {
 import {
   cancelQueryExecution,
   cancelQueryResultExport,
+  getQueryResultCount,
   getQueryResultWindow,
   startQueryExecution,
   startQueryResultExport,
@@ -32,6 +33,7 @@ export type QueryExecutionIntent = {
 };
 
 export type QueryResultWindowStatus = 'idle' | 'loading' | 'ready' | 'failed';
+export type QueryResultCountStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 export type QueryTabExecutionState = {
   status: QueryExecutionStatus | 'idle';
@@ -48,6 +50,9 @@ export type QueryTabResultState = {
   windowStatus: QueryResultWindowStatus;
   windowError: AppError | null;
   requestedWindowSignature: string | null;
+  countStatus: QueryResultCountStatus;
+  countError: AppError | null;
+  requestedCountSignature: string | null;
   quickFilter: string;
   filters: QueryResultFilter[];
   sort: QueryResultSort | null;
@@ -422,6 +427,15 @@ export function useQueryWorkspace({
         quickFilter: tab.result.quickFilter,
       });
 
+      const currentTab = tabsRef.current.find((entry) => entry.id === tabId);
+      if (
+        !currentTab ||
+        currentTab.result.requestedWindowSignature !== signature ||
+        currentTab.result.summary?.resultSetId !== window.resultSetId
+      ) {
+        return;
+      }
+
       commitTabs((currentTabs) =>
         currentTabs.map((entry) =>
           entry.id === tabId && entry.result.requestedWindowSignature === signature
@@ -438,6 +452,15 @@ export function useQueryWorkspace({
             : entry,
         ),
       );
+
+      if (window.totalRowCount === null) {
+        void loadTabResultCount(
+          tabId,
+          window.resultSetId,
+          currentTab.result.filters,
+          currentTab.result.quickFilter,
+        );
+      }
     } catch (caught) {
       const error = logger.asAppError(caught, 'get_query_result_window');
       onError(error);
@@ -464,10 +487,12 @@ export function useQueryWorkspace({
         tab.id === tabId
           ? {
               ...tab,
-              result: invalidateWindow({
-                ...tab.result,
-                quickFilter: value,
-              }),
+              result: resetCountState(
+                invalidateWindow({
+                  ...tab.result,
+                  quickFilter: value,
+                }),
+              ),
             }
           : tab,
       ),
@@ -492,10 +517,12 @@ export function useQueryWorkspace({
 
         return {
           ...tab,
-          result: invalidateWindow({
-            ...tab.result,
-            filters: nextFilters.sort((left, right) => left.columnIndex - right.columnIndex),
-          }),
+          result: resetCountState(
+            invalidateWindow({
+              ...tab.result,
+              filters: nextFilters.sort((left, right) => left.columnIndex - right.columnIndex),
+            }),
+          ),
         };
       }),
     );
@@ -614,6 +641,109 @@ export function useQueryWorkspace({
     }
   }
 
+  async function loadTabResultCount(
+    tabId: string,
+    resultSetId: string,
+    filters: QueryResultFilter[],
+    quickFilter: string,
+  ) {
+    const signature = countRequestSignature({
+      resultSetId,
+      filters,
+      quickFilter,
+    });
+    const tab = tabsRef.current.find((entry) => entry.id === tabId);
+    if (!tab || tab.result.summary?.resultSetId !== resultSetId) {
+      return;
+    }
+
+    if (
+      tab.result.requestedCountSignature === signature &&
+      tab.result.countStatus !== 'failed'
+    ) {
+      return;
+    }
+
+    commitTabs((currentTabs) =>
+      currentTabs.map((entry) =>
+        entry.id === tabId
+          ? {
+              ...entry,
+              result: {
+                ...entry.result,
+                requestedCountSignature: signature,
+                countStatus: 'loading',
+                countError: null,
+              },
+            }
+          : entry,
+      ),
+    );
+
+    try {
+      const count = await getQueryResultCount({
+        resultSetId,
+        filters,
+        quickFilter,
+      });
+
+      commitTabs((currentTabs) =>
+        currentTabs.map((entry) =>
+          entry.id === tabId &&
+          entry.result.requestedCountSignature === signature &&
+          entry.result.summary?.resultSetId === count.resultSetId
+            ? {
+                ...entry,
+                result: {
+                  ...entry.result,
+                  summary: entry.result.summary
+                    ? {
+                        ...entry.result.summary,
+                        totalRowCount: count.totalRowCount,
+                      }
+                    : entry.result.summary,
+                  window:
+                    entry.result.window?.resultSetId === count.resultSetId
+                      ? {
+                          ...entry.result.window,
+                          totalRowCount: count.totalRowCount,
+                        }
+                      : entry.result.window,
+                  countStatus: 'ready',
+                  countError: null,
+                },
+              }
+            : entry,
+        ),
+      );
+    } catch (caught) {
+      const error = logger.asAppError(caught, 'get_query_result_count');
+      const currentTab = tabsRef.current.find((entry) => entry.id === tabId);
+      if (
+        !currentTab ||
+        currentTab.result.requestedCountSignature !== signature ||
+        currentTab.result.summary?.resultSetId !== resultSetId
+      ) {
+        return;
+      }
+      onError(error);
+      commitTabs((currentTabs) =>
+        currentTabs.map((entry) =>
+          entry.id === tabId && entry.result.requestedCountSignature === signature
+            ? {
+                ...entry,
+                result: {
+                  ...entry.result,
+                  countStatus: 'failed',
+                  countError: error,
+                },
+              }
+            : entry,
+        ),
+      );
+    }
+  }
+
   return {
     activeTab,
     activeTabId: activeTab?.id ?? null,
@@ -679,6 +809,9 @@ function resetResultState(): QueryTabResultState {
     windowStatus: 'idle',
     windowError: null,
     requestedWindowSignature: null,
+    countStatus: 'idle',
+    countError: null,
+    requestedCountSignature: null,
     quickFilter: '',
     filters: [],
     sort: null,
@@ -727,7 +860,9 @@ function applyQueryEvent(tab: QueryTabState, event: QueryExecutionProgressEvent)
     nextSummary && tab.result.exportOutputPath.length === 0
       ? defaultExportPath(nextSummary.resultSetId)
       : tab.result.exportOutputPath;
-  const nextResult = shouldResetWindow ? resetViewerDescriptors(invalidateWindow(tab.result)) : tab.result;
+  const nextResult = shouldResetWindow
+    ? resetCountState(resetViewerDescriptors(invalidateWindow(tab.result)))
+    : tab.result;
 
   return {
     ...tab,
@@ -781,8 +916,9 @@ function summarizeExecutionEvent(event: QueryExecutionProgressEvent): string {
   }
 
   if (event.result?.kind === 'rows') {
-    const total = event.result.totalRowCount ?? event.result.bufferedRowCount;
-    return `${total} row${total === 1 ? '' : 's'} ready.`;
+    const available = event.result.bufferedRowCount;
+    const suffix = event.result.hasMoreRows && event.result.totalRowCount === null ? '+' : '';
+    return `${available}${suffix} row${available === 1 ? '' : 's'} ready.`;
   }
 
   return event.message;
@@ -803,6 +939,29 @@ function invalidateWindow(result: QueryTabResultState): QueryTabResultState {
     windowStatus: 'idle',
     windowError: null,
     requestedWindowSignature: null,
+  };
+}
+
+function resetCountState(result: QueryTabResultState): QueryTabResultState {
+  return {
+    ...result,
+    countStatus: 'idle',
+    countError: null,
+    requestedCountSignature: null,
+    summary: result.summary
+      ? {
+          ...result.summary,
+          totalRowCount: null,
+        }
+      : null,
+    window:
+      result.window
+        ? {
+            ...result.window,
+            totalRowCount: null,
+            visibleRowCount: result.window.rows.length,
+          }
+        : null,
   };
 }
 
@@ -827,6 +986,7 @@ function mergeSummaryFromWindow(
     ...summary,
     bufferedRowCount: window.bufferedRowCount,
     totalRowCount: window.totalRowCount,
+    hasMoreRows: window.hasMoreRows,
     status: window.status,
   };
 }
@@ -863,6 +1023,14 @@ function windowRequestSignature(input: {
   offset: number;
   limit: number;
   sort: QueryResultSort | null;
+  filters: QueryResultFilter[];
+  quickFilter: string;
+}): string {
+  return JSON.stringify(input);
+}
+
+function countRequestSignature(input: {
+  resultSetId: string;
   filters: QueryResultFilter[];
   quickFilter: string;
 }): string {

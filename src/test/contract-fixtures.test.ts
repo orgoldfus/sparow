@@ -23,6 +23,8 @@ import cancelQueryResultExportResultFixture from '../../fixtures/contracts/cance
 import queryExecutionAcceptedFixture from '../../fixtures/contracts/query-execution-accepted.json';
 import queryExecutionProgressFixture from '../../fixtures/contracts/query-execution-progress.json';
 import queryExecutionRequestFixture from '../../fixtures/contracts/query-execution-request.json';
+import queryResultCountRequestFixture from '../../fixtures/contracts/query-result-count-request.json';
+import queryResultCountResultFixture from '../../fixtures/contracts/query-result-count-result.json';
 import queryResultExportAcceptedFixture from '../../fixtures/contracts/query-result-export-accepted.json';
 import queryResultExportProgressFixture from '../../fixtures/contracts/query-result-export-progress.json';
 import queryResultExportRequestFixture from '../../fixtures/contracts/query-result-export-request.json';
@@ -45,6 +47,8 @@ import {
   isQueryExecutionProgressEvent,
   isQueryExecutionRequest,
   isQueryExecutionResult,
+  isQueryResultCountRequest,
+  isQueryResultCountResult,
   isQueryResultExportAccepted,
   isQueryResultExportProgressEvent,
   isQueryResultExportRequest,
@@ -187,6 +191,14 @@ describe('contract fixtures', () => {
     expect(isQueryResultWindow(queryResultWindowFixture)).toBe(true);
   });
 
+  it('validate the query result count request fixture', () => {
+    expect(isQueryResultCountRequest(queryResultCountRequestFixture)).toBe(true);
+  });
+
+  it('validate the query result count result fixture', () => {
+    expect(isQueryResultCountResult(queryResultCountResultFixture)).toBe(true);
+  });
+
   it('validate the query result export request fixture', () => {
     expect(isQueryResultExportRequest(queryResultExportRequestFixture)).toBe(true);
   });
@@ -324,6 +336,7 @@ describe('contract fixtures', () => {
         columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
         bufferedRowCount: 2,
         totalRowCount: 2,
+        hasMoreRows: false,
         status: 'completed',
       }),
     ).toBe(true);
@@ -335,6 +348,7 @@ describe('contract fixtures', () => {
         columns: [{ name: 'id', postgresType: 'int4', semanticType: 'number', isNullable: false }],
         bufferedRowCount: '2',
         totalRowCount: 2,
+        hasMoreRows: false,
         status: 'completed',
       }),
     ).toBe(false);

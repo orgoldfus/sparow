@@ -183,7 +183,7 @@ export function QueryResultsTable({
   return (
     <div className="h-full min-h-0 overflow-hidden bg-[color-mix(in_oklch,_var(--surface-editor)_82%,_var(--surface-panel)_18%)]">
       <div
-        className="min-h-0 overflow-auto"
+        className="h-full min-h-0 overflow-auto"
         aria-colcount={summary.columns.length + 1}
         aria-rowcount={totalRows}
         data-testid="query-result-grid-scroll"
