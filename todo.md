@@ -13,6 +13,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-25: Completed the latest CodeRabbit autofix pass for PR #13.
+  - Fixed the replayable result-store eviction path so a requested window wider than the default cache budget keeps every page in the active window, and added a regression that proves `load_window()` still returns the full 15-row span for that case.
+- 2026-03-25: Started another CodeRabbit autofix pass on `limit-large-queries`.
+  - Goal: fetch newly unresolved CodeRabbit review threads for the current PR, apply any valid fixes, rerun verification, then commit and push the follow-up.
 - 2026-03-24: Completed the scoped CodeRabbit autofix pass outside the skill workspace.
   - Fixed the unresolved bounded-cache, terminal-row-count, stale-count-error, and todo-history issues on `limit-large-queries`. Per user instruction, anything under `.agents/skills/**` was explicitly left untouched in this pass.
 - 2026-03-24: The current CodeRabbit follow-up excludes anything under the skill workspace by user instruction.
@@ -221,6 +225,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The full repo gate passed under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
+- `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
+  - The focused replayable result-store suite passed after the latest autofix change: 8 tests green, including the new large-anchor eviction regression that keeps a multi-page active window intact.
 - `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
   - The focused Rust replayable-result-store suite passed: 7 tests green, including the new bounded replacement-batch and terminal visible-row-count regressions.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅

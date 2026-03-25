@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::{Arc, Mutex},
 };
 
@@ -647,7 +647,15 @@ fn evict_cached_pages(
         return;
     }
 
-    let mut page_indexes = pages.keys().copied().collect::<Vec<_>>();
+    let mut retained_pages = pages
+        .range(anchor_range.start..=anchor_range.end)
+        .map(|(page_index, _)| *page_index)
+        .collect::<BTreeSet<_>>();
+    let mut page_indexes = pages
+        .keys()
+        .copied()
+        .filter(|page_index| !retained_pages.contains(page_index))
+        .collect::<Vec<_>>();
     page_indexes.sort_by_key(|page_index| {
         let distance = if *page_index < anchor_range.start {
             anchor_range.start - *page_index
@@ -658,9 +666,15 @@ fn evict_cached_pages(
         (distance, *page_index)
     });
 
-    for page_index in page_indexes.into_iter().skip(MAX_CACHED_PAGES) {
-        pages.remove(&page_index);
+    for page_index in page_indexes {
+        if retained_pages.len() >= MAX_CACHED_PAGES {
+            break;
+        }
+
+        retained_pages.insert(page_index);
     }
+
+    pages.retain(|page_index, _| retained_pages.contains(page_index));
 }
 
 #[cfg(test)]
@@ -780,6 +794,52 @@ mod tests {
 
         let snapshot = handle.cache_snapshot();
         assert_eq!(snapshot.cached_page_indexes, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn replayable_replace_cached_page_batch_keeps_full_anchor_window() {
+        let handle = test_handle(
+            3,
+            vec![
+                vec![QueryResultCell::Integer(0)],
+                vec![QueryResultCell::Integer(1)],
+                vec![QueryResultCell::Integer(2)],
+            ],
+            true,
+        );
+        let descriptor_signature = build_replayable_descriptor_signature(None, &[], "");
+        let count_signature = build_replayable_count_signature(&[], "");
+
+        handle.replace_cached_page_batch(
+            descriptor_signature,
+            count_signature,
+            1,
+            (3..18)
+                .map(|value| vec![QueryResultCell::Integer(value)])
+                .collect(),
+            false,
+            ReplayablePageRange { start: 1, end: 5 },
+        );
+
+        let snapshot = handle.cache_snapshot();
+        assert_eq!(snapshot.cached_page_indexes, vec![1, 2, 3, 4, 5]);
+
+        let window = handle.load_window(&QueryResultWindowRequest {
+            result_set_id: "result-1".to_string(),
+            offset: 3,
+            limit: 15,
+            sort: None,
+            filters: Vec::new(),
+            quick_filter: String::new(),
+        });
+
+        assert_eq!(window.rows.len(), 15);
+        assert_eq!(
+            window.rows,
+            (3..18)
+                .map(|value| vec![QueryResultCell::Integer(value)])
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
