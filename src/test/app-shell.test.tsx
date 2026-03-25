@@ -161,13 +161,13 @@ describe('App shell', () => {
     expect(screen.getByTestId('status-region')).toBeInTheDocument();
   });
 
-  it('keeps a widened responsive column for the connections rail', async () => {
+  it('uses a fixed narrow column for the connections rail', async () => {
     render(<App />);
 
     const connectionsRegion = await screen.findByTestId('connections-region');
 
     expect(connectionsRegion.parentElement?.className).toContain(
-      'lg:grid-cols-[clamp(360px,34vw,460px)_minmax(0,1fr)]',
+      'lg:grid-cols-[220px_minmax(0,1fr)]',
     );
   });
 

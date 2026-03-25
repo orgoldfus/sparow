@@ -1,8 +1,6 @@
 import { ChevronRight, FolderTree, LoaderCircle, RefreshCcw, Search, Table2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { cn } from '../../lib/utils';
 import type {
@@ -19,42 +17,38 @@ type SchemaSidebarProps = {
 export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
   return (
     <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-sidebar)_94%,_black_6%)]">
-      <div className="px-4 pb-3 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-muted)]">Schema</p>
-            <h3 className="mt-1 text-base font-semibold text-[var(--text-primary)]">
-              {activeSession?.database ?? 'Metadata browser'}
-            </h3>
+      <div className="px-4 py-2.5">
+        <div className="flex items-center justify-between gap-1">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Schema</p>
+            {activeSession?.database ? (
+              <p className="truncate text-xs text-[var(--text-secondary)]">{activeSession.database}</p>
+            ) : null}
           </div>
-          <Button
+          <button
+            aria-label="Refresh schema"
+            className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)] disabled:pointer-events-none disabled:opacity-30"
             disabled={schema.isDisabled}
-            onClick={() => {
-              void schema.refreshSelectedScope();
-            }}
-            size="sm"
+            onClick={() => { void schema.refreshSelectedScope(); }}
             type="button"
-            variant="ghost"
           >
             <RefreshCcw className="h-3.5 w-3.5" />
-            Refresh
-          </Button>
+          </button>
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <Input
-            aria-label="Search schema cache"
-            className="h-10 rounded-xl"
-            disabled={schema.isDisabled}
-            onChange={(event) => {
-              schema.setSearchQuery(event.currentTarget.value);
-            }}
-            placeholder={schema.isDisabled ? 'Connect to browse metadata' : 'Search tables, views, columns'}
-            value={schema.searchQuery}
-          />
-          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-2.5 text-[var(--text-muted)]">
-            <Search className="h-4 w-4" />
+        {!schema.isDisabled ? (
+          <div className="mt-2">
+            <label className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1.5">
+              <Search className="h-3 w-3 shrink-0 text-[var(--text-muted)]" />
+              <input
+                aria-label="Search schema cache"
+                className="w-full bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+                onChange={(event) => { schema.setSearchQuery(event.currentTarget.value); }}
+                placeholder="Search tables, views, columns…"
+                value={schema.searchQuery}
+              />
+            </label>
           </div>
-        </div>
+        ) : null}
       </div>
 
       <ScrollArea className="min-h-0 px-3 pb-3">
@@ -138,7 +132,11 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
                       )}
                       {iconForNode(row.node)}
                       <span className="min-w-0 flex-1 truncate">{row.node.name}</span>
-                      {row.isRefreshing ? (
+                      {row.node.kind === 'column' ? (
+                        <span className="ml-2 shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                          {row.node.dataType}
+                        </span>
+                      ) : row.isRefreshing ? (
                         <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[var(--accent-text)]" />
                       ) : row.childScopeStatus === 'stale' ? (
                         <Badge variant="warning">Stale</Badge>

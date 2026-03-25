@@ -1,8 +1,6 @@
-import { useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { Bug, ChevronDown, Database, Dot, PencilLine, Settings2, UserRound } from 'lucide-react';
+import { useDeferredValue, useEffect, useEffectEvent, useState } from 'react';
+import { ChevronDown, Database, Hash, HelpCircle, Settings2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +55,7 @@ export default function App() {
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [isDiagnosticsDialogOpen, setIsDiagnosticsDialogOpen] = useState(false);
   const [activeResultsTab, setActiveResultsTab] = useState<QueryResultsView>('results');
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
 
   const deferredRecentEvents = useDeferredValue(recentEvents);
   const deferredSchemaEvents = useDeferredValue(schemaEvents);
@@ -239,28 +238,7 @@ export default function App() {
 
   const activeQueryError = queryWorkspace.activeTab?.execution.lastError ?? null;
   const isDegraded = Boolean(error || activeQueryError);
-  const healthTone = isDegraded ? 'danger' : workspace.activeSession ? 'success' : 'warning';
-  const latestStatusText = useMemo(() => {
-    if (error) {
-      return error.message;
-    }
-    if (activeQueryError) {
-      return activeQueryError.message;
-    }
-    if (workspace.activeSession) {
-      return `Connected to ${workspace.activeSession.name}.`;
-    }
-    return 'No active database session.';
-  }, [activeQueryError, error, workspace.activeSession]);
   const activeResultSummary = queryWorkspace.activeTab?.result.summary ?? null;
-  const resultRowsLabel = activeResultSummary
-    ? activeResultSummary.totalRowCount !== null
-      ? `${activeResultSummary.bufferedRowCount} / ${activeResultSummary.totalRowCount} rows`
-      : `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows loaded`
-    : 'No result';
-  const elapsedLabel = queryWorkspace.activeTab?.execution.lastEvent
-    ? `${queryWorkspace.activeTab.execution.lastEvent.elapsedMs} ms`
-    : 'n/a';
   const headerConnectionName =
     workspace.activeSession?.name ??
     workspace.connections.find((connection) => connection.id === workspace.selectedConnectionId)?.name ??
@@ -349,85 +327,93 @@ export default function App() {
             </Dialog>
           }
           headerBar={
-            <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-5">
-              <div className="flex min-w-0 items-center gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-muted)] text-[var(--accent-text)]">
-                    <Database className="h-4 w-4" />
+            <div className="flex h-10 items-center justify-between px-3">
+              {/* Left: logo + divider + menu */}
+              <div className="flex items-center">
+                <div className="flex items-center gap-2 pr-3">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--accent-muted)]">
+                    <Database className="h-3.5 w-3.5 text-[var(--accent-text)]" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">Sparow</p>
-                  </div>
-                </div>
-
-                <div className="hidden items-center gap-1 text-sm text-[var(--text-secondary)] md:flex">
-                  {['File', 'Edit', 'View', 'Query', 'Tools'].map((label) => (
-                    <span
-                      aria-disabled="true"
-                      className="rounded-lg px-3 py-2 transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-primary)]"
-                      key={label}
-                    >
-                      {label}
-                    </span>
-                  ))}
+                  <span className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">Sparow</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Badge data-testid="environment-value">{bootstrap?.environment ?? 'booting'}</Badge>
-                <Badge>{bootstrap?.platform ?? 'desktop'}</Badge>
-                <Button
-                  className="min-w-[210px] justify-between"
+              {/* Right: connection chip + icon buttons + avatar */}
+              <div className="flex items-center gap-0.5">
+                {/* Environment value – kept accessible for tests */}
+                <span className="sr-only" data-testid="environment-value">{bootstrap?.environment ?? 'booting'}</span>
+
+                {/* Connection indicator chip */}
+                <button
+                  className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs transition hover:bg-[var(--surface-panel-hover)] disabled:pointer-events-none disabled:opacity-50"
                   disabled={!editableConnectionId}
                   onClick={() => {
                     if (editableConnectionId) {
                       openEditConnectionDialog(editableConnectionId);
                     }
                   }}
-                  size="sm"
                   type="button"
-                  variant="secondary"
                 >
-                  <span className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className={`h-2.5 w-2.5 rounded-full ${workspace.activeSession ? 'bg-[var(--success-text)]' : 'bg-[var(--border-subtle)]'}`}
-                    />
-                    <span className="text-left">
-                      <span className="block text-sm font-medium text-[var(--text-primary)]">
-                        {headerConnectionName}
-                      </span>
-                      <span className="block text-[11px] text-[var(--text-muted)]">
-                        {workspace.activeSession?.database ?? 'Select a target from the left rail'}
-                      </span>
+                  <span
+                    aria-hidden="true"
+                    className={`h-2 w-2 shrink-0 rounded-full transition ${
+                      workspace.activeSession
+                        ? 'bg-[var(--success-text)] shadow-[0_0_0_3px_color-mix(in_oklch,var(--success-text)_18%,transparent)]'
+                        : 'bg-[var(--border-strong)]'
+                    }`}
+                  />
+                  {(workspace.activeSession ?? workspace.selectedConnectionId) ? (
+                    <span className="rounded bg-[color-mix(in_oklch,var(--accent-muted)_80%,transparent)] px-1 py-0.5 text-[9px] font-bold text-[var(--accent-text)]">
+                      PG
                     </span>
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
-                </Button>
-                <Button
+                  ) : null}
+                  {workspace.activeSession ? (
+                    <>
+                      <span className="font-medium text-[var(--text-primary)]">{headerConnectionName}</span>
+                      <span className="text-[var(--text-muted)]">{workspace.activeSession.database}</span>
+                    </>
+                  ) : (
+                    <span className="text-[var(--text-secondary)]">{headerConnectionName}</span>
+                  )}
+                  <ChevronDown className="h-3 w-3 shrink-0 text-[var(--text-muted)]" />
+                </button>
+
+                {/* Diagnostics (#) */}
+                <button
                   aria-label="Diagnostics"
-                  onClick={() => {
-                    setIsDiagnosticsDialogOpen(true);
-                  }}
-                  size="sm"
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)]"
+                  onClick={() => { setIsDiagnosticsDialogOpen(true); }}
                   type="button"
-                  variant="ghost"
                 >
-                  <Bug className="h-3.5 w-3.5" />
-                </Button>
-                <Button
+                  <Hash className="h-4 w-4" />
+                </button>
+
+                {/* Help */}
+                <button
+                  aria-label="Help"
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] opacity-40 transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)] hover:opacity-100"
+                  disabled
+                  type="button"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+
+                {/* Connection settings */}
+                <button
                   aria-label="Connection settings"
-                  onClick={() => {
-                    openEditConnectionDialog();
-                  }}
-                  size="sm"
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)]"
+                  onClick={() => { openEditConnectionDialog(); }}
                   type="button"
-                  variant="ghost"
                 >
-                  <Settings2 className="h-3.5 w-3.5" />
-                </Button>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[color-mix(in_oklch,_var(--accent-solid)_52%,_var(--surface-panel)_48%)] text-sm font-semibold text-[var(--accent-foreground)]">
-                  <UserRound className="h-4 w-4" />
+                  <Settings2 className="h-4 w-4" />
+                </button>
+
+                {/* User avatar */}
+                <div
+                  aria-hidden="true"
+                  className="ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--accent-solid)_52%,var(--surface-panel)_48%)] text-[10px] font-bold uppercase text-[var(--accent-foreground)]"
+                >
+                  {userInitials(workspace.activeSession?.username)}
                 </div>
               </div>
             </div>
@@ -435,7 +421,9 @@ export default function App() {
           editor={
             <QueryWorkspace
               activeSession={workspace.activeSession}
-              connections={workspace.connections}
+              onCursorPositionChange={(line, column) => {
+                setCursorPosition({ line, column });
+              }}
               onError={(caught) => {
                 setError(logger.asAppError(caught, 'query_workspace'));
               }}
@@ -473,30 +461,50 @@ export default function App() {
             />
           }
           statusBar={
-            <div className="flex flex-col gap-2 px-4 py-2 text-sm text-[var(--text-secondary)] md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={healthTone}>{isDegraded ? 'Degraded' : workspace.activeSession ? 'Ready' : 'Idle'}</Badge>
-                <span>{workspace.activeSession ? `${workspace.activeSession.name} — ${workspace.activeSession.database}` : 'No active session'}</span>
-                <span className="hidden lg:inline">{workspace.activeSession?.serverVersion ?? latestStatusText}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1">
-                  <Dot className="h-4 w-4" />
-                  {queryWorkspace.activeTab?.execution.status ?? 'idle'}
-                </span>
-                <span>{resultRowsLabel}</span>
-                <span>{elapsedLabel}</span>
-                <Button
-                  onClick={() => {
-                    openEditConnectionDialog();
-                  }}
-                  size="sm"
+            <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-[var(--text-muted)]">
+              {/* Left: connection info (also acts as edit connection trigger for accessibility) */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  aria-label="Edit connection"
+                  className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition hover:bg-[var(--surface-panel-hover)] ${
+                    isDegraded
+                      ? 'text-[var(--danger-text)]'
+                      : workspace.activeSession
+                        ? 'text-[var(--success-text)]'
+                        : 'text-[var(--warning-text)]'
+                  }`}
+                  disabled={!editableConnectionId}
+                  onClick={() => { openEditConnectionDialog(); }}
                   type="button"
-                  variant="ghost"
                 >
-                  <PencilLine className="h-3.5 w-3.5" />
-                  Edit connection
-                </Button>
+                  <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                  <span>
+                    {workspace.activeSession
+                      ? `${workspace.activeSession.name} — ${workspace.activeSession.database}`
+                      : isDegraded
+                        ? (error?.message ?? 'Error')
+                        : 'No active session'}
+                  </span>
+                </button>
+                {workspace.activeSession?.serverVersion ? (
+                  <>
+                    <span aria-hidden="true" className="h-3 w-px bg-[var(--border-subtle)]" />
+                    <span>{workspace.activeSession.serverVersion}</span>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Right: cursor position + rows + encoding */}
+              <div className="flex items-center">
+                <span>Line {cursorPosition.line}, Col {cursorPosition.column}</span>
+                <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
+                <span>
+                  {activeResultSummary
+                    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows${queryWorkspace.activeTab?.execution.lastEvent ? ` · ${queryWorkspace.activeTab.execution.lastEvent.elapsedMs}ms` : ''}`
+                    : 'No result'}
+                </span>
+                <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
+                <span>UTF-8</span>
               </div>
             </div>
           }
@@ -504,4 +512,11 @@ export default function App() {
       </TooltipProvider>
     </ErrorBoundary>
   );
+}
+
+function userInitials(username?: string | null): string {
+  if (!username) {
+    return 'U';
+  }
+  return username.slice(0, 2).toUpperCase();
 }
