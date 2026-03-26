@@ -133,7 +133,10 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
                       {iconForNode(row.node)}
                       <span className="min-w-0 flex-1 truncate">{row.node.name}</span>
                       {row.node.kind === 'column' ? (
-                        <span className="ml-2 shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                        <span
+                          className="ml-2 max-w-[96px] truncate font-mono text-[10px] text-[var(--text-muted)]"
+                          title={row.node.dataType}
+                        >
                           {row.node.dataType}
                         </span>
                       ) : row.isRefreshing ? (

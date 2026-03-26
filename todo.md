@@ -13,6 +13,10 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-26: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Moved query cursor tracking out of `App` into a lightweight query-local store so Monaco caret movement no longer rerenders the shell, fixed the remaining query/schema UI review items, and verified the branch end-to-end before packaging the follow-up commit.
+- 2026-03-26: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fetch the current branch PR's unresolved CodeRabbit review threads, apply any valid fixes, rerun verification, then commit and push the follow-up.
 - 2026-03-25: Completed the latest CodeRabbit autofix pass for PR #13.
   - Fixed the replayable result-store eviction path so a requested window wider than the default cache budget keeps every page in the active window, and added a regression that proves `load_window()` still returns the full 15-row span for that case.
 - 2026-03-25: Started another CodeRabbit autofix pass on `limit-large-queries`.
@@ -225,6 +229,12 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The final 2026-03-26 rerun passed under Node `v24.14.0`: ESLint kept only the existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx`, Vitest passed 9 files / 97 tests, `smoke:foundation`, `smoke:results-browser`, and `smoke:shell-browser` completed successfully, and the Rust workspace passed with 93 tests green and 2 PostgreSQL smoke tests ignored.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The second 2026-03-26 rerun cleared the cursor-sync crash and brought the suite down to one failing Vitest case: `src/test/app-shell.test.tsx > App shell > sends a password when saving a selected profile without a stored secret`. The new status-bar edit handler passed `openEditConnectionDialog` directly, so React forwarded the click event into the optional `connectionId` parameter and the save request used the event object instead of the selected connection id.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The 2026-03-26 rerun reached `typecheck`, `lint`, and Vitest, then failed because the new cursor-position sync assumed Monaco's `getPosition()` exists. The test editor stub in `src/test/setup.ts` does not expose that method, which crashed `QueryWorkspace` during mount and broke the shell/schema/component suites until the cursor store was hardened against partial editor mocks.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The full repo gate passed under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
 - `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅

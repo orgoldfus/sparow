@@ -18,6 +18,7 @@ import {
   QueryWorkspace,
   type QueryResultsView,
 } from './features/query/QueryWorkspace';
+import { useQueryCursorPosition } from './features/query/queryCursorPosition';
 import { useQueryWorkspace } from './features/query/useQueryWorkspace';
 import { SchemaSidebar } from './features/schema/SchemaWorkspace';
 import { useSchemaBrowser } from './features/schema/useSchemaBrowser';
@@ -55,7 +56,6 @@ export default function App() {
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [isDiagnosticsDialogOpen, setIsDiagnosticsDialogOpen] = useState(false);
   const [activeResultsTab, setActiveResultsTab] = useState<QueryResultsView>('results');
-  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
 
   const deferredRecentEvents = useDeferredValue(recentEvents);
   const deferredSchemaEvents = useDeferredValue(schemaEvents);
@@ -239,6 +239,19 @@ export default function App() {
   const activeQueryError = queryWorkspace.activeTab?.execution.lastError ?? null;
   const isDegraded = Boolean(error || activeQueryError);
   const activeResultSummary = queryWorkspace.activeTab?.result.summary ?? null;
+  const activeResultLabel = activeResultSummary
+    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows${queryWorkspace.activeTab?.execution.lastEvent ? ` · ${queryWorkspace.activeTab.execution.lastEvent.elapsedMs}ms` : ''}`
+    : 'No result';
+  const connectionStatusLabel = workspace.activeSession
+    ? `${workspace.activeSession.name} — ${workspace.activeSession.database}`
+    : isDegraded
+      ? (error?.message ?? 'Error')
+      : 'No active session';
+  const connectionStatusTone = isDegraded
+    ? 'text-[var(--danger-text)]'
+    : workspace.activeSession
+      ? 'text-[var(--success-text)]'
+      : 'text-[var(--warning-text)]';
   const headerConnectionName =
     workspace.activeSession?.name ??
     workspace.connections.find((connection) => connection.id === workspace.selectedConnectionId)?.name ??
@@ -421,9 +434,6 @@ export default function App() {
           editor={
             <QueryWorkspace
               activeSession={workspace.activeSession}
-              onCursorPositionChange={(line, column) => {
-                setCursorPosition({ line, column });
-              }}
               onError={(caught) => {
                 setError(logger.asAppError(caught, 'query_workspace'));
               }}
@@ -461,52 +471,16 @@ export default function App() {
             />
           }
           statusBar={
-            <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-[var(--text-muted)]">
-              {/* Left: connection info (also acts as edit connection trigger for accessibility) */}
-              <div className="flex items-center gap-2.5">
-                <button
-                  aria-label="Edit connection"
-                  className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition hover:bg-[var(--surface-panel-hover)] ${
-                    isDegraded
-                      ? 'text-[var(--danger-text)]'
-                      : workspace.activeSession
-                        ? 'text-[var(--success-text)]'
-                        : 'text-[var(--warning-text)]'
-                  }`}
-                  disabled={!editableConnectionId}
-                  onClick={() => { openEditConnectionDialog(); }}
-                  type="button"
-                >
-                  <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-                  <span>
-                    {workspace.activeSession
-                      ? `${workspace.activeSession.name} — ${workspace.activeSession.database}`
-                      : isDegraded
-                        ? (error?.message ?? 'Error')
-                        : 'No active session'}
-                  </span>
-                </button>
-                {workspace.activeSession?.serverVersion ? (
-                  <>
-                    <span aria-hidden="true" className="h-3 w-px bg-[var(--border-subtle)]" />
-                    <span>{workspace.activeSession.serverVersion}</span>
-                  </>
-                ) : null}
-              </div>
-
-              {/* Right: cursor position + rows + encoding */}
-              <div className="flex items-center">
-                <span>Line {cursorPosition.line}, Col {cursorPosition.column}</span>
-                <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
-                <span>
-                  {activeResultSummary
-                    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows${queryWorkspace.activeTab?.execution.lastEvent ? ` · ${queryWorkspace.activeTab.execution.lastEvent.elapsedMs}ms` : ''}`
-                    : 'No result'}
-                </span>
-                <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
-                <span>UTF-8</span>
-              </div>
-            </div>
+            <AppStatusBar
+              canEditConnection={Boolean(editableConnectionId)}
+              connectionStatusLabel={connectionStatusLabel}
+              connectionStatusTone={connectionStatusTone}
+              onEditConnection={() => {
+                openEditConnectionDialog();
+              }}
+              resultStatusLabel={activeResultLabel}
+              serverVersion={workspace.activeSession?.serverVersion ?? null}
+            />
           }
         />
       </TooltipProvider>
@@ -519,4 +493,55 @@ function userInitials(username?: string | null): string {
     return 'U';
   }
   return username.slice(0, 2).toUpperCase();
+}
+
+type AppStatusBarProps = {
+  canEditConnection: boolean;
+  connectionStatusLabel: string;
+  connectionStatusTone: string;
+  onEditConnection: () => void;
+  resultStatusLabel: string;
+  serverVersion: string | null;
+};
+
+function AppStatusBar({
+  canEditConnection,
+  connectionStatusLabel,
+  connectionStatusTone,
+  onEditConnection,
+  resultStatusLabel,
+  serverVersion,
+}: AppStatusBarProps) {
+  const cursorPosition = useQueryCursorPosition();
+
+  return (
+    <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-[var(--text-muted)]">
+      <div className="flex items-center gap-2.5">
+        <button
+          aria-label="Edit connection"
+          className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition hover:bg-[var(--surface-panel-hover)] ${connectionStatusTone}`}
+          disabled={!canEditConnection}
+          onClick={onEditConnection}
+          type="button"
+        >
+          <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+          <span>{connectionStatusLabel}</span>
+        </button>
+        {serverVersion ? (
+          <>
+            <span aria-hidden="true" className="h-3 w-px bg-[var(--border-subtle)]" />
+            <span>{serverVersion}</span>
+          </>
+        ) : null}
+      </div>
+
+      <div className="flex items-center">
+        <span>Line {cursorPosition.line}, Col {cursorPosition.column}</span>
+        <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
+        <span>{resultStatusLabel}</span>
+        <span aria-hidden="true" className="mx-2.5 h-3 w-px bg-[var(--border-subtle)]" />
+        <span>UTF-8</span>
+      </div>
+    </div>
+  );
 }

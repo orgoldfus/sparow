@@ -15,6 +15,11 @@ import type {
 } from '../../lib/contracts';
 import { resolveExecutionSlice } from './executionSlice';
 import { EmptyPanel, QueryResultsTable } from './QueryResultsTable';
+import {
+  resetQueryCursorPosition,
+  setQueryCursorPosition,
+  syncQueryCursorPosition,
+} from './queryCursorPosition';
 import { formatResultColumns, registerSqlCompletionProvider } from './sqlAutocomplete';
 import type { QueryTabState, QueryWorkspaceState } from './useQueryWorkspace';
 
@@ -22,7 +27,6 @@ type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
   /** @deprecated - no longer used in rendering but kept for API compatibility */
   connections?: ConnectionSummary[];
-  onCursorPositionChange?: (line: number, column: number) => void;
   onError: (error: AppError | Error) => void;
   showTabStrip?: boolean;
   workspace: QueryWorkspaceState;
@@ -81,7 +85,7 @@ export function QueryTabStrip({ workspace }: { workspace: QueryWorkspaceState })
                 </button>
                 <button
                   aria-label={`Close ${tab.title || tab.id}`}
-                  className="rounded p-0.5 text-[var(--text-muted)] opacity-0 transition hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] group-hover:opacity-100"
+                  className="rounded p-0.5 text-[var(--text-muted)] opacity-0 transition hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   onClick={() => {
                     workspace.closeTab(tab.id);
                   }}
@@ -112,7 +116,6 @@ export function QueryTabStrip({ workspace }: { workspace: QueryWorkspaceState })
 
 export function QueryWorkspace({
   activeSession,
-  onCursorPositionChange,
   onError,
   showTabStrip = true,
   workspace,
@@ -122,6 +125,7 @@ export function QueryWorkspace({
   const completionRef = useRef<ReturnType<typeof registerSqlCompletionProvider> | null>(null);
   const runActiveEditorRef = useRef<() => void>(() => {});
   const activeTab = workspace.activeTab;
+  const activeTabId = activeTab?.id ?? null;
 
   runActiveEditorRef.current = () => {
     void runActiveEditor();
@@ -145,6 +149,21 @@ export function QueryWorkspace({
       completionRef.current = null;
     };
   }, [activeSession?.connectionId, onError, workspace.activeTab?.targetConnectionId]);
+
+  useEffect(() => {
+    if (!activeTabId || !editorRef.current) {
+      resetQueryCursorPosition();
+      return;
+    }
+
+    syncQueryCursorPosition(editorRef.current);
+  }, [activeTabId]);
+
+  useEffect(() => {
+    return () => {
+      resetQueryCursorPosition();
+    };
+  }, []);
 
   function handleMount(
     editorInstance: Monaco.editor.IStandaloneCodeEditor,
@@ -184,6 +203,7 @@ export function QueryWorkspace({
       wordWrap: 'on',
     });
     monacoInstance.editor.setTheme('sparow-dark');
+    syncQueryCursorPosition(editorInstance);
 
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, () => {
       runActiveEditorRef.current();
@@ -191,7 +211,10 @@ export function QueryWorkspace({
 
     if (typeof editorInstance.onDidChangeCursorPosition === 'function') {
       editorInstance.onDidChangeCursorPosition((event) => {
-        onCursorPositionChange?.(event.position.lineNumber, event.position.column);
+        setQueryCursorPosition({
+          column: event.position.column,
+          line: event.position.lineNumber,
+        });
       });
     }
   }
@@ -241,7 +264,12 @@ export function QueryWorkspace({
           >
             <Play className="h-3 w-3" />
             Run
-            <kbd aria-hidden="true" className="ml-px rounded bg-white/10 px-1 py-px text-[10px] font-mono leading-none">⌘↵</kbd>
+            <kbd
+              aria-hidden="true"
+              className="ml-px rounded bg-white/10 px-1 py-px text-[10px] font-mono leading-none"
+            >
+              Ctrl/Cmd↵
+            </kbd>
           </button>
 
           {/* Cancel — always rendered for test accessibility; visually hidden when idle */}
@@ -299,6 +327,7 @@ export function QueryResultsPanel({
   const result = tab?.execution.lastResult ?? null;
   const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
   const totalRows = resolveVisibleResultRowCount(summary, tab?.result.window ?? null);
+  const displayResultCount = formatResultTabCount(summary);
   const resultKind = result?.kind ?? null;
 
   return (
@@ -317,8 +346,8 @@ export function QueryResultsPanel({
             value="results"
           >
             Results
-            {totalRows > 0 ? (
-              <span className="text-[var(--text-muted)]">{totalRows}</span>
+            {displayResultCount ? (
+              <span className="text-[var(--text-muted)]">{displayResultCount}</span>
             ) : null}
           </TabsTrigger>
           <TabsTrigger
@@ -487,3 +516,14 @@ function formatRowCountLabel(
   return loadedLabel;
 }
 
+function formatResultTabCount(summary: QueryResultSetSummary | null): string | null {
+  if (!summary) {
+    return null;
+  }
+
+  if (summary.totalRowCount !== null) {
+    return summary.totalRowCount.toString();
+  }
+
+  return `${summary.bufferedRowCount}${summary.hasMoreRows ? '+' : ''}`;
+}
