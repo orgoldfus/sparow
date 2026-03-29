@@ -37,7 +37,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
         </div>
         {!schema.isDisabled ? (
           <div className="mt-2">
-            <label className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1.5">
+            <label className="flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1.5 focus-within:border-[var(--ring)] focus-within:ring-1 focus-within:ring-[var(--ring)]">
               <Search className="h-3 w-3 shrink-0 text-[var(--text-muted)]" />
               <input
                 aria-label="Search schema cache"

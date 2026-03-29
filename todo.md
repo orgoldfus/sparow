@@ -13,6 +13,14 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-29: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Fixed the Monaco cursor-listener disposal leak, taught the status bar to describe successful command executions, disabled the dead header connection-settings control when nothing is editable, and restored visible keyboard focus styling for the query and schema filters.
+  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
+- 2026-03-29: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
+  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
+- 2026-03-29: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fetch the current PR's unresolved CodeRabbit review threads, apply any still-valid fixes, rerun verification, then commit and push the follow-up.
 - 2026-03-26: Completed the latest CodeRabbit autofix pass for PR #14.
   - Moved query cursor tracking out of `App` into a lightweight query-local store so Monaco caret movement no longer rerenders the shell, fixed the remaining query/schema UI review items, and verified the branch end-to-end before packaging the follow-up commit.
 - 2026-03-26: Started another CodeRabbit autofix pass on `improve-ui`.

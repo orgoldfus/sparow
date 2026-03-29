@@ -31,8 +31,10 @@ import {
   type AppBootstrap,
   type AppError,
   type BackgroundJobProgressEvent,
+  type QueryExecutionResult,
   type QueryExecutionProgressEvent,
   type QueryResultExportProgressEvent,
+  type QueryResultSetSummary,
   type SchemaRefreshProgressEvent,
 } from './lib/contracts';
 import {
@@ -239,9 +241,11 @@ export default function App() {
   const activeQueryError = queryWorkspace.activeTab?.execution.lastError ?? null;
   const isDegraded = Boolean(error || activeQueryError);
   const activeResultSummary = queryWorkspace.activeTab?.result.summary ?? null;
-  const activeResultLabel = activeResultSummary
-    ? `${activeResultSummary.bufferedRowCount}${activeResultSummary.hasMoreRows ? '+' : ''} rows${queryWorkspace.activeTab?.execution.lastEvent ? ` · ${queryWorkspace.activeTab.execution.lastEvent.elapsedMs}ms` : ''}`
-    : 'No result';
+  const activeResultLabel = formatActiveResultLabel(
+    activeResultSummary,
+    queryWorkspace.activeTab?.execution.lastResult ?? null,
+    queryWorkspace.activeTab?.execution.lastEvent?.elapsedMs ?? null,
+  );
   const connectionStatusLabel = workspace.activeSession
     ? `${workspace.activeSession.name} — ${workspace.activeSession.database}`
     : isDegraded
@@ -414,8 +418,14 @@ export default function App() {
                 {/* Connection settings */}
                 <button
                   aria-label="Connection settings"
-                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)]"
-                  onClick={() => { openEditConnectionDialog(); }}
+                  aria-disabled={!editableConnectionId}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-secondary)] disabled:pointer-events-none disabled:opacity-40"
+                  disabled={!editableConnectionId}
+                  onClick={() => {
+                    if (editableConnectionId) {
+                      openEditConnectionDialog(editableConnectionId);
+                    }
+                  }}
                   type="button"
                 >
                   <Settings2 className="h-4 w-4" />
@@ -493,6 +503,24 @@ function userInitials(username?: string | null): string {
     return 'U';
   }
   return username.slice(0, 2).toUpperCase();
+}
+
+function formatActiveResultLabel(
+  summary: QueryResultSetSummary | null,
+  lastResult: QueryExecutionResult | null,
+  elapsedMs: number | null,
+): string {
+  const elapsedLabel = elapsedMs !== null ? ` · ${elapsedMs}ms` : '';
+
+  if (summary) {
+    return `${summary.bufferedRowCount}${summary.hasMoreRows ? '+' : ''} rows${elapsedLabel}`;
+  }
+
+  if (lastResult?.kind === 'command') {
+    return `${lastResult.commandTag}${lastResult.rowsAffected !== null ? ` · ${lastResult.rowsAffected} rows` : ''}${elapsedLabel}`;
+  }
+
+  return 'No result';
 }
 
 type AppStatusBarProps = {

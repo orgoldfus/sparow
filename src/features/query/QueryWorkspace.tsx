@@ -123,6 +123,7 @@ export function QueryWorkspace({
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const completionRef = useRef<ReturnType<typeof registerSqlCompletionProvider> | null>(null);
+  const cursorListenerRef = useRef<Monaco.IDisposable | null>(null);
   const runActiveEditorRef = useRef<() => void>(() => {});
   const activeTab = workspace.activeTab;
   const activeTabId = activeTab?.id ?? null;
@@ -161,6 +162,8 @@ export function QueryWorkspace({
 
   useEffect(() => {
     return () => {
+      cursorListenerRef.current?.dispose();
+      cursorListenerRef.current = null;
       resetQueryCursorPosition();
     };
   }, []);
@@ -169,6 +172,7 @@ export function QueryWorkspace({
     editorInstance: Monaco.editor.IStandaloneCodeEditor,
     monacoInstance: typeof Monaco,
   ) {
+    cursorListenerRef.current?.dispose();
     editorRef.current = editorInstance;
     monacoRef.current = monacoInstance;
 
@@ -210,7 +214,7 @@ export function QueryWorkspace({
     });
 
     if (typeof editorInstance.onDidChangeCursorPosition === 'function') {
-      editorInstance.onDidChangeCursorPosition((event) => {
+      cursorListenerRef.current = editorInstance.onDidChangeCursorPosition((event) => {
         setQueryCursorPosition({
           column: event.position.column,
           line: event.position.lineNumber,
@@ -377,7 +381,7 @@ export function QueryResultsPanel({
       <TabsContent className="min-h-0" value="results">
         <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
           <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_86%,_black_14%)] px-3 py-2">
-            <label className="flex min-w-0 max-w-[360px] flex-1 items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1.5">
+            <label className="flex min-w-0 max-w-[360px] flex-1 items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2.5 py-1.5 focus-within:border-[var(--ring)] focus-within:ring-1 focus-within:ring-[var(--ring)]">
               <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
               <input
                 aria-label="Filter result rows"
