@@ -69,6 +69,8 @@ export function QueryResultsTable({
     [summary.columns],
   );
   const table = useReactTable({
+    autoResetAll: false,
+    autoResetPageIndex: false,
     columns,
     data: loadedRows,
     defaultColumn: {
@@ -78,6 +80,7 @@ export function QueryResultsTable({
     },
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.absoluteIndex),
+    manualPagination: true,
   });
   const leafColumns = table.getVisibleLeafColumns();
   const tableRows = table.getRowModel().rows;

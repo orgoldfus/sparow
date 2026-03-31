@@ -1,0 +1,10 @@
+{
+  "id": null,
+  "title": "Active users",
+  "sql": "select * from users where active = true order by created_at desc;",
+  "tags": [
+    "users",
+    "ops"
+  ],
+  "connectionProfileId": "conn-local-postgres"
+}

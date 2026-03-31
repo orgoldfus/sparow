@@ -11,7 +11,9 @@ pub use contracts::{
     BackgroundJobStatus, CancelJobResult, CancelQueryExecutionResult,
     CancelQueryResultExportResult, ConnectionDetails, ConnectionDraft, ConnectionSessionStatus,
     ConnectionSummary, ConnectionTestResult, ConnectionTestStatus, DatabaseEngine,
-    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DeleteSavedQueryResult,
+    DiagnosticsSnapshot, DisconnectSessionResult, HistoryEntry, ListQueryHistoryRequest,
+    ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
     ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
     QueryExecutionOrigin, QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult,
     QueryExecutionStatus, QueryResultCell, QueryResultColumn, QueryResultColumnSemanticType,
@@ -19,11 +21,11 @@ pub use contracts::{
     QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultExportStatus,
     QueryResultFilter, QueryResultFilterMode, QueryResultSetSummary, QueryResultSort,
     QueryResultSortDirection, QueryResultStatus, QueryResultWindow, QueryResultWindowRequest,
-    RefreshSchemaScopeRequest, SaveConnectionRequest, SchemaCacheStatus, SchemaNode,
-    SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-    SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest, SchemaSearchResult, SecretProvider,
-    SslMode, TestConnectionRequest, BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT,
-    QUERY_RESULT_EXPORT_EVENT, SCHEMA_REFRESH_EVENT,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SaveSavedQueryRequest, SavedQuery,
+    SchemaCacheStatus, SchemaNode, SchemaNodeBase, SchemaNodeKind, SchemaRefreshAccepted,
+    SchemaRefreshProgressEvent, SchemaRefreshStatus, SchemaScopeKind, SchemaSearchRequest,
+    SchemaSearchResult, SecretProvider, SslMode, TestConnectionRequest,
+    BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT, SCHEMA_REFRESH_EVENT,
 };
 pub use error::AppError;
 pub use jobs::JobRegistry;

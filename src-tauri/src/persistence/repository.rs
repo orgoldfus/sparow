@@ -4,10 +4,11 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::foundation::{
-    ensure_parent_directory, AppError, SchemaNode, SchemaScopeKind, SecretProvider, SslMode,
+    ensure_parent_directory, AppError, HistoryEntry, SavedQuery, SchemaNode, SchemaScopeKind,
+    SecretProvider, SslMode,
 };
 
-const MIGRATIONS: [(&str, &str); 6] = [
+const MIGRATIONS: [(&str, &str); 7] = [
     ("0001_init", include_str!("migrations/0001_init.sql")),
     (
         "0002_connection_management",
@@ -29,10 +30,15 @@ const MIGRATIONS: [(&str, &str); 6] = [
         "0006_drop_query_result_cache",
         include_str!("migrations/0006_drop_query_result_cache.sql"),
     ),
+    (
+        "0007_productivity_layer",
+        include_str!("migrations/0007_productivity_layer.sql"),
+    ),
 ];
 
 const SELECTED_CONNECTION_ID_KEY: &str = "connections.selectedConnectionId";
 const ROOT_SCOPE_PATH: &str = "";
+const HISTORY_RETENTION_LIMIT: usize = 2_000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SampleCounts {
@@ -96,6 +102,15 @@ pub struct ReplaceSchemaScopeRecord {
 }
 
 #[derive(Debug, Clone)]
+pub struct SaveSavedQueryRecord {
+    pub id: Option<String>,
+    pub title: String,
+    pub sql: String,
+    pub tags: Vec<String>,
+    pub connection_profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Repository {
     database_path: PathBuf,
 }
@@ -150,8 +165,258 @@ impl Repository {
                     Some(error.to_string()),
                 )
             })?;
+        self.prune_query_history(&connection)?;
 
         Ok(())
+    }
+
+    pub fn list_query_history(
+        &self,
+        search_query: &str,
+        connection_profile_id: Option<&str>,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<HistoryEntry>, AppError> {
+        let connection = self.open()?;
+        let like_query = format!("%{}%", search_query.trim().to_lowercase());
+        let connection_profile_id = connection_profile_id.map(str::to_owned);
+        let mut statement = connection
+            .prepare(
+                "select
+                    id,
+                    sql,
+                    connection_profile_id,
+                    created_at
+                 from query_history
+                 where (?1 = '' or lower(sql) like ?2)
+                   and (?3 is null or connection_profile_id = ?3)
+                 order by datetime(created_at) desc, id desc
+                 limit ?4 offset ?5",
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "query_history_prepare_failed",
+                    "Failed to prepare the query-history listing query.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        let rows = statement
+            .query_map(
+                params![
+                    search_query.trim().to_lowercase(),
+                    like_query,
+                    connection_profile_id,
+                    limit as i64,
+                    offset as i64,
+                ],
+                Self::read_history_entry,
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "query_history_query_failed",
+                    "Failed to load query-history entries.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
+            AppError::internal(
+                "query_history_row_failed",
+                "Failed to decode a query-history entry.",
+                Some(error.to_string()),
+            )
+        })
+    }
+
+    pub fn get_saved_query(&self, id: &str) -> Result<Option<SavedQuery>, AppError> {
+        let connection = self.open()?;
+        connection
+            .query_row(
+                "select
+                    id,
+                    title,
+                    sql,
+                    tags_json,
+                    connection_profile_id,
+                    created_at,
+                    updated_at
+                 from saved_queries
+                 where id = ?1",
+                params![id],
+                Self::read_saved_query,
+            )
+            .optional()
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_query_load_failed",
+                    "Failed to load the saved query.",
+                    Some(error.to_string()),
+                )
+            })
+    }
+
+    pub fn list_saved_queries(
+        &self,
+        search_query: &str,
+        connection_profile_id: Option<&str>,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<SavedQuery>, AppError> {
+        let connection = self.open()?;
+        let like_query = format!("%{}%", search_query.trim().to_lowercase());
+        let connection_profile_id = connection_profile_id.map(str::to_owned);
+        let mut statement = connection
+            .prepare(
+                "select
+                    id,
+                    title,
+                    sql,
+                    tags_json,
+                    connection_profile_id,
+                    created_at,
+                    updated_at
+                 from saved_queries
+                 where (?1 = '' or lower(title) like ?2 or lower(sql) like ?2 or lower(tags_json) like ?2)
+                   and (?3 is null or connection_profile_id = ?3)
+                 order by datetime(updated_at) desc, id desc
+                 limit ?4 offset ?5",
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_queries_prepare_failed",
+                    "Failed to prepare the saved-query listing query.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        let rows = statement
+            .query_map(
+                params![
+                    search_query.trim().to_lowercase(),
+                    like_query,
+                    connection_profile_id,
+                    limit as i64,
+                    offset as i64,
+                ],
+                Self::read_saved_query,
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_queries_query_failed",
+                    "Failed to load saved queries.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
+            AppError::internal(
+                "saved_queries_row_failed",
+                "Failed to decode a saved query.",
+                Some(error.to_string()),
+            )
+        })
+    }
+
+    pub fn save_saved_query(
+        &self,
+        record: SaveSavedQueryRecord,
+    ) -> Result<SavedQuery, AppError> {
+        let connection = self.open()?;
+        let id = record
+            .id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let tags_json = serde_json::to_string(&record.tags).map_err(|error| {
+            AppError::internal(
+                "saved_query_tags_encode_failed",
+                "Failed to encode saved-query tags.",
+                Some(error.to_string()),
+            )
+        })?;
+
+        let existing_created_at = record
+            .id
+            .as_deref()
+            .map(|existing_id| {
+                connection
+                    .query_row(
+                        "select created_at from saved_queries where id = ?1",
+                        params![existing_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()
+            })
+            .transpose()
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_query_load_failed",
+                    "Failed to load the existing saved query.",
+                    Some(error.to_string()),
+                )
+            })?
+            .flatten();
+
+        let created_at = existing_created_at.unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let updated_at = chrono::Utc::now().to_rfc3339();
+
+        connection
+            .execute(
+                "insert into saved_queries (
+                    id,
+                    title,
+                    sql,
+                    tags_json,
+                    connection_profile_id,
+                    created_at,
+                    updated_at
+                 ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 on conflict(id) do update set
+                    title = excluded.title,
+                    sql = excluded.sql,
+                    tags_json = excluded.tags_json,
+                    connection_profile_id = excluded.connection_profile_id,
+                    updated_at = excluded.updated_at",
+                params![
+                    id,
+                    record.title,
+                    record.sql,
+                    tags_json,
+                    record.connection_profile_id,
+                    created_at,
+                    updated_at,
+                ],
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_query_save_failed",
+                    "Failed to save the query.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        self.get_saved_query(&id)?.ok_or_else(|| {
+            AppError::internal(
+                "saved_query_load_failed",
+                "The saved query could not be reloaded after save.",
+                Some(id),
+            )
+        })
+    }
+
+    pub fn delete_saved_query(&self, id: &str) -> Result<bool, AppError> {
+        let connection = self.open()?;
+        let deleted = connection
+            .execute("delete from saved_queries where id = ?1", params![id])
+            .map_err(|error| {
+                AppError::internal(
+                    "saved_query_delete_failed",
+                    "Failed to delete the saved query.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        Ok(deleted > 0)
     }
 
     pub fn list_saved_connections(&self) -> Result<Vec<SavedConnectionRecord>, AppError> {
@@ -783,6 +1048,59 @@ impl Repository {
         })
     }
 
+    fn read_history_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
+        Ok(HistoryEntry {
+            id: row.get(0)?,
+            sql: row.get(1)?,
+            connection_profile_id: row.get(2)?,
+            created_at: row.get(3)?,
+        })
+    }
+
+    fn read_saved_query(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedQuery> {
+        let tags_json: String = row.get(3)?;
+        let tags = serde_json::from_str::<Vec<String>>(&tags_json).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                3,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?;
+
+        Ok(SavedQuery {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            sql: row.get(2)?,
+            tags,
+            connection_profile_id: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    }
+
+    fn prune_query_history(&self, connection: &Connection) -> Result<(), AppError> {
+        connection
+            .execute(
+                "delete from query_history
+                 where id in (
+                    select id
+                    from query_history
+                    order by datetime(created_at) desc, id desc
+                    limit -1 offset ?1
+                 )",
+                params![HISTORY_RETENTION_LIMIT as i64],
+            )
+            .map_err(|error| {
+                AppError::internal(
+                    "query_history_prune_failed",
+                    "Failed to prune old query-history entries.",
+                    Some(error.to_string()),
+                )
+            })?;
+
+        Ok(())
+    }
+
     fn update_saved_connection_timestamp(
         &self,
         column: &str,
@@ -996,8 +1314,12 @@ fn schema_scope_kind_as_str(value: SchemaScopeKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{PersistedSecretRef, ReplaceSchemaScopeRecord, Repository, SaveConnectionRecord};
+    use super::{
+        PersistedSecretRef, ReplaceSchemaScopeRecord, Repository, SaveConnectionRecord,
+        SaveSavedQueryRecord, HISTORY_RETENTION_LIMIT, MIGRATIONS,
+    };
     use crate::foundation::{SchemaNode, SchemaNodeBase, SchemaScopeKind, SecretProvider, SslMode};
+    use rusqlite::{params, Connection};
 
     fn test_database_path(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join("sparow-phase2-tests");
@@ -1027,6 +1349,158 @@ mod tests {
 
         let counts = repository.sample_counts().expect("counts should load");
         assert_eq!(counts.history_entries, 1);
+    }
+
+    #[test]
+    fn prunes_history_entries_to_the_latest_retention_limit() {
+        let database_path = test_database_path("history-prune.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        for index in 0..(HISTORY_RETENTION_LIMIT + 5) {
+            repository
+                .record_history(format!("select {index};"))
+                .expect("history insert should succeed");
+        }
+
+        let counts = repository.sample_counts().expect("counts should load");
+        assert_eq!(counts.history_entries, HISTORY_RETENTION_LIMIT);
+    }
+
+    #[test]
+    fn lists_query_history_with_search_and_connection_filters() {
+        let database_path = test_database_path("history-list.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+        let connection = repository.open().expect("db should open");
+
+        connection
+            .execute(
+                "insert into query_history (id, sql, connection_profile_id, created_at) values (?1, ?2, ?3, ?4)",
+                params![
+                    "hist-1",
+                    "select * from users",
+                    "conn-local-postgres",
+                    "2026-03-31T10:00:00.000Z"
+                ],
+            )
+            .expect("insert should succeed");
+        connection
+            .execute(
+                "insert into query_history (id, sql, connection_profile_id, created_at) values (?1, ?2, ?3, ?4)",
+                params![
+                    "hist-2",
+                    "select * from projects",
+                    "conn-other",
+                    "2026-03-31T11:00:00.000Z"
+                ],
+            )
+            .expect("insert should succeed");
+
+        let results = repository
+            .list_query_history("users", Some("conn-local-postgres"), 10, 0)
+            .expect("history list should succeed");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "hist-1");
+    }
+
+    #[test]
+    fn migrates_saved_queries_with_backfilled_created_at() {
+        let database_path = test_database_path("saved-query-migration.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let connection = Connection::open(&database_path).expect("db should open");
+        connection
+            .execute_batch(
+                "create table if not exists migration_state (
+                    version text primary key,
+                    applied_at text not null
+                );",
+            )
+            .expect("migration state should create");
+
+        for (version, sql) in MIGRATIONS.iter().take(6) {
+            connection.execute_batch(sql).expect("migration should apply");
+            connection
+                .execute(
+                    "insert into migration_state (version, applied_at) values (?1, datetime('now'))",
+                    params![version],
+                )
+                .expect("migration state insert should succeed");
+        }
+
+        connection
+            .execute(
+                "insert into saved_queries (id, title, sql, tags_json, updated_at) values (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    "saved-query-legacy",
+                    "Legacy query",
+                    "select 1",
+                    "[\"legacy\"]",
+                    "2026-03-31T09:00:00.000Z"
+                ],
+            )
+            .expect("legacy insert should succeed");
+        drop(connection);
+
+        let repository = Repository::new(database_path).expect("repository should migrate");
+        let migrated = repository
+            .get_saved_query("saved-query-legacy")
+            .expect("saved query should load")
+            .expect("saved query should exist");
+
+        assert_eq!(migrated.created_at, "2026-03-31T09:00:00.000Z");
+        assert_eq!(migrated.connection_profile_id, None);
+    }
+
+    #[test]
+    fn saves_lists_and_deletes_saved_queries() {
+        let database_path = test_database_path("saved-queries-roundtrip.sqlite3");
+        let _ = std::fs::remove_file(&database_path);
+        let repository = Repository::new(database_path).expect("repository should initialize");
+
+        repository
+            .save_connection(SaveConnectionRecord {
+                id: Some("conn-local-postgres".to_string()),
+                name: "Local".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 5432,
+                database: "app_dev".to_string(),
+                username: "sparow".to_string(),
+                ssl_mode: SslMode::Prefer,
+                secret_ref: None,
+            })
+            .expect("connection save should succeed");
+
+        let saved = repository
+            .save_saved_query(SaveSavedQueryRecord {
+                id: None,
+                title: "Active users".to_string(),
+                sql: "select * from users where active = true".to_string(),
+                tags: vec!["users".to_string(), "ops".to_string()],
+                connection_profile_id: Some("conn-local-postgres".to_string()),
+            })
+            .expect("saved query should persist");
+
+        assert_eq!(saved.connection_profile_id.as_deref(), Some("conn-local-postgres"));
+
+        let listed = repository
+            .list_saved_queries("ops", Some("conn-local-postgres"), 10, 0)
+            .expect("saved query list should load");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, saved.id);
+
+        assert!(
+            repository
+                .delete_saved_query(&saved.id)
+                .expect("saved query delete should succeed")
+        );
+        assert!(
+            repository
+                .get_saved_query(&saved.id)
+                .expect("saved query reload should succeed")
+                .is_none()
+        );
     }
 
     #[test]

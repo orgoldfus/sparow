@@ -1,5 +1,5 @@
 import { ChevronRight, FolderTree, LoaderCircle, RefreshCcw, Search, Table2 } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -13,10 +13,29 @@ import type { SchemaBrowserState } from './useSchemaBrowser';
 
 type SchemaSidebarProps = {
   activeSession: DatabaseSessionSnapshot | null;
+  registerFocusTarget?: (focus: (() => void) | null) => void;
   schema: SchemaBrowserState;
 };
 
-export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
+export function SchemaSidebar({ activeSession, registerFocusTarget, schema }: SchemaSidebarProps) {
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const treeRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    registerFocusTarget?.(() => {
+      if (!schema.isDisabled && treeRef.current) {
+        treeRef.current.focus();
+        return;
+      }
+
+      searchInputRef.current?.focus();
+    });
+
+    return () => {
+      registerFocusTarget?.(null);
+    };
+  }, [registerFocusTarget, schema.isDisabled]);
+
   return (
     <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-sidebar)_94%,_black_6%)]">
       <div className="px-4 pb-3 pt-4">
@@ -49,6 +68,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
               schema.setSearchQuery(event.currentTarget.value);
             }}
             placeholder={schema.isDisabled ? 'Connect to browse metadata' : 'Search tables, views, columns'}
+            ref={searchInputRef}
             value={schema.searchQuery}
           />
           <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-2.5 text-[var(--text-muted)]">
@@ -90,6 +110,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
               onKeyDown={(event) => {
                 void handleTreeKeyDown(event, schema);
               }}
+              ref={treeRef}
               role="tree"
               tabIndex={0}
             >
@@ -182,6 +203,19 @@ function handleTreeKeyDown(event: KeyboardEvent<HTMLDivElement>, schema: SchemaB
     case 'ArrowRight':
       event.preventDefault();
       void schema.handleTreeNavigation('right');
+      break;
+    case 'Enter':
+    case ' ':
+      event.preventDefault();
+      if (schema.selectedNode) {
+        if (schema.selectedNode.hasChildren) {
+          void schema.toggleNode(schema.selectedNode);
+        } else {
+          schema.selectNode(schema.selectedNode);
+        }
+      } else if (schema.visibleRows[0]) {
+        schema.selectNode(schema.visibleRows[0].node);
+      }
       break;
     default:
       break;

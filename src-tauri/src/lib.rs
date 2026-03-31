@@ -2,6 +2,7 @@ mod commands;
 mod connections;
 mod foundation;
 mod persistence;
+mod productivity;
 mod query;
 mod schema;
 
@@ -9,16 +10,19 @@ use std::sync::Arc;
 
 use commands::{
     bootstrap_app, cancel_mock_job, cancel_query_execution, cancel_query_result_export,
-    connect_saved_connection, delete_saved_connection, disconnect_active_connection,
-    get_query_result_count, get_query_result_window, get_saved_connection, list_saved_connections,
-    list_schema_children, refresh_schema_scope, save_connection, search_schema_cache,
-    start_mock_job, start_query_execution, start_query_result_export, test_connection,
+    connect_saved_connection, delete_saved_connection, delete_saved_query,
+    disconnect_active_connection, get_query_result_count, get_query_result_window,
+    get_saved_connection, list_query_history, list_saved_connections, list_saved_queries,
+    list_schema_children, refresh_schema_scope, save_connection, save_saved_query,
+    search_schema_cache, start_mock_job, start_query_execution, start_query_result_export,
+    test_connection,
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
 use foundation::{
     initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry, MockJobRunner,
 };
 use persistence::Repository;
+use productivity::ProductivityService;
 use query::RuntimeQueryExecutionDriver;
 use schema::{RuntimeSchemaIntrospectionDriver, SchemaService};
 use tauri::Manager;
@@ -59,6 +63,7 @@ pub fn run() {
                 JobRegistry::default(),
                 JobRegistry::default(),
             );
+            let productivity = ProductivityService::new(repository.clone(), diagnostics.clone());
             let state = AppState::new(
                 paths,
                 repository,
@@ -67,6 +72,7 @@ pub fn run() {
                 connections,
                 schema,
                 query,
+                productivity,
             );
 
             info!("application state initialized");
@@ -83,6 +89,10 @@ pub fn run() {
             connect_saved_connection,
             disconnect_active_connection,
             delete_saved_connection,
+            list_query_history,
+            list_saved_queries,
+            save_saved_query,
+            delete_saved_query,
             list_schema_children,
             refresh_schema_scope,
             search_schema_cache,

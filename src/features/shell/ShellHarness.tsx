@@ -1,9 +1,22 @@
-import { useMemo, useState } from 'react';
-import { Bug, ChevronDown, Database, Settings2, UserRound } from 'lucide-react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
+import {
+  Bug,
+  ChevronDown,
+  Command,
+  Database,
+  LibraryBig,
+  Settings2,
+  UserRound,
+} from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { TooltipProvider } from '../../components/ui/tooltip';
 import { ConnectionsRail } from '../connections/ConnectionWorkspace';
+import { CommandPalette } from '../productivity/CommandPalette';
+import { QueryLibraryDialog } from '../productivity/QueryLibraryDialog';
+import { SaveQueryDialog } from '../productivity/SaveQueryDialog';
+import type { CommandPaletteItem, QueryLibraryTab, SaveQueryDialogState } from '../productivity/types';
+import { useShellFocusRegistry } from '../productivity/useShellFocusRegistry';
 import { QueryResultsPanel, QueryTabStrip, QueryWorkspace, type QueryResultsView } from '../query/QueryWorkspace';
 import type {
   QueryTabState,
@@ -22,6 +35,8 @@ import type {
   QueryResultSort,
   QueryResultWindow,
   SchemaNode,
+  SavedQuery,
+  HistoryEntry,
 } from '../../lib/contracts';
 
 const connections: ConnectionSummary[] = [
@@ -108,6 +123,8 @@ const baseRows: QueryResultCell[][] = Array.from({ length: 140 }, (_, index) => 
 ]);
 
 const schemaRows = buildSchemaRows();
+const harnessSavedQueries = buildHarnessSavedQueries();
+const harnessHistoryEntries = buildHarnessHistoryEntries();
 
 export function ShellHarness() {
   const [selectedConnectionId, setSelectedConnectionId] = useState('conn-staging');
@@ -119,6 +136,19 @@ export function ShellHarness() {
   const [activeTabId, setActiveTabId] = useState<string>('tab-lifetime');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSchemaPath, setSelectedSchemaPath] = useState<string | null>('schema/public');
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>(() => harnessSavedQueries);
+  const [historyEntries] = useState<HistoryEntry[]>(() => harnessHistoryEntries);
+  const [isQueryLibraryOpen, setIsQueryLibraryOpen] = useState(false);
+  const [queryLibraryTab, setQueryLibraryTab] = useState<QueryLibraryTab>('saved');
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyConnectionId, setHistoryConnectionId] = useState<string | null>(null);
+  const [savedQueriesSearchQuery, setSavedQueriesSearchQuery] = useState('');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteSearchQuery, setCommandPaletteSearchQuery] = useState('');
+  const [saveDialogState, setSaveDialogState] = useState<SaveQueryDialogState | null>(null);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [deletingSavedQueryId, setDeletingSavedQueryId] = useState<string | null>(null);
+  const focusRegistry = useShellFocusRegistry();
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null;
   const schemaSearchResults = useMemo(() => {
@@ -132,6 +162,317 @@ export function ShellHarness() {
       .filter((node) => node.name.toLowerCase().includes(trimmed) || node.path.toLowerCase().includes(trimmed))
       .slice(0, 16);
   }, [searchQuery]);
+  const filteredHistoryEntries = useMemo(() => {
+    const query = historySearchQuery.trim().toLowerCase();
+    return historyEntries.filter((entry) => {
+      if (historyConnectionId && entry.connectionProfileId !== historyConnectionId) {
+        return false;
+      }
+
+      if (query.length === 0) {
+        return true;
+      }
+
+      return entry.sql.toLowerCase().includes(query);
+    });
+  }, [historyConnectionId, historyEntries, historySearchQuery]);
+  const filteredSavedQueries = useMemo(() => {
+    const query = savedQueriesSearchQuery.trim().toLowerCase();
+    return savedQueries.filter((savedQuery) => {
+      if (query.length === 0) {
+        return true;
+      }
+
+      return [savedQuery.title, savedQuery.sql, savedQuery.tags.join(' ')]
+        .join(' ')
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [savedQueries, savedQueriesSearchQuery]);
+
+  function closeTransientOverlays() {
+    setIsCommandPaletteOpen(false);
+    setIsQueryLibraryOpen(false);
+  }
+
+  function openSaveDialog(nextState: SaveQueryDialogState) {
+    setSaveDialogState(nextState);
+    setIsSaveDialogOpen(true);
+    setIsCommandPaletteOpen(false);
+  }
+
+  function openSaveDialogForActiveTab() {
+    if (!activeTab) {
+      return;
+    }
+
+    const existingSavedQuery = activeTab.savedQueryId
+      ? savedQueries.find((entry) => entry.id === activeTab.savedQueryId) ?? null
+      : null;
+    openSaveDialog({
+      tabId: activeTab.id,
+      existingId: activeTab.savedQueryId,
+      title: existingSavedQuery?.title ?? activeTab.title,
+      sql: activeTab.sql,
+      tagsText: existingSavedQuery?.tags.join(', ') ?? '',
+      connectionProfileId:
+        existingSavedQuery?.connectionProfileId ??
+        activeTab.targetConnectionId ??
+        activeSession?.connectionId ??
+        selectedConnectionId ??
+        connections[0]?.id ??
+        null,
+      mode: activeTab.savedQueryId ? 'update' : 'create',
+      sourceLabel: activeTab.savedQueryId
+        ? `Harness tab linked to ${existingSavedQuery?.title ?? activeTab.title}`
+        : `Harness tab: ${activeTab.title}`,
+      allowSaveAsNew: Boolean(activeTab.savedQueryId),
+    });
+  }
+
+  function openHistoryEntry(entry: HistoryEntry) {
+    closeTransientOverlays();
+    workspace.openQueryTab({
+      sql: entry.sql,
+      targetConnectionId: entry.connectionProfileId,
+    });
+  }
+
+  function openSavedQueryEntry(savedQuery: SavedQuery) {
+    closeTransientOverlays();
+    workspace.openQueryTab({
+      sql: savedQuery.sql,
+      title: savedQuery.title,
+      targetConnectionId: savedQuery.connectionProfileId,
+      savedQueryId: savedQuery.id,
+    });
+  }
+
+  function openSaveDialogForHistoryEntry(entry: HistoryEntry) {
+    openSaveDialog({
+      tabId: null,
+      existingId: null,
+      title: deriveHarnessTabTitle(entry.sql),
+      sql: entry.sql,
+      tagsText: '',
+      connectionProfileId: entry.connectionProfileId,
+      mode: 'create',
+      sourceLabel: `History entry from ${entry.createdAt}`,
+      allowSaveAsNew: false,
+    });
+  }
+
+  function openSaveDialogForSavedQuery(savedQuery: SavedQuery) {
+    openSaveDialog({
+      tabId: null,
+      existingId: savedQuery.id,
+      title: savedQuery.title,
+      sql: savedQuery.sql,
+      tagsText: savedQuery.tags.join(', '),
+      connectionProfileId: savedQuery.connectionProfileId,
+      mode: 'update',
+      sourceLabel: `Saved query: ${savedQuery.title}`,
+      allowSaveAsNew: true,
+    });
+  }
+
+  function submitSaveDialog(modeOverride?: 'create' | 'update') {
+    const draft = saveDialogState;
+    if (!draft) {
+      return;
+    }
+
+    const nextId =
+      modeOverride === 'create' || !draft.existingId ? `saved-query-${crypto.randomUUID()}` : draft.existingId;
+    const resolvedConnectionId =
+      draft.connectionProfileId ??
+      activeTab?.targetConnectionId ??
+      activeSession?.connectionId ??
+      selectedConnectionId ??
+      connections[0]?.id ??
+      null;
+    const savedQuery: SavedQuery = {
+      id: nextId,
+      title: draft.title.trim() || deriveHarnessTabTitle(draft.sql),
+      sql: draft.sql,
+      tags: draft.tagsText
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+      connectionProfileId: resolvedConnectionId,
+      createdAt:
+        modeOverride === 'create' || !draft.existingId
+          ? new Date().toISOString()
+          : savedQueries.find((entry) => entry.id === draft.existingId)?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setSavedQueries((current) => {
+      const remaining = current.filter((entry) => entry.id !== savedQuery.id);
+      return [savedQuery, ...remaining];
+    });
+
+    if (draft.tabId) {
+      workspace.updateTabMetadata(draft.tabId, {
+        savedQueryId: savedQuery.id,
+        targetConnectionId: savedQuery.connectionProfileId,
+        title: savedQuery.title,
+      });
+    }
+
+    setIsSaveDialogOpen(false);
+    setSaveDialogState(null);
+  }
+
+  function deleteSavedQueryEntry(savedQuery: SavedQuery) {
+    setDeletingSavedQueryId(savedQuery.id);
+    setSavedQueries((current) => current.filter((entry) => entry.id !== savedQuery.id));
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.savedQueryId === savedQuery.id ? { ...tab, savedQueryId: null } : tab,
+      ),
+    );
+    setDeletingSavedQueryId(null);
+  }
+
+  const query = commandPaletteSearchQuery.trim().toLowerCase();
+  const items: CommandPaletteItem[] = [
+    {
+      id: 'action-new-tab',
+      group: 'Actions',
+      title: 'New query tab',
+      subtitle: 'Open a fresh harness tab.',
+      shortcut: 'Mod+N',
+      onSelect: () => {
+        workspace.createTab();
+        setIsCommandPaletteOpen(false);
+      },
+    },
+    {
+      id: 'action-save-query',
+      group: 'Actions',
+      title: 'Save query',
+      subtitle: 'Persist the active harness tab as a saved query.',
+      shortcut: 'Mod+S',
+      onSelect: openSaveDialogForActiveTab,
+    },
+    {
+      id: 'action-query-library',
+      group: 'Actions',
+      title: 'Open query library',
+      subtitle: 'Inspect saved queries and history in the harness.',
+      onSelect: () => {
+        setQueryLibraryTab('saved');
+        setIsQueryLibraryOpen(true);
+        setIsCommandPaletteOpen(false);
+      },
+    },
+    {
+      id: 'action-focus-results',
+      group: 'Actions',
+      title: 'Focus results',
+      subtitle: 'Move focus to the quick filter.',
+      shortcut: 'Mod+4',
+      onSelect: () => {
+        focusRegistry.focusTarget('results');
+        setIsCommandPaletteOpen(false);
+      },
+    },
+  ];
+
+  const dynamicItems = [
+    ...savedQueries.map<CommandPaletteItem>((savedQuery) => ({
+      id: `saved-${savedQuery.id}`,
+      group: 'Saved Queries',
+      title: savedQuery.title,
+      subtitle: savedQuery.sql.replace(/\s+/g, ' ').trim(),
+      detail: savedQuery.connectionProfileId ?? 'No default connection',
+      onSelect: () => {
+        openSavedQueryEntry(savedQuery);
+        setIsCommandPaletteOpen(false);
+      },
+    })),
+    ...historyEntries.map<CommandPaletteItem>((entry) => ({
+      id: `history-${entry.id}`,
+      group: 'History',
+      title: deriveHarnessTabTitle(entry.sql),
+      subtitle: entry.sql.replace(/\s+/g, ' ').trim(),
+      detail: entry.connectionProfileId ?? 'No default connection',
+      onSelect: () => {
+        openHistoryEntry(entry);
+        setIsCommandPaletteOpen(false);
+      },
+    })),
+  ];
+
+  const commandPaletteItems = [...items, ...dynamicItems].filter((item) =>
+    query.length === 0
+      ? true
+      : [item.title, item.subtitle, item.detail ?? ''].join(' ').toLowerCase().includes(query),
+  );
+
+  const handleHarnessShortcuts = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    const mod = event.metaKey || event.ctrlKey;
+    const key = event.key.toLowerCase();
+
+    if (event.key === 'Escape') {
+      if (isSaveDialogOpen) {
+        event.preventDefault();
+        setIsSaveDialogOpen(false);
+        return;
+      }
+
+      if (isQueryLibraryOpen) {
+        event.preventDefault();
+        setIsQueryLibraryOpen(false);
+        return;
+      }
+
+      if (isCommandPaletteOpen) {
+        event.preventDefault();
+        setIsCommandPaletteOpen(false);
+      }
+      return;
+    }
+
+    if (!mod) {
+      return;
+    }
+
+    if (key === 'k') {
+      event.preventDefault();
+      setIsCommandPaletteOpen(true);
+      return;
+    }
+
+    switch (key) {
+      case 's':
+        event.preventDefault();
+        openSaveDialogForActiveTab();
+        break;
+      case '4':
+        event.preventDefault();
+        focusRegistry.focusTarget('results');
+        break;
+      default:
+        break;
+    }
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      handleHarnessShortcuts(event);
+    };
+
+    window.addEventListener('keydown', listener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+    };
+  }, []);
 
   const workspace: QueryWorkspaceState = {
     activeTab,
@@ -144,6 +485,42 @@ export function ShellHarness() {
       setActiveTabId(nextTab.id);
     },
     createNewTab: () => {},
+    openQueryTab: (input) => {
+      const nextTab = buildTab(
+        `tab-${tabs.length + 1}`,
+        input.title?.trim() || input.sql.split('\n')[0]?.trim() || 'query.sql',
+        input.targetConnectionId ?? activeSession?.connectionId ?? null,
+      );
+      setTabs((current) => [
+        ...current,
+        {
+          ...nextTab,
+          sql: input.sql,
+          title: input.title?.trim() || nextTab.title,
+          savedQueryId: input.savedQueryId ?? null,
+        },
+      ]);
+      setActiveTabId(nextTab.id);
+      return nextTab.id;
+    },
+    updateTabMetadata: (tabId, updates) => {
+      setTabs((current) =>
+        current.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                title: updates.title?.trim() || tab.title,
+                savedQueryId:
+                  updates.savedQueryId === undefined ? tab.savedQueryId : updates.savedQueryId,
+                targetConnectionId:
+                  updates.targetConnectionId === undefined
+                    ? tab.targetConnectionId
+                    : updates.targetConnectionId,
+              }
+            : tab,
+        ),
+      );
+    },
     closeTab: (tabId) => {
       setTabs((current) => {
         const nextTabs = current.filter((tab) => tab.id !== tabId);
@@ -363,11 +740,84 @@ export function ShellHarness() {
         <AppShell
         connectionDialog={null}
         diagnosticsDialog={null}
+        productivityDialogs={
+          <>
+            <QueryLibraryDialog
+              activeTab={queryLibraryTab}
+              connections={connections}
+              deletingSavedQueryId={deletingSavedQueryId}
+              historyConnectionId={historyConnectionId}
+              historyEntries={filteredHistoryEntries}
+              historyHasMore={false}
+              historyLoading={false}
+              historySearchQuery={historySearchQuery}
+              onActiveTabChange={setQueryLibraryTab}
+              onDeleteSavedQuery={deleteSavedQueryEntry}
+              onEditSavedQuery={openSaveDialogForSavedQuery}
+              onHistoryConnectionIdChange={setHistoryConnectionId}
+              onHistorySearchQueryChange={setHistorySearchQuery}
+              onOpenChange={setIsQueryLibraryOpen}
+              onOpenHistoryEntry={openHistoryEntry}
+              onOpenSavedQuery={openSavedQueryEntry}
+              onRunHistoryEntry={openHistoryEntry}
+              onRunSavedQuery={openSavedQueryEntry}
+              onSaveHistoryEntry={openSaveDialogForHistoryEntry}
+              onSavedQueriesSearchQueryChange={setSavedQueriesSearchQuery}
+              open={isQueryLibraryOpen}
+              savedQueries={filteredSavedQueries}
+              savedQueriesHasMore={false}
+              savedQueriesLoading={false}
+              savedQueriesSearchQuery={savedQueriesSearchQuery}
+            />
+            <SaveQueryDialog
+              connections={connections}
+              draft={saveDialogState}
+              onConnectionProfileIdChange={(connectionProfileId) => {
+                setSaveDialogState((current) =>
+                  current ? { ...current, connectionProfileId } : current,
+                );
+              }}
+              onOpenChange={(open) => {
+                setIsSaveDialogOpen(open);
+                if (!open) {
+                  setSaveDialogState(null);
+                }
+              }}
+              onSaveAsNew={
+                saveDialogState?.allowSaveAsNew
+                  ? () => {
+                      submitSaveDialog('create');
+                    }
+                  : null
+              }
+              onSubmit={() => {
+                submitSaveDialog();
+              }}
+              onTagsTextChange={(value) => {
+                setSaveDialogState((current) => (current ? { ...current, tagsText: value } : current));
+              }}
+              onTitleChange={(value) => {
+                setSaveDialogState((current) => (current ? { ...current, title: value } : current));
+              }}
+              open={isSaveDialogOpen}
+              pending={false}
+            />
+            <CommandPalette
+              items={commandPaletteItems}
+              loading={false}
+              onOpenChange={setIsCommandPaletteOpen}
+              onSearchQueryChange={setCommandPaletteSearchQuery}
+              open={isCommandPaletteOpen}
+              searchQuery={commandPaletteSearchQuery}
+            />
+          </>
+        }
         editor={
           <QueryWorkspace
             activeSession={activeSession}
             connections={connections}
             onError={() => {}}
+            registerEditorFocusTarget={focusRegistry.registerEditorFocusTarget}
             showTabStrip={false}
             workspace={workspace}
           />
@@ -382,12 +832,32 @@ export function ShellHarness() {
                 </div>
                 <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">Sparow</p>
               </div>
-              <div className="hidden items-center gap-1 text-sm text-[var(--text-secondary)] md:flex">
-                {['File', 'Edit', 'View', 'Query', 'Tools'].map((label) => (
-                  <button className="rounded-lg px-3 py-2 transition hover:bg-[var(--surface-panel-hover)] hover:text-[var(--text-primary)]" key={label} type="button">
-                    {label}
-                  </button>
-                ))}
+              <div className="hidden items-center gap-2 md:flex">
+                <Button
+                  data-testid="query-library-launcher"
+                  onClick={() => {
+                    setQueryLibraryTab('saved');
+                    setIsQueryLibraryOpen(true);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <LibraryBig className="h-3.5 w-3.5" />
+                  Query Library
+                </Button>
+                <Button
+                  data-testid="command-palette-launcher"
+                  onClick={() => {
+                    setIsCommandPaletteOpen(true);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Command className="h-3.5 w-3.5" />
+                  Command Palette
+                </Button>
               </div>
             </div>
 
@@ -437,10 +907,12 @@ export function ShellHarness() {
               }}
               onEditSelected={() => {}}
               onSelectConnection={setSelectedConnectionId}
+              registerFocusTarget={focusRegistry.registerConnectionsFocusTarget}
               selectedConnectionId={selectedConnectionId}
             />
             <SchemaSidebar
               activeSession={activeSession}
+              registerFocusTarget={focusRegistry.registerSchemaFocusTarget}
               schema={{
                 activeConnectionId: activeSession?.connectionId ?? null,
                 isDisabled: activeSession === null,
@@ -470,6 +942,7 @@ export function ShellHarness() {
             activeSession={activeSession}
             activeView={activeResultsView}
             onActiveViewChange={setActiveResultsView}
+            registerResultsFocusTarget={focusRegistry.registerResultsFocusTarget}
             workspace={workspace}
           />
         }
@@ -508,6 +981,7 @@ function buildTab(id: string, title: string, connectionId: string | null): Query
     title,
     sql: `select current_database(), current_user, now();`,
     targetConnectionId: connectionId,
+    savedQueryId: null,
     dirty: false,
     lastExecutionSummary: 'Query completed with rows ready.',
     lastRunSql: 'select current_database(), current_user, now();',
@@ -645,6 +1119,10 @@ function buildWindow(
   };
 }
 
+function deriveHarnessTabTitle(sql: string) {
+  return sql.replace(/\s+/g, ' ').trim().slice(0, 48) || 'query.sql';
+}
+
 function toSession(connectionId: string): DatabaseSessionSnapshot | null {
   const connection = connections.find((entry) => entry.id === connectionId);
   if (!connection) {
@@ -736,5 +1214,45 @@ function buildSchemaRows() {
       isExpanded: false,
       isRefreshing: false,
     })),
+  ];
+}
+
+function buildHarnessSavedQueries(): SavedQuery[] {
+  return [
+    {
+      id: 'saved-query-ops-users',
+      title: 'Active users',
+      sql: 'select id, name, email from "user" where active = true order by updated_at desc;',
+      tags: ['ops', 'users'],
+      connectionProfileId: 'conn-staging',
+      createdAt: '2026-03-12T09:00:00.000Z',
+      updatedAt: '2026-03-12T09:00:00.000Z',
+    },
+    {
+      id: 'saved-query-revenue',
+      title: 'Revenue by week',
+      sql: 'select week_start, total_revenue from revenue_snapshot order by week_start desc;',
+      tags: ['finance', 'weekly'],
+      connectionProfileId: 'conn-analytics',
+      createdAt: '2026-03-11T08:00:00.000Z',
+      updatedAt: '2026-03-11T08:00:00.000Z',
+    },
+  ];
+}
+
+function buildHarnessHistoryEntries(): HistoryEntry[] {
+  return [
+    {
+      id: 'history-users',
+      sql: 'select id, name, email from "user" where active = true order by updated_at desc;',
+      connectionProfileId: 'conn-staging',
+      createdAt: '2026-03-12T08:55:00.000Z',
+    },
+    {
+      id: 'history-orders',
+      sql: 'select id, state, total_cents from "order" where state = \'open\' order by inserted_at desc;',
+      connectionProfileId: 'conn-production',
+      createdAt: '2026-03-12T08:40:00.000Z',
+    },
   ];
 }

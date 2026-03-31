@@ -1,0 +1,6 @@
+{
+  "searchQuery": "active",
+  "connectionId": "conn-local-postgres",
+  "limit": 25,
+  "offset": 0
+}

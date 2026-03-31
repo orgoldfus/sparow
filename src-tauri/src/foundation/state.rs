@@ -7,20 +7,23 @@ use tauri::AppHandle;
 use tokio::task;
 
 use crate::{
-    connections::ConnectionService, persistence::Repository, query::QueryService,
-    schema::SchemaService,
+    connections::ConnectionService, persistence::Repository, productivity::ProductivityService,
+    query::QueryService, schema::SchemaService,
 };
 
 use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
     BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult,
     CancelQueryResultExportResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
-    DatabaseSessionSnapshot, DeleteConnectionResult, DiagnosticsSnapshot, DisconnectSessionResult,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DeleteSavedQueryResult,
+    DiagnosticsSnapshot, DisconnectSessionResult, ListQueryHistoryRequest,
+    ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
     ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
     QueryExecutionRequest, QueryResultCountRequest, QueryResultCountResult,
     QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindow,
     QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
-    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
+    SaveSavedQueryRequest, SavedQuery, SchemaRefreshAccepted, SchemaSearchRequest,
+    SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -71,6 +74,7 @@ pub struct AppState {
     connections: ConnectionService,
     schema: SchemaService,
     query: QueryService,
+    productivity: ProductivityService,
 }
 
 impl AppState {
@@ -82,6 +86,7 @@ impl AppState {
         connections: ConnectionService,
         schema: SchemaService,
         query: QueryService,
+        productivity: ProductivityService,
     ) -> Self {
         Self {
             paths,
@@ -91,6 +96,7 @@ impl AppState {
             connections,
             schema,
             query,
+            productivity,
         }
     }
 
@@ -192,6 +198,50 @@ impl AppState {
         id: &str,
     ) -> Result<DeleteConnectionResult, AppError> {
         let result = self.connections.delete_saved_connection(id).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn list_query_history(
+        &self,
+        request: ListQueryHistoryRequest,
+    ) -> Result<ListQueryHistoryResult, AppError> {
+        let result = self.productivity.list_query_history(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn list_saved_queries(
+        &self,
+        request: ListSavedQueriesRequest,
+    ) -> Result<ListSavedQueriesResult, AppError> {
+        let result = self.productivity.list_saved_queries(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn save_saved_query(
+        &self,
+        request: SaveSavedQueryRequest,
+    ) -> Result<SavedQuery, AppError> {
+        let result = self.productivity.save_saved_query(request).await;
+        if let Err(error) = &result {
+            self.diagnostics.record_error(error.clone());
+        }
+        result
+    }
+
+    pub async fn delete_saved_query(
+        &self,
+        id: String,
+    ) -> Result<DeleteSavedQueryResult, AppError> {
+        let result = self.productivity.delete_saved_query(id).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());
         }

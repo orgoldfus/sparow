@@ -1,0 +1,12 @@
+{
+  "id": "saved-query-active-users",
+  "title": "Active users",
+  "sql": "select * from users where active = true order by created_at desc;",
+  "tags": [
+    "users",
+    "ops"
+  ],
+  "connectionProfileId": "conn-local-postgres",
+  "createdAt": "2026-03-30T09:15:00.000Z",
+  "updatedAt": "2026-03-31T13:30:00.000Z"
+}

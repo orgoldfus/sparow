@@ -12,6 +12,7 @@ type AppShellProps = {
   headerBar: ReactNode;
   isLoading: boolean;
   leftSidebar: ReactNode;
+  productivityDialogs?: ReactNode;
   results: ReactNode;
   statusBar: ReactNode;
 };
@@ -24,6 +25,7 @@ export function AppShell({
   headerBar,
   isLoading,
   leftSidebar,
+  productivityDialogs,
   results,
   statusBar,
 }: AppShellProps) {
@@ -82,6 +84,7 @@ export function AppShell({
 
       {connectionDialog}
       {diagnosticsDialog}
+      {productivityDialogs}
     </main>
   );
 }

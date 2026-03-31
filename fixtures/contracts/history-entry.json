@@ -1,0 +1,6 @@
+{
+  "id": "hist-2026-03-31-001",
+  "sql": "select * from users where active = true;",
+  "connectionProfileId": "conn-local-postgres",
+  "createdAt": "2026-03-31T13:24:00.000Z"
+}

@@ -24,6 +24,7 @@ type QueryWorkspaceProps = {
   activeSession: DatabaseSessionSnapshot | null;
   connections: ConnectionSummary[];
   onError: (error: AppError | Error) => void;
+  registerEditorFocusTarget?: (focus: (() => void) | null) => void;
   showTabStrip?: boolean;
   workspace: QueryWorkspaceState;
 };
@@ -34,6 +35,7 @@ type QueryResultsPanelProps = {
   activeSession: DatabaseSessionSnapshot | null;
   activeView: QueryResultsView;
   onActiveViewChange: (view: QueryResultsView) => void;
+  registerResultsFocusTarget?: (focus: (() => void) | null) => void;
   workspace: QueryWorkspaceState;
 };
 
@@ -99,6 +101,7 @@ export function QueryWorkspace({
   activeSession,
   connections,
   onError,
+  registerEditorFocusTarget,
   showTabStrip = true,
   workspace,
 }: QueryWorkspaceProps) {
@@ -111,6 +114,20 @@ export function QueryWorkspace({
   runActiveEditorRef.current = () => {
     void runActiveEditor();
   };
+
+  useEffect(() => {
+    registerEditorFocusTarget?.(
+      editorRef.current
+        ? () => {
+            editorRef.current?.focus();
+          }
+        : null,
+    );
+
+    return () => {
+      registerEditorFocusTarget?.(null);
+    };
+  }, [registerEditorFocusTarget]);
 
   useEffect(() => {
     if (!monacoRef.current) {
@@ -137,6 +154,9 @@ export function QueryWorkspace({
   ) {
     editorRef.current = editorInstance;
     monacoRef.current = monacoInstance;
+    registerEditorFocusTarget?.(() => {
+      editorInstance.focus();
+    });
 
     monacoInstance.editor.defineTheme('sparow-dark', {
       base: 'vs-dark',
@@ -284,13 +304,25 @@ export function QueryResultsPanel({
   activeSession,
   activeView,
   onActiveViewChange,
+  registerResultsFocusTarget,
   workspace,
 }: QueryResultsPanelProps) {
+  const quickFilterRef = useRef<HTMLInputElement | null>(null);
   const tab = workspace.activeTab;
   const result = tab?.execution.lastResult ?? null;
   const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
   const totalRows = resolveVisibleResultRowCount(summary, tab?.result.window ?? null);
   const resultKind = result?.kind ?? null;
+
+  useEffect(() => {
+    registerResultsFocusTarget?.(() => {
+      quickFilterRef.current?.focus();
+    });
+
+    return () => {
+      registerResultsFocusTarget?.(null);
+    };
+  }, [registerResultsFocusTarget]);
 
   return (
     <Tabs
@@ -335,7 +367,7 @@ export function QueryResultsPanel({
                   aria-label="Filter result rows"
                   className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   data-testid="result-quick-filter"
-                  disabled={!summary}
+                  ref={quickFilterRef}
                   placeholder="Filter result rows"
                   value={tab?.result.quickFilter ?? ''}
                   onChange={(event) => {

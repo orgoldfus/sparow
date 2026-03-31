@@ -114,7 +114,45 @@ export type SavedQuery = {
   title: string;
   sql: string;
   tags: string[];
+  connectionProfileId: string | null;
+  createdAt: string;
   updatedAt: string;
+};
+
+export type ListQueryHistoryRequest = {
+  searchQuery: string;
+  connectionId: string | null;
+  limit: number;
+  offset: number;
+};
+
+export type ListQueryHistoryResult = {
+  entries: HistoryEntry[];
+  hasMore: boolean;
+};
+
+export type ListSavedQueriesRequest = {
+  searchQuery: string;
+  connectionId: string | null;
+  limit: number;
+  offset: number;
+};
+
+export type ListSavedQueriesResult = {
+  entries: SavedQuery[];
+  hasMore: boolean;
+};
+
+export type SaveSavedQueryRequest = {
+  id: string | null;
+  title: string;
+  sql: string;
+  tags: string[];
+  connectionProfileId: string | null;
+};
+
+export type DeleteSavedQueryResult = {
+  id: string;
 };
 
 export type SchemaCacheEntry = {
