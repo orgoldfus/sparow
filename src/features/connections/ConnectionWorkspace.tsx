@@ -128,18 +128,19 @@ export function ConnectionsRail({
   const activeConnectionId = activeSession?.connectionId ?? null;
   return (
     <section className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)]" ref={railRef}>
-      <div className="border-b border-[var(--border-subtle)] px-4 py-5">
-        <div className="flex items-center justify-between gap-3">
+      <div className="border-b border-[var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center justify-between">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Connections</p>
           <Button
-            className="shrink-0"
+            aria-label="New connection"
+            className="h-6 w-6 rounded p-0"
             data-testid="new-connection-button"
             onClick={onCreateConnection}
             size="sm"
             type="button"
+            variant="ghost"
           >
             <Plus className="h-3.5 w-3.5" />
-            New
           </Button>
         </div>
       </div>

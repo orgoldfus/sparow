@@ -13,6 +13,29 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-31: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Updated the status-bar `Edit connection` button in `src/App.tsx` so the disabled state now exposes `aria-disabled`, removes the hover affordance when inactive, and applies explicit disabled styling.
+  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
+- 2026-03-31: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
+  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
+- 2026-03-31: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fix the new PR #14 status-bar accessibility comment in `src/App.tsx`, rerun verification, then commit and push the follow-up.
+- 2026-03-31: Completed a CodeRabbit review-state check for PR #14.
+  - PR [#14](https://github.com/orgoldfus/sparow/pull/14) has 1 new actionable CodeRabbit comment from 2026-03-29 after commit `844339e`.
+  - The remaining unresolved item is in `src/App.tsx`: the status-bar `Edit connection` button still needs explicit disabled styling and `aria-disabled` when `canEditConnection` is false.
+- 2026-03-29: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Fixed the Monaco cursor-listener disposal leak, taught the status bar to describe successful command executions, disabled the dead header connection-settings control when nothing is editable, and restored visible keyboard focus styling for the query and schema filters.
+  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
+- 2026-03-29: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
+  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
+- 2026-03-29: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fetch the current PR's unresolved CodeRabbit review threads, apply any still-valid fixes, rerun verification, then commit and push the follow-up.
+- 2026-03-26: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Moved query cursor tracking out of `App` into a lightweight query-local store so Monaco caret movement no longer rerenders the shell, fixed the remaining query/schema UI review items, and verified the branch end-to-end before packaging the follow-up commit.
+- 2026-03-26: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fetch the current branch PR's unresolved CodeRabbit review threads, apply any valid fixes, rerun verification, then commit and push the follow-up.
 - 2026-03-25: Completed the latest CodeRabbit autofix pass for PR #13.
   - Fixed the replayable result-store eviction path so a requested window wider than the default cache budget keeps every page in the active window, and added a regression that proves `load_window()` still returns the full 15-row span for that case.
 - 2026-03-25: Started another CodeRabbit autofix pass on `limit-large-queries`.
@@ -225,6 +248,12 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
 
 ## Verification
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - The final 2026-03-26 rerun passed under Node `v24.14.0`: ESLint kept only the existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx`, Vitest passed 9 files / 97 tests, `smoke:foundation`, `smoke:results-browser`, and `smoke:shell-browser` completed successfully, and the Rust workspace passed with 93 tests green and 2 PostgreSQL smoke tests ignored.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The second 2026-03-26 rerun cleared the cursor-sync crash and brought the suite down to one failing Vitest case: `src/test/app-shell.test.tsx > App shell > sends a password when saving a selected profile without a stored secret`. The new status-bar edit handler passed `openEditConnectionDialog` directly, so React forwarded the click event into the optional `connectionId` parameter and the save request used the event object instead of the selected connection id.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
+  - The 2026-03-26 rerun reached `typecheck`, `lint`, and Vitest, then failed because the new cursor-position sync assumed Monaco's `getPosition()` exists. The test editor stub in `src/test/setup.ts` does not expose that method, which crashed `QueryWorkspace` during mount and broke the shell/schema/component suites until the cursor store was hardened against partial editor mocks.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - The full repo gate passed under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
 - `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
