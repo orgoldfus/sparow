@@ -547,7 +547,8 @@ function AppStatusBar({
       <div className="flex items-center gap-2.5">
         <button
           aria-label="Edit connection"
-          className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition hover:bg-[var(--surface-panel-hover)] ${connectionStatusTone}`}
+          aria-disabled={!canEditConnection}
+          className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition ${connectionStatusTone} ${canEditConnection ? 'hover:bg-[var(--surface-panel-hover)]' : 'cursor-not-allowed opacity-50'}`}
           disabled={!canEditConnection}
           onClick={onEditConnection}
           type="button"

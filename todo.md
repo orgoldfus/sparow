@@ -13,6 +13,17 @@ Build the Phase 5 streamed results workflow for Sparow: Rust-owned result cachin
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-03-31: Completed the latest CodeRabbit autofix pass for PR #14.
+  - Updated the status-bar `Edit connection` button in `src/App.tsx` so the disabled state now exposes `aria-disabled`, removes the hover affordance when inactive, and applies explicit disabled styling.
+  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
+- 2026-03-31: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
+  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
+- 2026-03-31: Started another CodeRabbit autofix pass on `improve-ui`.
+  - Goal: fix the new PR #14 status-bar accessibility comment in `src/App.tsx`, rerun verification, then commit and push the follow-up.
+- 2026-03-31: Completed a CodeRabbit review-state check for PR #14.
+  - PR [#14](https://github.com/orgoldfus/sparow/pull/14) has 1 new actionable CodeRabbit comment from 2026-03-29 after commit `844339e`.
+  - The remaining unresolved item is in `src/App.tsx`: the status-bar `Edit connection` button still needs explicit disabled styling and `aria-disabled` when `canEditConnection` is false.
 - 2026-03-29: Completed the latest CodeRabbit autofix pass for PR #14.
   - Fixed the Monaco cursor-listener disposal leak, taught the status bar to describe successful command executions, disabled the dead header connection-settings control when nothing is editable, and restored visible keyboard focus styling for the query and schema filters.
   - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
