@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-const SHELL_COLUMNS_CLASS = 'lg:grid-cols-[clamp(360px,34vw,460px)_minmax(0,1fr)]';
+const SHELL_COLUMNS_CLASS = 'lg:grid-cols-[220px_minmax(0,1fr)]';
 const SHELL_ROWS_WITH_TABS = 'auto minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
 const SHELL_ROWS_WITHOUT_TABS = 'minmax(260px, 0.94fr) minmax(340px, 1.06fr)';
 

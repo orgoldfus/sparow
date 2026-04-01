@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started post-PR conflict resolution for `codex/phase-6`.
+  - The branch is locally clean, so the conflict appears to be against the updated `main` branch rather than unresolved local merge markers.
+  - Resolution strategy is to merge `origin/main` into `codex/phase-6`, keep the Phase 6 productivity layer intact, and rerun the most relevant checks before pushing the updated branch.
 - 2026-03-31: Started Phase 6 implementation from a green baseline.
   - Phase 6 will preserve the current shell grid and add overlay productivity surfaces that can survive the planned UI replacement.
   - Shared contract files (`src/lib/contracts.ts`, `src/lib/guards.ts`, Rust contract structs, fixtures, IPC, commands, app state, and `src/App.tsx`) are treated as serial merge hotspots and must land before deeper feature work.
@@ -23,6 +26,10 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during post-PR conflict resolution after merging `origin/main` into `codex/phase-6`. TypeScript compilation passed with the merged Phase 6 productivity layer and the updated shell changes from `main`.
+- `npm run test -- src/test/app-shell.test.tsx src/test/productivity-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-04-01 during post-PR conflict resolution after merging `origin/main` into `codex/phase-6`. The targeted shell, productivity, query-workspace, and schema-browser slices all passed (33 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
   - Ran on 2026-03-31 under Node `v24.14.0`. `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed. The existing TanStack React Compiler warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
 - `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace-component.test.tsx` ❌

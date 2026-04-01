@@ -196,7 +196,7 @@ export function QueryResultsTable({
           setScrollTop(event.currentTarget.scrollTop);
         }}
       >
-        <div className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)] backdrop-blur-sm" role="rowgroup">
+        <div className="sticky top-0 z-20 min-w-max border-b border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-panel)_92%,_black_8%)]" role="rowgroup">
           {table.getHeaderGroups().map((headerGroup) => (
             <div
               className="grid min-w-max w-max"
