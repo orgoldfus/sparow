@@ -63,7 +63,7 @@ try {
     await page.getByTestId('command-palette-dialog').waitFor();
     await page.getByTestId('command-palette-input').waitFor();
     await page.getByTestId('command-palette-item-saved-saved-query-ops-users').click();
-    await page.getByRole('heading', { name: 'Active users' }).waitFor();
+    await waitForQueryTabCount(page, 'Active users', 1);
 
     await page.getByTestId('new-query-tab-button').click();
     await page.keyboard.press('Control+s');
@@ -73,6 +73,21 @@ try {
 
     await page.getByTestId('query-library-launcher').click();
     await page.getByTestId('query-library-dialog').waitFor();
+    await page.getByTestId('query-library-saved-entry-saved-query-ops-users').getByRole('button', {
+      name: /^Run$/i,
+    }).click();
+    await waitForQueryTabCount(page, 'Active users', 2);
+
+    await page.getByTestId('query-library-launcher').click();
+    await page.getByTestId('query-library-dialog').waitFor();
+    await page.getByTestId('query-library-saved-entry-saved-query-ops-users').getByRole('button', {
+      name: /Edit metadata/i,
+    }).click();
+    await page.getByTestId('save-query-dialog').waitFor();
+    await page.getByTestId('save-query-title-input').fill('Active users nightly');
+    await page.getByRole('button', { name: /Update saved query/i }).click();
+    await waitForQueryTabCount(page, 'Active users nightly', 2);
+
     await page.getByTestId('query-library-saved-entry-saved-query-revenue').waitFor();
     await page.getByTestId('query-library-saved-entry-saved-query-revenue').getByRole('button', {
       name: /^Delete$/i,
@@ -225,4 +240,14 @@ async function stopProcess(child) {
       }
     }, 2_000);
   });
+}
+
+async function waitForQueryTabCount(page, title, expectedCount) {
+  await page.waitForFunction(
+    ([nextTitle, nextExpectedCount]) =>
+      Array.from(document.querySelectorAll('[data-testid^="query-tab-"]')).filter((node) =>
+        node.textContent?.includes(nextTitle),
+      ).length === nextExpectedCount,
+    [title, expectedCount],
+  );
 }

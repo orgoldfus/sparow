@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started a second CodeRabbit autofix pass for PR #15.
+  - Scope is limited to the newly unresolved CodeRabbit threads after commit `9f21ca2`, with local verification before any code change.
+  - Completed by downgrading uncached saved-query tabs to "save as new", wiring the harness query-library Run actions through `startTabQuery`, syncing open tabs after saved-query metadata edits, and tightening the productivity smoke to verify the real tab/overlay flow.
 - 2026-04-01: Started a CodeRabbit autofix pass for PR #15.
   - Scope is limited to unresolved actionable CodeRabbit review threads on the current branch, with local verification before any code change.
   - The first full CI rerun produced invalid Node-side failures because `npm ci` was launched in parallel with `typecheck`, `lint`, `test`, and `build`, leaving those commands to read a partially rewritten `node_modules` tree. The fix is to rerun the Node checks serially after `npm ci` finishes.
@@ -42,6 +45,14 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `npm run smoke:productivity-browser` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass after correcting the harness smoke to reuse the already-open query-library overlay following metadata edits. The productivity harness smoke completed successfully and wrote `/Users/orgoldfus/Workspace/personal/sparow/artifacts/productivity-harness-smoke.png`.
+- `npm run smoke:productivity-browser` ❌
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. The updated smoke initially failed because it tried to relaunch the query library after editing saved-query metadata even though the dialog intentionally stayed open behind the save modal, so Playwright hit the existing overlay and timed out on the launcher click.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. The focused productivity and shell slices passed (22 tests).
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. TypeScript compilation passed after the new saved-query/harness fixes.
 - `npm run typecheck` ✅
   - Ran on 2026-04-01 during the targeted CodeRabbit regression pass. TypeScript compilation passed after the productivity/query/schema fixes.
 - `npm run test -- src/test/productivity-workspace.test.tsx src/test/schema-browser.test.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅

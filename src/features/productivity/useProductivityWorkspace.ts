@@ -366,13 +366,14 @@ export function useProductivityWorkspace({
     }
 
     const existingSavedQuery = activeTab.savedQueryId ? savedQueryCache[activeTab.savedQueryId] ?? null : null;
+    const canUpdateExisting = activeTab.savedQueryId !== null && existingSavedQuery !== null;
     openSaveDialog({
       tabId: activeTab.id,
-      existingId: activeTab.savedQueryId,
+      existingId: canUpdateExisting ? activeTab.savedQueryId : null,
       title: existingSavedQuery?.title ?? activeTab.title,
       sql: activeTab.sql,
       tagsText: existingSavedQuery?.tags.join(', ') ?? '',
-      hasExplicitConnectionProfileId: existingSavedQuery !== null || activeTab.targetConnectionId !== null,
+      hasExplicitConnectionProfileId: canUpdateExisting || activeTab.targetConnectionId !== null,
       connectionProfileId: existingSavedQuery
         ? existingSavedQuery.connectionProfileId
         : activeTab.targetConnectionId ??
@@ -380,11 +381,11 @@ export function useProductivityWorkspace({
           connectionWorkspace.selectedConnectionId ??
           connectionWorkspace.connections[0]?.id ??
           null,
-      mode: activeTab.savedQueryId ? 'update' : 'create',
-      sourceLabel: activeTab.savedQueryId
+      mode: canUpdateExisting ? 'update' : 'create',
+      sourceLabel: canUpdateExisting
         ? `Current tab linked to "${existingSavedQuery?.title ?? activeTab.title}"`
         : `Current tab: ${activeTab.title}`,
-      allowSaveAsNew: Boolean(activeTab.savedQueryId),
+      allowSaveAsNew: canUpdateExisting,
     });
   }
 

@@ -209,13 +209,14 @@ export function ShellHarness() {
     const existingSavedQuery = activeTab.savedQueryId
       ? savedQueries.find((entry) => entry.id === activeTab.savedQueryId) ?? null
       : null;
+    const canUpdateExisting = activeTab.savedQueryId !== null && existingSavedQuery !== null;
     openSaveDialog({
       tabId: activeTab.id,
-      existingId: activeTab.savedQueryId,
+      existingId: canUpdateExisting ? activeTab.savedQueryId : null,
       title: existingSavedQuery?.title ?? activeTab.title,
       sql: activeTab.sql,
       tagsText: existingSavedQuery?.tags.join(', ') ?? '',
-      hasExplicitConnectionProfileId: existingSavedQuery !== null || activeTab.targetConnectionId !== null,
+      hasExplicitConnectionProfileId: canUpdateExisting || activeTab.targetConnectionId !== null,
       connectionProfileId: existingSavedQuery
         ? existingSavedQuery.connectionProfileId
         : activeTab.targetConnectionId ??
@@ -223,11 +224,11 @@ export function ShellHarness() {
           selectedConnectionId ??
           connections[0]?.id ??
           null,
-      mode: activeTab.savedQueryId ? 'update' : 'create',
-      sourceLabel: activeTab.savedQueryId
+      mode: canUpdateExisting ? 'update' : 'create',
+      sourceLabel: canUpdateExisting
         ? `Harness tab linked to ${existingSavedQuery?.title ?? activeTab.title}`
         : `Harness tab: ${activeTab.title}`,
-      allowSaveAsNew: Boolean(activeTab.savedQueryId),
+      allowSaveAsNew: canUpdateExisting,
     });
   }
 
@@ -247,6 +248,22 @@ export function ShellHarness() {
       targetConnectionId: savedQuery.connectionProfileId,
       savedQueryId: savedQuery.id,
     });
+  }
+
+  async function runQueryInNewTab(entry: {
+    connectionId: string | null;
+    savedQueryId?: string | null;
+    sql: string;
+    title?: string | null;
+  }) {
+    closeTransientOverlays();
+    const tabId = workspace.openQueryTab({
+      sql: entry.sql,
+      title: entry.title ?? null,
+      targetConnectionId: entry.connectionId,
+      savedQueryId: entry.savedQueryId ?? null,
+    });
+    await workspace.startTabQuery(tabId, buildHarnessExecutionIntent(entry.sql));
   }
 
   function openSaveDialogForHistoryEntry(entry: HistoryEntry) {
@@ -321,6 +338,16 @@ export function ShellHarness() {
         targetConnectionId: savedQuery.connectionProfileId,
         title: savedQuery.title,
       });
+    }
+
+    for (const tab of tabs) {
+      if (tab.savedQueryId === savedQuery.id) {
+        workspace.updateTabMetadata(tab.id, {
+          savedQueryId: savedQuery.id,
+          targetConnectionId: savedQuery.connectionProfileId,
+          title: savedQuery.title,
+        });
+      }
     }
 
     setIsSaveDialogOpen(false);
@@ -762,8 +789,20 @@ export function ShellHarness() {
               onOpenChange={setIsQueryLibraryOpen}
               onOpenHistoryEntry={openHistoryEntry}
               onOpenSavedQuery={openSavedQueryEntry}
-              onRunHistoryEntry={openHistoryEntry}
-              onRunSavedQuery={openSavedQueryEntry}
+              onRunHistoryEntry={(entry) => {
+                void runQueryInNewTab({
+                  connectionId: entry.connectionProfileId,
+                  sql: entry.sql,
+                });
+              }}
+              onRunSavedQuery={(savedQuery) => {
+                void runQueryInNewTab({
+                  connectionId: savedQuery.connectionProfileId,
+                  savedQueryId: savedQuery.id,
+                  sql: savedQuery.sql,
+                  title: savedQuery.title,
+                });
+              }}
               onSaveHistoryEntry={openSaveDialogForHistoryEntry}
               onSavedQueriesSearchQueryChange={setSavedQueriesSearchQuery}
               open={isQueryLibraryOpen}
@@ -981,6 +1020,14 @@ function createInitialTabs(connectionId: string): QueryTabState[] {
     refreshTabResult(buildTab('tab-revenue', 'revenue_report.sql', connectionId)),
     refreshTabResult(buildTab('tab-users', 'users.sql', connectionId)),
   ];
+}
+
+function buildHarnessExecutionIntent(sql: string) {
+  return {
+    sql,
+    origin: 'current-statement' as const,
+    isSelectionMultiStatement: false,
+  };
 }
 
 function buildTab(id: string, title: string, connectionId: string | null): QueryTabState {
