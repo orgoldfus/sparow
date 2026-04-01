@@ -505,7 +505,13 @@ export default function App() {
                 draft={productivity.saveDialogState}
                 onConnectionProfileIdChange={(connectionProfileId) => {
                   productivity.setSaveDialogState((current) =>
-                    current ? { ...current, connectionProfileId } : current,
+                    current
+                      ? {
+                          ...current,
+                          connectionProfileId,
+                          hasExplicitConnectionProfileId: true,
+                        }
+                      : current,
                   );
                 }}
                 onOpenChange={(open) => {

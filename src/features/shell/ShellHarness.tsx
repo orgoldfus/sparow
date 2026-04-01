@@ -215,13 +215,14 @@ export function ShellHarness() {
       title: existingSavedQuery?.title ?? activeTab.title,
       sql: activeTab.sql,
       tagsText: existingSavedQuery?.tags.join(', ') ?? '',
-      connectionProfileId:
-        existingSavedQuery?.connectionProfileId ??
-        activeTab.targetConnectionId ??
-        activeSession?.connectionId ??
-        selectedConnectionId ??
-        connections[0]?.id ??
-        null,
+      hasExplicitConnectionProfileId: existingSavedQuery !== null || activeTab.targetConnectionId !== null,
+      connectionProfileId: existingSavedQuery
+        ? existingSavedQuery.connectionProfileId
+        : activeTab.targetConnectionId ??
+          activeSession?.connectionId ??
+          selectedConnectionId ??
+          connections[0]?.id ??
+          null,
       mode: activeTab.savedQueryId ? 'update' : 'create',
       sourceLabel: activeTab.savedQueryId
         ? `Harness tab linked to ${existingSavedQuery?.title ?? activeTab.title}`
@@ -255,6 +256,7 @@ export function ShellHarness() {
       title: deriveHarnessTabTitle(entry.sql),
       sql: entry.sql,
       tagsText: '',
+      hasExplicitConnectionProfileId: true,
       connectionProfileId: entry.connectionProfileId,
       mode: 'create',
       sourceLabel: `History entry from ${entry.createdAt}`,
@@ -269,6 +271,7 @@ export function ShellHarness() {
       title: savedQuery.title,
       sql: savedQuery.sql,
       tagsText: savedQuery.tags.join(', '),
+      hasExplicitConnectionProfileId: true,
       connectionProfileId: savedQuery.connectionProfileId,
       mode: 'update',
       sourceLabel: `Saved query: ${savedQuery.title}`,
@@ -284,13 +287,13 @@ export function ShellHarness() {
 
     const nextId =
       modeOverride === 'create' || !draft.existingId ? `saved-query-${crypto.randomUUID()}` : draft.existingId;
-    const resolvedConnectionId =
-      draft.connectionProfileId ??
-      activeTab?.targetConnectionId ??
-      activeSession?.connectionId ??
-      selectedConnectionId ??
-      connections[0]?.id ??
-      null;
+    const resolvedConnectionId = draft.hasExplicitConnectionProfileId
+      ? draft.connectionProfileId
+      : activeTab?.targetConnectionId ??
+        activeSession?.connectionId ??
+        selectedConnectionId ??
+        connections[0]?.id ??
+        null;
     const savedQuery: SavedQuery = {
       id: nextId,
       title: draft.title.trim() || deriveHarnessTabTitle(draft.sql),
@@ -489,7 +492,7 @@ export function ShellHarness() {
       const nextTab = buildTab(
         `tab-${tabs.length + 1}`,
         input.title?.trim() || input.sql.split('\n')[0]?.trim() || 'query.sql',
-        input.targetConnectionId ?? activeSession?.connectionId ?? null,
+        input.targetConnectionId !== undefined ? input.targetConnectionId : activeSession?.connectionId ?? null,
       );
       setTabs((current) => [
         ...current,
@@ -774,7 +777,13 @@ export function ShellHarness() {
               draft={saveDialogState}
               onConnectionProfileIdChange={(connectionProfileId) => {
                 setSaveDialogState((current) =>
-                  current ? { ...current, connectionProfileId } : current,
+                  current
+                    ? {
+                        ...current,
+                        connectionProfileId,
+                        hasExplicitConnectionProfileId: true,
+                      }
+                    : current,
                 );
               }}
               onOpenChange={(open) => {

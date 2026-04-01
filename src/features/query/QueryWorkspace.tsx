@@ -358,13 +358,21 @@ export function QueryResultsPanel({
 
   useEffect(() => {
     registerResultsFocusTarget?.(() => {
+      if (activeView !== 'results') {
+        onActiveViewChange('results');
+        window.requestAnimationFrame(() => {
+          quickFilterRef.current?.focus();
+        });
+        return;
+      }
+
       quickFilterRef.current?.focus();
     });
 
     return () => {
       registerResultsFocusTarget?.(null);
     };
-  }, [registerResultsFocusTarget]);
+  }, [activeView, onActiveViewChange, registerResultsFocusTarget]);
 
   return (
     <Tabs

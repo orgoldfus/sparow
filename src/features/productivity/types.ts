@@ -10,6 +10,7 @@ export type SaveQueryDialogState = {
   sql: string;
   tagsText: string;
   connectionProfileId: string | null;
+  hasExplicitConnectionProfileId: boolean;
   mode: SaveQueryDialogMode;
   sourceLabel: string;
   allowSaveAsNew: boolean;

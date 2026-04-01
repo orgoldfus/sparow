@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
+import { SchemaSidebar } from '../features/schema/SchemaWorkspace';
+import type { SchemaBrowserState } from '../features/schema/useSchemaBrowser';
 import appBootstrapFixture from '../../fixtures/contracts/app-bootstrap.json';
 import connectionDetailsFixture from '../../fixtures/contracts/connection-details.json';
 import connectionTestResultFixture from '../../fixtures/contracts/connection-test-result.json';
@@ -11,6 +13,7 @@ import type {
   AppBootstrap,
   DatabaseSessionSnapshot,
   ListSchemaChildrenResult,
+  SchemaNode,
 } from '../lib/contracts';
 import { isAppBootstrap, isDatabaseSessionSnapshot } from '../lib/guards';
 import { bootstrapApp } from '../lib/ipc';
@@ -109,6 +112,22 @@ describe('schema browser', () => {
     ).toBeInTheDocument();
   });
 
+  it('moves schema focus to the disabled empty state when no connection is active', async () => {
+    vi.mocked(bootstrapApp).mockResolvedValue({
+      ...appBootstrap,
+      activeSession: null,
+    });
+
+    render(<App />);
+
+    await screen.findByText(/Connect a saved PostgreSQL target to browse cached schema and relation metadata/i);
+    fireEvent.keyDown(window, { ctrlKey: true, key: '2' });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByTestId('schema-disabled-focus-target'));
+    });
+  });
+
   it('expands the schema tree with keyboard navigation', async () => {
     render(<App />);
 
@@ -127,6 +146,59 @@ describe('schema browser', () => {
     fireEvent.keyDown(tree, { key: 'ArrowRight' });
 
     expect(await screen.findByText('users')).toBeInTheDocument();
+  });
+
+  it('does not treat bubbled arrow keys from treeitem buttons as tree-container navigation', () => {
+    const rootNode: SchemaNode = {
+      kind: 'schema',
+      id: 'conn-local-postgres:schema/public',
+      connectionId: databaseSession.connectionId,
+      name: 'public',
+      path: 'schema/public',
+      parentPath: null,
+      schemaName: 'public',
+      relationName: null,
+      hasChildren: true,
+      refreshedAt: '2026-03-09T18:15:00.000Z',
+    };
+    const schema: SchemaBrowserState = {
+      activeConnectionId: databaseSession.connectionId,
+      isDisabled: false,
+      isLoadingRoot: false,
+      latestRefreshEvent: null,
+      searchQuery: '',
+      searchResults: [],
+      scopes: {},
+      selectedNode: rootNode,
+      visibleRows: [
+        {
+          node: rootNode,
+          depth: 0,
+          childScopeStatus: 'fresh',
+          isExpanded: false,
+          isRefreshing: false,
+        },
+      ],
+      setSearchQuery: vi.fn(),
+      selectNode: vi.fn(),
+      toggleNode: vi.fn(() => Promise.resolve()),
+      refreshSelectedScope: vi.fn(() => Promise.resolve()),
+      handleTreeNavigation: vi.fn(() => Promise.resolve()),
+    };
+
+    render(
+      <SchemaSidebar
+        activeSession={databaseSession}
+        registerFocusTarget={undefined}
+        schema={schema}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId('schema-node-schema/public'), {
+      key: 'ArrowDown',
+    });
+
+    expect(schema.handleTreeNavigation).not.toHaveBeenCalled();
   });
 
   it('shows cached search matches in diagnostics after selection', async () => {

@@ -2,6 +2,7 @@ import {
   useCallback,
   startTransition,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import type { ConnectionWorkspaceState } from '../connections/useConnectionWorkspace';
@@ -21,6 +22,7 @@ import { logger } from '../../lib/logger';
 const LIBRARY_LIMIT = 24;
 const PALETTE_LIMIT = 6;
 const SEARCH_DEBOUNCE_MS = 150;
+type SearchTarget = 'library' | 'palette';
 
 type UseProductivityWorkspaceArgs = {
   connectionWorkspace: ConnectionWorkspaceState;
@@ -63,6 +65,8 @@ export function useProductivityWorkspace({
   const [deletingSavedQueryId, setDeletingSavedQueryId] = useState<string | null>(null);
   const [pendingRunRequest, setPendingRunRequest] = useState<PendingRunRequest | null>(null);
   const [savedQueryCache, setSavedQueryCache] = useState<Record<string, SavedQuery>>({});
+  const historyRequestIdsRef = useRef<Record<SearchTarget, number>>({ library: 0, palette: 0 });
+  const savedQueryRequestIdsRef = useRef<Record<SearchTarget, number>>({ library: 0, palette: 0 });
 
   const activeTab = queryWorkspace.activeTab;
 
@@ -87,14 +91,20 @@ export function useProductivityWorkspace({
     limit: number;
     offset: number;
     searchQuery: string;
-    target: 'library' | 'palette';
+    target: SearchTarget;
   }) => {
+    const requestId = historyRequestIdsRef.current[params.target] + 1;
+    historyRequestIdsRef.current[params.target] = requestId;
     const result = await listQueryHistory({
       connectionId: params.connectionId,
       limit: params.limit,
       offset: params.offset,
       searchQuery: params.searchQuery,
     });
+
+    if (historyRequestIdsRef.current[params.target] !== requestId) {
+      return;
+    }
 
     startTransition(() => {
       if (params.target === 'library') {
@@ -112,14 +122,21 @@ export function useProductivityWorkspace({
     limit: number;
     offset: number;
     searchQuery: string;
-    target: 'library' | 'palette';
+    target: SearchTarget;
   }) => {
+    const requestId = savedQueryRequestIdsRef.current[params.target] + 1;
+    savedQueryRequestIdsRef.current[params.target] = requestId;
     const result = await listSavedQueries({
       connectionId: params.connectionId,
       limit: params.limit,
       offset: params.offset,
       searchQuery: params.searchQuery,
     });
+
+    if (savedQueryRequestIdsRef.current[params.target] !== requestId) {
+      return;
+    }
+
     rememberSavedQueries(result.entries);
 
     startTransition(() => {
@@ -244,6 +261,11 @@ export function useProductivityWorkspace({
     };
   }, [commandPaletteSearchQuery, isCommandPaletteOpen, loadHistoryEntries, loadSavedQueries, onError]);
 
+  const handleRunQueryFailure = useCallback((caught: unknown) => {
+    setPendingRunRequest(null);
+    onError(logger.asAppError(caught, 'run_productivity_query'));
+  }, [onError]);
+
   useEffect(() => {
     if (!pendingRunRequest) {
       return;
@@ -262,10 +284,13 @@ export function useProductivityWorkspace({
     const readyRequest = pendingRunRequest;
     setPendingRunRequest(null);
 
-    void queryWorkspace.startTabQuery(readyRequest.tabId, buildExecutionIntent(readyRequest.sql));
+    void queryWorkspace
+      .startTabQuery(readyRequest.tabId, buildExecutionIntent(readyRequest.sql))
+      .catch(handleRunQueryFailure);
   }, [
     connectionWorkspace.activeSession?.connectionId,
     connectionWorkspace.connectingConnectionId,
+    handleRunQueryFailure,
     pendingRunRequest,
     queryWorkspace,
   ]);
@@ -347,13 +372,14 @@ export function useProductivityWorkspace({
       title: existingSavedQuery?.title ?? activeTab.title,
       sql: activeTab.sql,
       tagsText: existingSavedQuery?.tags.join(', ') ?? '',
-      connectionProfileId:
-        existingSavedQuery?.connectionProfileId ??
-        activeTab.targetConnectionId ??
-        connectionWorkspace.activeSession?.connectionId ??
-        connectionWorkspace.selectedConnectionId ??
-        connectionWorkspace.connections[0]?.id ??
-        null,
+      hasExplicitConnectionProfileId: existingSavedQuery !== null || activeTab.targetConnectionId !== null,
+      connectionProfileId: existingSavedQuery
+        ? existingSavedQuery.connectionProfileId
+        : activeTab.targetConnectionId ??
+          connectionWorkspace.activeSession?.connectionId ??
+          connectionWorkspace.selectedConnectionId ??
+          connectionWorkspace.connections[0]?.id ??
+          null,
       mode: activeTab.savedQueryId ? 'update' : 'create',
       sourceLabel: activeTab.savedQueryId
         ? `Current tab linked to "${existingSavedQuery?.title ?? activeTab.title}"`
@@ -369,6 +395,7 @@ export function useProductivityWorkspace({
       title: deriveTabTitle(entry.sql),
       sql: entry.sql,
       tagsText: '',
+      hasExplicitConnectionProfileId: true,
       connectionProfileId: entry.connectionProfileId,
       mode: 'create',
       sourceLabel: `History entry from ${formatSourceTimestamp(entry.createdAt)}`,
@@ -383,6 +410,7 @@ export function useProductivityWorkspace({
       title: savedQuery.title,
       sql: savedQuery.sql,
       tagsText: savedQuery.tags.join(', '),
+      hasExplicitConnectionProfileId: true,
       connectionProfileId: savedQuery.connectionProfileId,
       mode: 'update',
       sourceLabel: `Saved query: ${savedQuery.title}`,
@@ -402,19 +430,18 @@ export function useProductivityWorkspace({
       const tabConnectionId = draft.tabId
         ? queryWorkspace.tabs.find((tab) => tab.id === draft.tabId)?.targetConnectionId ?? null
         : null;
-      const resolvedConnectionProfileId =
-        draft.connectionProfileId ??
-        tabConnectionId ??
-        connectionWorkspace.activeSession?.connectionId ??
-        connectionWorkspace.selectedConnectionId ??
-        connectionWorkspace.connections[0]?.id ??
-        null;
       const savedQuery = await saveSavedQuery({
         id: modeOverride === 'create' ? null : draft.existingId,
         title: draft.title.trim(),
         sql: draft.sql,
         tags: splitTags(draft.tagsText),
-        connectionProfileId: resolvedConnectionProfileId,
+        connectionProfileId: draft.hasExplicitConnectionProfileId
+          ? draft.connectionProfileId
+          : tabConnectionId ??
+            connectionWorkspace.activeSession?.connectionId ??
+            connectionWorkspace.selectedConnectionId ??
+            connectionWorkspace.connections[0]?.id ??
+            null,
       });
 
       rememberSavedQueries([savedQuery]);
@@ -516,18 +543,22 @@ export function useProductivityWorkspace({
   }
 
   async function runQueryForTab(tabId: string, sql: string, connectionId: string | null) {
-    if (connectionId && connectionWorkspace.activeSession?.connectionId !== connectionId) {
-      connectionWorkspace.selectConnection(connectionId);
-      setPendingRunRequest({
-        connectionId,
-        sql,
-        tabId,
-      });
-      await connectionWorkspace.activateConnection(connectionId);
-      return;
-    }
+    try {
+      if (connectionId && connectionWorkspace.activeSession?.connectionId !== connectionId) {
+        connectionWorkspace.selectConnection(connectionId);
+        setPendingRunRequest({
+          connectionId,
+          sql,
+          tabId,
+        });
+        await connectionWorkspace.activateConnection(connectionId);
+        return;
+      }
 
-    await queryWorkspace.startTabQuery(tabId, buildExecutionIntent(sql));
+      await queryWorkspace.startTabQuery(tabId, buildExecutionIntent(sql));
+    } catch (caught) {
+      handleRunQueryFailure(caught);
+    }
   }
 
   const query = commandPaletteSearchQuery.trim().toLowerCase();

@@ -202,6 +202,32 @@ describe('Productivity workspace', () => {
     });
   });
 
+  it('preserves "No default connection" when saving a query from the active tab', async () => {
+    render(<App />);
+
+    await screen.findByTestId('environment-value');
+    fireEvent.keyDown(window, { ctrlKey: true, key: 's' });
+
+    await screen.findByTestId('save-query-dialog');
+    fireEvent.change(screen.getByTestId('save-query-title-input'), {
+      target: { value: 'No default target' },
+    });
+    fireEvent.change(screen.getByTestId('save-query-connection-select'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Save query$/i }));
+
+    await waitFor(() => {
+      expect(saveSavedQueryMock).toHaveBeenCalledWith({
+        id: null,
+        title: 'No default target',
+        sql: 'select current_database(), current_user, now();',
+        tags: [],
+        connectionProfileId: null,
+      });
+    });
+  });
+
   it('opens the command palette with Mod+K and loads matching saved queries and history rows', async () => {
     render(<App />);
 
@@ -233,6 +259,7 @@ describe('Productivity workspace', () => {
     render(<App />);
 
     await screen.findByTestId('environment-value');
+    fireEvent.click(screen.getByRole('tab', { name: /^Messages$/i }));
     fireEvent.keyDown(window, { ctrlKey: true, key: '4' });
 
     await waitFor(() => {

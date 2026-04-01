@@ -16,17 +16,23 @@ type SchemaSidebarProps = {
 };
 
 export function SchemaSidebar({ activeSession, registerFocusTarget, schema }: SchemaSidebarProps) {
+  const disabledFocusRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const treeRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     registerFocusTarget?.(() => {
-      if (!schema.isDisabled && treeRef.current) {
-        treeRef.current.focus();
+      if (!schema.isDisabled) {
+        if (treeRef.current) {
+          treeRef.current.focus();
+          return;
+        }
+
+        searchInputRef.current?.focus();
         return;
       }
 
-      searchInputRef.current?.focus();
+      disabledFocusRef.current?.focus();
     });
 
     return () => {
@@ -74,7 +80,9 @@ export function SchemaSidebar({ activeSession, registerFocusTarget, schema }: Sc
       <ScrollArea className="min-h-0 px-3 pb-3">
         <div className="grid gap-2">
           {schema.isDisabled ? (
-            <EmptyState message="Connect a saved PostgreSQL target to browse cached schema and relation metadata." />
+            <div data-testid="schema-disabled-focus-target" ref={disabledFocusRef} tabIndex={-1}>
+              <EmptyState message="Connect a saved PostgreSQL target to browse cached schema and relation metadata." />
+            </div>
           ) : schema.searchQuery.trim().length > 0 ? (
             schema.searchResults.length > 0 ? (
               schema.searchResults.map((node) => (
@@ -188,6 +196,10 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function handleTreeKeyDown(event: KeyboardEvent<HTMLDivElement>, schema: SchemaBrowserState) {
+  if (event.target !== event.currentTarget) {
+    return;
+  }
+
   switch (event.key) {
     case 'ArrowUp':
       event.preventDefault();

@@ -13,6 +13,10 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started a CodeRabbit autofix pass for PR #15.
+  - Scope is limited to unresolved actionable CodeRabbit review threads on the current branch, with local verification before any code change.
+  - The first full CI rerun produced invalid Node-side failures because `npm ci` was launched in parallel with `typecheck`, `lint`, `test`, and `build`, leaving those commands to read a partially rewritten `node_modules` tree. The fix is to rerun the Node checks serially after `npm ci` finishes.
+  - Completed by fixing the unresolved CodeRabbit findings around stale productivity searches, explicit `null` connection targets, results-tab focus routing, schema disabled-state focus, bubbled tree keyboard events, and fire-and-forget query error handling. The branch is back to a full local CI-equivalent green state.
 - 2026-04-01: Started a full local CI parity pass for `codex/phase-6`.
   - Scope mirrors `.github/workflows/ci.yml`: Rust format check, Clippy, locked Rust tests, `npm ci`, TypeScript typecheck, ESLint, Vitest, and frontend build.
   - The branch will only be committed and pushed again if every local CI-equivalent check passes.
@@ -38,6 +42,34 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during the targeted CodeRabbit regression pass. TypeScript compilation passed after the productivity/query/schema fixes.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/schema-browser.test.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - Ran on 2026-04-01 during the targeted CodeRabbit regression pass. The focused productivity, schema, query-workspace, and query-results slices all passed (31 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. The Rust workspace remained formatting-clean.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. Clippy passed with `-D warnings`.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
+- `npm ci` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. Dependencies installed successfully from the committed lockfile.
+- `npm run typecheck` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. It failed against a partially rewritten `node_modules` tree (`TS2688: Cannot find type definition file for 'node'`), so the Node checks were rerun serially.
+- `npm run lint` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. It failed against a partially rewritten `node_modules` tree, so the Node checks were rerun serially.
+- `npm run test` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. Vitest worker startup failed because packages under `node_modules` were mid-install, so the Node checks were rerun serially.
+- `npm run build` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. The nested typecheck failed against the partially rewritten `node_modules` tree, so the Node checks were rerun serially.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. TypeScript compilation passed.
+- `npm run lint` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run test` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. Vitest passed with 10 test files and 113 tests green. The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run build` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. The frontend production build succeeded. Vite reported the existing chunk-size advisory for the main bundle, but the build completed successfully.
 - `npm run build` ✅
   - Ran on 2026-04-01 as part of the local CI parity pass. The frontend production build succeeded. Vite reported the existing chunk-size advisory for the main bundle, but the build completed successfully.
 - `npm run test` ✅

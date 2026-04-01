@@ -137,6 +137,7 @@ export function useQueryWorkspace({
 }: UseQueryWorkspaceArgs): QueryWorkspaceState {
   const [tabs, setTabs] = useState<QueryTabState[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const previousActiveConnectionIdRef = useRef<string | null>(activeSession?.connectionId ?? null);
   const seenQueryEventsRef = useRef<Set<string>>(new Set());
   const seenResultExportEventsRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<QueryTabState[]>(tabs);
@@ -169,20 +170,27 @@ export function useQueryWorkspace({
   }, [activeSession?.connectionId, connections, selectedConnectionId, tabs.length]);
 
   useEffect(() => {
-    if (!activeSession?.connectionId || !activeTabId) {
+    const nextConnectionId = activeSession?.connectionId ?? null;
+    const previousConnectionId = previousActiveConnectionIdRef.current;
+
+    if (!nextConnectionId || !activeTabId) {
+      previousActiveConnectionIdRef.current = nextConnectionId;
       return;
     }
 
     commitTabs((currentTabs) =>
       currentTabs.map((tab) =>
-        tab.id === activeTabId && !tab.execution.jobId
+        tab.id === activeTabId &&
+        !tab.execution.jobId &&
+        tab.targetConnectionId === previousConnectionId
           ? {
               ...tab,
-              targetConnectionId: activeSession.connectionId,
+              targetConnectionId: nextConnectionId,
             }
           : tab,
       ),
     );
+    previousActiveConnectionIdRef.current = nextConnectionId;
   }, [
     activeSession?.connectionId,
     activeTabId,
@@ -250,11 +258,12 @@ export function useQueryWorkspace({
       sql: input.sql,
       title: input.title ?? null,
       targetConnectionId:
-        input.targetConnectionId ??
-        activeSession?.connectionId ??
-        selectedConnectionId ??
-        connections[0]?.id ??
-        null,
+        input.targetConnectionId !== undefined
+          ? input.targetConnectionId
+          : activeSession?.connectionId ??
+            selectedConnectionId ??
+            connections[0]?.id ??
+            null,
       savedQueryId: input.savedQueryId ?? null,
     });
 
