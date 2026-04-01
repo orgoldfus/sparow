@@ -318,10 +318,7 @@ impl Repository {
         })
     }
 
-    pub fn save_saved_query(
-        &self,
-        record: SaveSavedQueryRecord,
-    ) -> Result<SavedQuery, AppError> {
+    pub fn save_saved_query(&self, record: SaveSavedQueryRecord) -> Result<SavedQuery, AppError> {
         let connection = self.open()?;
         let id = record
             .id
@@ -1420,7 +1417,9 @@ mod tests {
             .expect("migration state should create");
 
         for (version, sql) in MIGRATIONS.iter().take(6) {
-            connection.execute_batch(sql).expect("migration should apply");
+            connection
+                .execute_batch(sql)
+                .expect("migration should apply");
             connection
                 .execute(
                     "insert into migration_state (version, applied_at) values (?1, datetime('now'))",
@@ -1482,7 +1481,10 @@ mod tests {
             })
             .expect("saved query should persist");
 
-        assert_eq!(saved.connection_profile_id.as_deref(), Some("conn-local-postgres"));
+        assert_eq!(
+            saved.connection_profile_id.as_deref(),
+            Some("conn-local-postgres")
+        );
 
         let listed = repository
             .list_saved_queries("ops", Some("conn-local-postgres"), 10, 0)
@@ -1490,17 +1492,13 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, saved.id);
 
-        assert!(
-            repository
-                .delete_saved_query(&saved.id)
-                .expect("saved query delete should succeed")
-        );
-        assert!(
-            repository
-                .get_saved_query(&saved.id)
-                .expect("saved query reload should succeed")
-                .is_none()
-        );
+        assert!(repository
+            .delete_saved_query(&saved.id)
+            .expect("saved query delete should succeed"));
+        assert!(repository
+            .get_saved_query(&saved.id)
+            .expect("saved query reload should succeed")
+            .is_none());
     }
 
     #[test]

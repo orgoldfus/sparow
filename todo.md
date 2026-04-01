@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started a Rust formatting pass on `codex/phase-6`.
+  - Scope is limited to the Tauri/Rust workspace formatting command and any syntax or formatter-blocking issues it exposes.
+  - Completed with `cargo fmt --manifest-path src-tauri/Cargo.toml --all`; the formatter passed and normalized Rust formatting in the Phase 6 Tauri files without exposing any syntax errors.
 - 2026-04-01: Started post-PR conflict resolution for `codex/phase-6`.
   - The branch is locally clean, so the conflict appears to be against the updated `main` branch rather than unresolved local merge markers.
   - Resolution strategy is to merge `origin/main` into `codex/phase-6`, keep the Phase 6 productivity layer intact, and rerun the most relevant checks before pushing the updated branch.
@@ -27,6 +30,8 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-01 for a Rust workspace formatting pass. The command succeeded and rewrote formatting in `src-tauri/src/bin/sqlite_inspector.rs`, `src-tauri/src/foundation/contracts.rs`, `src-tauri/src/foundation/mod.rs`, `src-tauri/src/foundation/state.rs`, `src-tauri/src/persistence/repository.rs`, and `src-tauri/src/productivity/service.rs`.
 - `npm run typecheck` ✅
   - Ran on 2026-04-01 during post-PR conflict resolution after merging `origin/main` into `codex/phase-6`. TypeScript compilation passed with the merged Phase 6 productivity layer and the updated shell changes from `main`.
 - `npm run test -- src/test/app-shell.test.tsx src/test/productivity-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅

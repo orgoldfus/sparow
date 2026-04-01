@@ -900,16 +900,16 @@ mod tests {
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
         CancelQueryExecutionResult, CancelQueryResultExportResult, ConnectionDetails,
         ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
-        DeleteSavedQueryResult, DisconnectSessionResult, HistoryEntry,
-        ListQueryHistoryRequest, ListQueryHistoryResult, ListSavedQueriesRequest,
-        ListSavedQueriesResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
-        QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-        QueryExecutionResult, QueryResultCell, QueryResultCountRequest, QueryResultCountResult,
-        QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
+        DeleteSavedQueryResult, DisconnectSessionResult, HistoryEntry, ListQueryHistoryRequest,
+        ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
+        ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
+        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult, QueryResultCell,
+        QueryResultCountRequest, QueryResultCountResult, QueryResultExportAccepted,
+        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
+        QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
         SaveConnectionRequest, SaveSavedQueryRequest, SavedQuery, SchemaNode,
-        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest,
-        SchemaSearchResult, SslMode, TestConnectionRequest,
+        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
+        SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -935,8 +935,7 @@ mod tests {
         include_str!("../../../fixtures/contracts/delete-connection-result.json");
     const HISTORY_ENTRY_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/history-entry.json");
-    const SAVED_QUERY_FIXTURE: &str =
-        include_str!("../../../fixtures/contracts/saved-query.json");
+    const SAVED_QUERY_FIXTURE: &str = include_str!("../../../fixtures/contracts/saved-query.json");
     const LIST_QUERY_HISTORY_REQUEST_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/list-query-history-request.json");
     const LIST_QUERY_HISTORY_RESULT_FIXTURE: &str =
@@ -1080,8 +1079,8 @@ mod tests {
 
     #[test]
     fn deserializes_history_entry_fixture() {
-        let fixture: HistoryEntry =
-            serde_json::from_str(HISTORY_ENTRY_FIXTURE).expect("history fixture should deserialize");
+        let fixture: HistoryEntry = serde_json::from_str(HISTORY_ENTRY_FIXTURE)
+            .expect("history fixture should deserialize");
         assert_eq!(
             fixture.connection_profile_id.as_deref(),
             Some("conn-local-postgres")
@@ -1090,8 +1089,8 @@ mod tests {
 
     #[test]
     fn deserializes_saved_query_fixture() {
-        let fixture: SavedQuery =
-            serde_json::from_str(SAVED_QUERY_FIXTURE).expect("saved query fixture should deserialize");
+        let fixture: SavedQuery = serde_json::from_str(SAVED_QUERY_FIXTURE)
+            .expect("saved query fixture should deserialize");
         assert_eq!(fixture.title, "Active users");
         assert_eq!(
             fixture.connection_profile_id.as_deref(),
@@ -1137,9 +1136,8 @@ mod tests {
 
     #[test]
     fn deserializes_save_saved_query_request_fixture() {
-        let fixture: SaveSavedQueryRequest =
-            serde_json::from_str(SAVE_SAVED_QUERY_REQUEST_FIXTURE)
-                .expect("save saved query request fixture should deserialize");
+        let fixture: SaveSavedQueryRequest = serde_json::from_str(SAVE_SAVED_QUERY_REQUEST_FIXTURE)
+            .expect("save saved query request fixture should deserialize");
         assert_eq!(fixture.id, None);
         assert_eq!(fixture.tags, vec!["users".to_string(), "ops".to_string()]);
     }

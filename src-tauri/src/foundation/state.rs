@@ -15,15 +15,14 @@ use super::{
     environment_label, platform_label, AppBootstrap, AppError, AppPaths, BackgroundJobAccepted,
     BackgroundJobProgressEvent, BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult,
     CancelQueryResultExportResult, ConnectionDetails, ConnectionSummary, ConnectionTestResult,
-    DatabaseSessionSnapshot, DeleteConnectionResult, DeleteSavedQueryResult,
-    DiagnosticsSnapshot, DisconnectSessionResult, ListQueryHistoryRequest,
-    ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
-    ListSchemaChildrenRequest, ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted,
-    QueryExecutionRequest, QueryResultCountRequest, QueryResultCountResult,
-    QueryResultExportAccepted, QueryResultExportRequest, QueryResultWindow,
-    QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
-    SaveSavedQueryRequest, SavedQuery, SchemaRefreshAccepted, SchemaSearchRequest,
-    SchemaSearchResult, TestConnectionRequest,
+    DatabaseSessionSnapshot, DeleteConnectionResult, DeleteSavedQueryResult, DiagnosticsSnapshot,
+    DisconnectSessionResult, ListQueryHistoryRequest, ListQueryHistoryResult,
+    ListSavedQueriesRequest, ListSavedQueriesResult, ListSchemaChildrenRequest,
+    ListSchemaChildrenResult, MockJobRunner, QueryExecutionAccepted, QueryExecutionRequest,
+    QueryResultCountRequest, QueryResultCountResult, QueryResultExportAccepted,
+    QueryResultExportRequest, QueryResultWindow, QueryResultWindowRequest,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SaveSavedQueryRequest, SavedQuery,
+    SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
 };
 
 #[derive(Debug, Default)]
@@ -237,10 +236,7 @@ impl AppState {
         result
     }
 
-    pub async fn delete_saved_query(
-        &self,
-        id: String,
-    ) -> Result<DeleteSavedQueryResult, AppError> {
+    pub async fn delete_saved_query(&self, id: String) -> Result<DeleteSavedQueryResult, AppError> {
         let result = self.productivity.delete_saved_query(id).await;
         if let Err(error) = &result {
             self.diagnostics.record_error(error.clone());

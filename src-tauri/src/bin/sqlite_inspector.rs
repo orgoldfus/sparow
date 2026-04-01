@@ -12,20 +12,18 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
-    let command = args
-        .next()
-        .ok_or_else(|| usage("Missing subcommand. Expected one of: history, saved-queries, schema-cache."))?;
+    let command = args.next().ok_or_else(|| {
+        usage("Missing subcommand. Expected one of: history, saved-queries, schema-cache.")
+    })?;
     let options = parse_options(args.collect())?;
 
     let output = match command.as_str() {
         "history" => inspect_history(&options)?,
         "saved-queries" => inspect_saved_queries(&options)?,
         "schema-cache" => inspect_schema_cache(&options)?,
-        other => {
-            return Err(usage(&format!(
-                "Unknown subcommand '{other}'. Expected one of: history, saved-queries, schema-cache."
-            )))
-        }
+        other => return Err(usage(&format!(
+            "Unknown subcommand '{other}'. Expected one of: history, saved-queries, schema-cache."
+        ))),
     };
 
     let json = serde_json::to_string_pretty(&output)
@@ -163,15 +161,18 @@ fn inspect_schema_cache(options: &HashMap<String, String>) -> Result<InspectorOu
              order by scope_path asc",
         )
         .map_err(|error| format!("Failed to prepare schema scope query: {error}"))?;
-    let scopes = collect_rows(scope_statement.query_map(params![&connection_id], |row| {
-        Ok(SchemaScopeRow {
-            scope_path: empty_string_to_none(row.get::<_, String>(0)?),
-            scope_kind: row.get(1)?,
-            refreshed_at: row.get(2)?,
-            refresh_status: row.get(3)?,
-        })
-    })
-    .map_err(|error| format!("Failed to read schema scopes: {error}"))?)?;
+    let scopes = collect_rows(
+        scope_statement
+            .query_map(params![&connection_id], |row| {
+                Ok(SchemaScopeRow {
+                    scope_path: empty_string_to_none(row.get::<_, String>(0)?),
+                    scope_kind: row.get(1)?,
+                    refreshed_at: row.get(2)?,
+                    refresh_status: row.get(3)?,
+                })
+            })
+            .map_err(|error| format!("Failed to read schema scopes: {error}"))?,
+    )?;
 
     let mut node_statement = connection
         .prepare(
@@ -182,20 +183,23 @@ fn inspect_schema_cache(options: &HashMap<String, String>) -> Result<InspectorOu
              order by position asc, lower(display_name) asc, id asc",
         )
         .map_err(|error| format!("Failed to prepare schema node query: {error}"))?;
-    let nodes = collect_rows(node_statement.query_map(params![&connection_id, normalized_scope], |row| {
-        Ok(SchemaNodeRow {
-            object_kind: row.get(0)?,
-            object_path: row.get(1)?,
-            display_name: row.get(2)?,
-            parent_path: row.get(3)?,
-            schema_name: row.get(4)?,
-            relation_name: row.get(5)?,
-            position: row.get(6)?,
-            has_children: row.get(7)?,
-            refreshed_at: row.get(8)?,
-        })
-    })
-    .map_err(|error| format!("Failed to read schema nodes: {error}"))?)?;
+    let nodes = collect_rows(
+        node_statement
+            .query_map(params![&connection_id, normalized_scope], |row| {
+                Ok(SchemaNodeRow {
+                    object_kind: row.get(0)?,
+                    object_path: row.get(1)?,
+                    display_name: row.get(2)?,
+                    parent_path: row.get(3)?,
+                    schema_name: row.get(4)?,
+                    relation_name: row.get(5)?,
+                    position: row.get(6)?,
+                    has_children: row.get(7)?,
+                    refreshed_at: row.get(8)?,
+                })
+            })
+            .map_err(|error| format!("Failed to read schema nodes: {error}"))?,
+    )?;
 
     Ok(InspectorOutput::SchemaCache(SchemaCacheInspection {
         db_path: db,
@@ -229,13 +233,11 @@ fn required_option(options: &HashMap<String, String>, key: &str) -> Result<Strin
 }
 
 fn optional_option(options: &HashMap<String, String>, key: &str) -> Option<String> {
-    options.get(key).cloned().map(|value| value.trim().to_string()).and_then(|value| {
-        if value.is_empty() {
-            None
-        } else {
-            Some(value)
-        }
-    })
+    options
+        .get(key)
+        .cloned()
+        .map(|value| value.trim().to_string())
+        .and_then(|value| if value.is_empty() { None } else { Some(value) })
 }
 
 fn parse_limit(options: &HashMap<String, String>, default_limit: i64) -> Result<i64, String> {

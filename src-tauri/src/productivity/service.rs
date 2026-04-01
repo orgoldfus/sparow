@@ -294,7 +294,8 @@ mod tests {
     fn create_service(name: &str) -> ProductivityService {
         let database_path = test_database_path(name);
         let _ = std::fs::remove_file(&database_path);
-        let repository = Arc::new(Repository::new(database_path).expect("repository should initialize"));
+        let repository =
+            Arc::new(Repository::new(database_path).expect("repository should initialize"));
         ProductivityService::new(repository, DiagnosticsStore::new())
     }
 
