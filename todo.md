@@ -16,6 +16,7 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-04-01: Started post-PR conflict resolution for `codex/phase-6`.
   - The branch is locally clean, so the conflict appears to be against the updated `main` branch rather than unresolved local merge markers.
   - Resolution strategy is to merge `origin/main` into `codex/phase-6`, keep the Phase 6 productivity layer intact, and rerun the most relevant checks before pushing the updated branch.
+  - Completed by merging `origin/main` into `codex/phase-6` as `9439cff`, keeping the Phase 6 productivity launchers and focus hooks intact, and pushing the refreshed branch to update PR #15.
 - 2026-03-31: Started Phase 6 implementation from a green baseline.
   - Phase 6 will preserve the current shell grid and add overlay productivity surfaces that can survive the planned UI replacement.
   - Shared contract files (`src/lib/contracts.ts`, `src/lib/guards.ts`, Rust contract structs, fixtures, IPC, commands, app state, and `src/App.tsx`) are treated as serial merge hotspots and must land before deeper feature work.
