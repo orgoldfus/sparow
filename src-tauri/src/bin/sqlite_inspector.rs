@@ -21,9 +21,11 @@ fn run() -> Result<(), String> {
         "history" => inspect_history(&options)?,
         "saved-queries" => inspect_saved_queries(&options)?,
         "schema-cache" => inspect_schema_cache(&options)?,
-        other => return Err(usage(&format!(
+        other => {
+            return Err(usage(&format!(
             "Unknown subcommand '{other}'. Expected one of: history, saved-queries, schema-cache."
-        ))),
+        )))
+        }
     };
 
     let json = serde_json::to_string_pretty(&output)

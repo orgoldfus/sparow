@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started a Rust formatting check pass on `codex/phase-6`.
+  - Scope is `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` plus any formatter-reported fixes needed to make the Rust workspace check-clean.
+  - Completed by rerunning `cargo fmt --manifest-path src-tauri/Cargo.toml --all` to normalize the remaining drift in `src-tauri/src/bin/sqlite_inspector.rs`, then confirming the workspace passes `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 - 2026-04-01: Started a Rust formatting pass on `codex/phase-6`.
   - Scope is limited to the Tauri/Rust workspace formatting command and any syntax or formatter-blocking issues it exposes.
   - Completed with `cargo fmt --manifest-path src-tauri/Cargo.toml --all`; the formatter passed and normalized Rust formatting in the Phase 6 Tauri files without exposing any syntax errors.
@@ -30,6 +33,12 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ❌
+  - Ran on 2026-04-01 for a Rust formatting gate. It failed on one remaining formatting diff in `src-tauri/src/bin/sqlite_inspector.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-01 after the failed check to normalize the remaining drift in `src-tauri/src/bin/sqlite_inspector.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 after reformatting the Rust workspace. The Tauri workspace is now formatting-clean in check mode.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
   - Ran on 2026-04-01 for a Rust workspace formatting pass. The command succeeded and rewrote formatting in `src-tauri/src/bin/sqlite_inspector.rs`, `src-tauri/src/foundation/contracts.rs`, `src-tauri/src/foundation/mod.rs`, `src-tauri/src/foundation/state.rs`, `src-tauri/src/persistence/repository.rs`, and `src-tauri/src/productivity/service.rs`.
 - `npm run typecheck` ✅
