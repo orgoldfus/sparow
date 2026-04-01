@@ -19,7 +19,8 @@ use commands::{
 };
 use connections::{default_secret_store, ConnectionService, RuntimePostgresDriver};
 use foundation::{
-    initialize_logging, AppPaths, AppState, DiagnosticsStore, JobRegistry, MockJobRunner,
+    initialize_logging, AppPaths, AppServices, AppState, DiagnosticsStore, JobRegistry,
+    MockJobRunner,
 };
 use persistence::Repository;
 use productivity::ProductivityService;
@@ -69,10 +70,12 @@ pub fn run() {
                 repository,
                 diagnostics,
                 mock_jobs,
-                connections,
-                schema,
-                query,
-                productivity,
+                AppServices {
+                    connections,
+                    schema,
+                    query,
+                    productivity,
+                },
             );
 
             info!("application state initialized");

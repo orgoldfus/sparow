@@ -31,4 +31,5 @@ pub use error::AppError;
 pub use jobs::JobRegistry;
 pub(crate) use jobs::MockJobRunner;
 pub use logging::initialize_logging;
+pub(crate) use state::AppServices;
 pub use state::{AppState, DiagnosticsStore};

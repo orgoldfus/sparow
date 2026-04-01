@@ -13,6 +13,11 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-01: Started a full local CI parity pass for `codex/phase-6`.
+  - Scope mirrors `.github/workflows/ci.yml`: Rust format check, Clippy, locked Rust tests, `npm ci`, TypeScript typecheck, ESLint, Vitest, and frontend build.
+  - The branch will only be committed and pushed again if every local CI-equivalent check passes.
+  - Clippy initially failed because `AppState::new` grew to eight parameters, which tripped `clippy::too_many_arguments` under `-D warnings`; the fix is to bundle the service dependencies into a small `AppServices` struct and rerun the Rust gates.
+  - Completed with all local CI-equivalent checks green. The only non-failing output left is the existing React Compiler warning for `useReactTable()`, the longstanding jsdom `flushSync` test warnings, and Vite’s chunk-size advisory during production build.
 - 2026-04-01: Started a Rust formatting check pass on `codex/phase-6`.
   - Scope is `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` plus any formatter-reported fixes needed to make the Rust workspace check-clean.
   - Completed by rerunning `cargo fmt --manifest-path src-tauri/Cargo.toml --all` to normalize the remaining drift in `src-tauri/src/bin/sqlite_inspector.rs`, then confirming the workspace passes `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
@@ -33,6 +38,26 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `npm run build` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. The frontend production build succeeded. Vite reported the existing chunk-size advisory for the main bundle, but the build completed successfully.
+- `npm run test` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. Vitest passed with 10 test files and 109 tests green. The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run lint` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. TypeScript compilation passed against the current Phase 6 branch.
+- `npm ci` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. Dependencies installed successfully from the committed lockfile.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. The Rust workspace passed with 107 tests green, 2 expected PostgreSQL tests ignored, and no failures.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 after the `AppServices` refactor during the local CI parity pass. The Rust workspace remained formatting-clean.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ✅
+  - Ran on 2026-04-01 after bundling the app services passed into `AppState::new`. Clippy passed with `-D warnings`.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ❌
+  - Ran on 2026-04-01 as part of the local CI parity pass. Clippy failed on `clippy::too_many_arguments` for `AppState::new` in `src-tauri/src/foundation/state.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 as part of a full local CI parity pass against `.github/workflows/ci.yml`. The Rust workspace is formatting-clean.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ❌
   - Ran on 2026-04-01 for a Rust formatting gate. It failed on one remaining formatting diff in `src-tauri/src/bin/sqlite_inspector.rs`.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅

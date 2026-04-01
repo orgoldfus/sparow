@@ -76,26 +76,31 @@ pub struct AppState {
     productivity: ProductivityService,
 }
 
+#[derive(Clone)]
+pub(crate) struct AppServices {
+    pub(crate) connections: ConnectionService,
+    pub(crate) schema: SchemaService,
+    pub(crate) query: QueryService,
+    pub(crate) productivity: ProductivityService,
+}
+
 impl AppState {
     pub(crate) fn new(
         paths: AppPaths,
         repository: Arc<Repository>,
         diagnostics: DiagnosticsStore,
         mock_jobs: MockJobRunner,
-        connections: ConnectionService,
-        schema: SchemaService,
-        query: QueryService,
-        productivity: ProductivityService,
+        services: AppServices,
     ) -> Self {
         Self {
             paths,
             repository,
             diagnostics,
             mock_jobs,
-            connections,
-            schema,
-            query,
-            productivity,
+            connections: services.connections,
+            schema: services.schema,
+            query: services.query,
+            productivity: services.productivity,
         }
     }
 
