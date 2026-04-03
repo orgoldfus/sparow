@@ -267,8 +267,8 @@ function SavedQueryCard({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {savedQuery.tags.length > 0 ? (
-              savedQuery.tags.map((tag) => (
-                <Badge key={tag} variant="accent">
+              savedQuery.tags.map((tag, index) => (
+                <Badge key={`${tag}-${index}`} variant="accent">
                   {tag}
                 </Badge>
               ))
@@ -322,9 +322,6 @@ function connectionLabelFor(connectionId: string | null, connections: Connection
 }
 
 function formatTimestamp(value: string) {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }

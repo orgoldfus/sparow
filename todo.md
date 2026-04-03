@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-03: Started an autofix pass for the newest CodeRabbit comments on the current Phase 6 PR.
+  - Scope is limited to newly actionable CodeRabbit review feedback on the current branch, followed by focused local verification before commit/push.
+  - Completed by hardening `QueryLibraryDialog` against duplicate saved-query tag keys and invalid timestamp strings so the latest CodeRabbit review threads have code fixes ready to ship.
 - 2026-04-03: Started a full remaining CodeRabbit cleanup pass for PR #15.
   - Scope is the 11 unresolved review threads still open on the PR after earlier targeted fixes, covering script robustness, Rust docs/persistence correctness, accessibility, and repo-log path cleanup.
   - Completed by hardening the SQLite inspector and productivity smoke scripts, documenting the new Rust IPC surface, switching query-history/saved-query text search to literal substring matching, improving empty-state focus/accessibility in the productivity shell, and redacting machine-specific artifact paths from the repo log.
@@ -50,6 +53,10 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `npm run test -- src/test/productivity-workspace.test.tsx` ✅
+  - Ran on 2026-04-03 during the latest CodeRabbit autofix pass. The focused productivity slice passed (5 tests).
+- `npm run typecheck` ✅
+  - Ran on 2026-04-03 during the latest CodeRabbit autofix pass. TypeScript compilation passed after the `QueryLibraryDialog` fixes.
 - `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
   - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
