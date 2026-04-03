@@ -13,6 +13,10 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-03: Started a local app-startup failure investigation from the current branch.
+  - Goal is to reproduce the failure through the real dev entrypoint, identify the exact failing layer, and patch only the code/config required to restore local startup.
+  - Reproduced a Tauri startup regression: `npm run tauri dev` failed because Tauri shells out to `cargo run`, and the new `sqlite_inspector` utility introduced a second binary without a manifest `default-run`.
+  - Completed by setting `default-run = "sparow"` in `src-tauri/Cargo.toml`, which preserves the desktop app as the default binary while keeping `sqlite_inspector` available via `--bin sqlite_inspector`.
 - 2026-04-03: Started an autofix pass for the newest CodeRabbit comments on the current Phase 6 PR.
   - Scope is limited to newly actionable CodeRabbit review feedback on the current branch, followed by focused local verification before commit/push.
   - Completed by hardening `QueryLibraryDialog` against duplicate saved-query tag keys and invalid timestamp strings so the latest CodeRabbit review threads have code fixes ready to ship.
@@ -53,6 +57,12 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `cargo build --manifest-path src-tauri/Cargo.toml --bins` ✅
+  - Ran on 2026-04-03 after adding `default-run = "sparow"` to `src-tauri/Cargo.toml`. Both declared Rust binaries built successfully.
+- `npm run tauri dev` ✅
+  - Ran on 2026-04-03 after adding `default-run = "sparow"` to `src-tauri/Cargo.toml`. Tauri got past the previous Cargo ambiguity, compiled the app, and reached `Running target/debug/sparow`; the process was then stopped manually after confirming startup.
+- `npm run tauri dev` ❌
+  - Ran on 2026-04-03 before the manifest fix. Tauri failed because `cargo run` could not choose between the `sparow` and `sqlite_inspector` binaries.
 - `npm run test -- src/test/productivity-workspace.test.tsx` ✅
   - Ran on 2026-04-03 during the latest CodeRabbit autofix pass. The focused productivity slice passed (5 tests).
 - `npm run typecheck` ✅
