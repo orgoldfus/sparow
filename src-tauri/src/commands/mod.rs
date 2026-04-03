@@ -74,6 +74,7 @@ pub async fn delete_saved_connection(
     state.delete_saved_connection(&id).await
 }
 
+/// Returns paginated accepted-query history filtered by text and optional connection.
 #[tauri::command]
 pub async fn list_query_history(
     state: State<'_, AppState>,
@@ -82,6 +83,7 @@ pub async fn list_query_history(
     state.list_query_history(request).await
 }
 
+/// Returns paginated saved queries filtered by text and optional connection.
 #[tauri::command]
 pub async fn list_saved_queries(
     state: State<'_, AppState>,
@@ -90,6 +92,7 @@ pub async fn list_saved_queries(
     state.list_saved_queries(request).await
 }
 
+/// Creates or updates a saved query and returns the persisted definition.
 #[tauri::command]
 pub async fn save_saved_query(
     state: State<'_, AppState>,
@@ -98,6 +101,7 @@ pub async fn save_saved_query(
     state.save_saved_query(request).await
 }
 
+/// Deletes a saved query by id and returns the deleted identifier.
 #[tauri::command]
 pub async fn delete_saved_query(
     state: State<'_, AppState>,

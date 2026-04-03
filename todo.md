@@ -13,6 +13,9 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
+- 2026-04-03: Started a full remaining CodeRabbit cleanup pass for PR #15.
+  - Scope is the 11 unresolved review threads still open on the PR after earlier targeted fixes, covering script robustness, Rust docs/persistence correctness, accessibility, and repo-log path cleanup.
+  - Completed by hardening the SQLite inspector and productivity smoke scripts, documenting the new Rust IPC surface, switching query-history/saved-query text search to literal substring matching, improving empty-state focus/accessibility in the productivity shell, and redacting machine-specific artifact paths from the repo log.
 - 2026-04-03: Checked PR #15 for another CodeRabbit pass after commit `b07ddef`.
   - The latest CodeRabbit review run reported no actionable comments for the delta from `9f21ca2` to `b07ddef`, so no further code changes were required.
 - 2026-04-01: Started a second CodeRabbit autofix pass for PR #15.
@@ -47,8 +50,24 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. Rust formatting completed successfully after the repository, command, contract, and inspector updates.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ❌
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The first run failed because the new SQLite `ESCAPE` clauses in `src-tauri/src/persistence/repository.rs` were rejected at runtime (`ESCAPE expression must be a single character`), so the search implementation was simplified to literal `instr(lower(...), ?)` matching and rerun.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass before the first Rust test run. Rust formatting completed successfully.
 - `npm run smoke:productivity-browser` ✅
-  - Ran on 2026-04-01 during the second CodeRabbit autofix pass after correcting the harness smoke to reuse the already-open query-library overlay following metadata edits. The productivity harness smoke completed successfully and wrote `/Users/orgoldfus/Workspace/personal/sparow/artifacts/productivity-harness-smoke.png`.
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
+- `npm run test -- src/test/app-shell.test.tsx src/test/productivity-workspace.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The focused shell, productivity, and schema-browser slices all passed (29 tests).
+- `npm run lint` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. TypeScript compilation passed.
+- `npm run smoke:productivity-browser` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass after correcting the harness smoke to reuse the already-open query-library overlay following metadata edits. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
 - `npm run smoke:productivity-browser` ❌
   - Ran on 2026-04-01 during the second CodeRabbit autofix pass. The updated smoke initially failed because it tried to relaunch the query library after editing saved-query metadata even though the dialog intentionally stayed open behind the save modal, so Playwright hit the existing overlay and timed out on the launcher click.
 - `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
@@ -168,7 +187,7 @@ Build the Phase 6 developer productivity layer for Sparow: query history and sav
 - `npm run test -- src/test/query-workspace-component.test.tsx src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
   - Ran on 2026-03-31 after the result-table pagination change. The query-workspace, productivity, and shell slices all passed (28 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
 - `npm run smoke:productivity-browser` ✅
-  - Ran on 2026-03-31 after tightening the browser-only selectors. The productivity harness smoke completed successfully and wrote `/Users/orgoldfus/Workspace/personal/sparow/artifacts/productivity-harness-smoke.png`.
+  - Ran on 2026-03-31 after tightening the browser-only selectors. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
 - `npm run verify` ❌
   - Ran on 2026-03-31. The full verify failed in the lint step on new React rules in the productivity code: the command palette reset effect used synchronous `setState`, `useProductivityWorkspace` called `useEffectEvent` helpers from non-effect code, and the harness command-palette `useMemo` violated the repo’s React Compiler preservation rules.
 - `npm run lint` ✅

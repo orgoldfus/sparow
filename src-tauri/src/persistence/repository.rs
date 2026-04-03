@@ -153,10 +153,16 @@ impl Repository {
         connection_profile_id: Option<String>,
     ) -> Result<(), AppError> {
         let connection = self.open()?;
+        let created_at = chrono::Utc::now().to_rfc3339();
         connection
             .execute(
-                "insert into query_history (id, sql, connection_profile_id, created_at) values (?1, ?2, ?3, datetime('now'))",
-                params![uuid::Uuid::new_v4().to_string(), sql, connection_profile_id],
+                "insert into query_history (id, sql, connection_profile_id, created_at) values (?1, ?2, ?3, ?4)",
+                params![
+                    uuid::Uuid::new_v4().to_string(),
+                    sql,
+                    connection_profile_id,
+                    created_at,
+                ],
             )
             .map_err(|error| {
                 AppError::internal(
@@ -178,7 +184,7 @@ impl Repository {
         offset: usize,
     ) -> Result<Vec<HistoryEntry>, AppError> {
         let connection = self.open()?;
-        let like_query = format!("%{}%", search_query.trim().to_lowercase());
+        let normalized_search_query = search_query.trim().to_lowercase();
         let connection_profile_id = connection_profile_id.map(str::to_owned);
         let mut statement = connection
             .prepare(
@@ -188,10 +194,10 @@ impl Repository {
                     connection_profile_id,
                     created_at
                  from query_history
-                 where (?1 = '' or lower(sql) like ?2)
-                   and (?3 is null or connection_profile_id = ?3)
+                 where (?1 = '' or instr(lower(sql), ?1) > 0)
+                   and (?2 is null or connection_profile_id = ?2)
                  order by datetime(created_at) desc, id desc
-                 limit ?4 offset ?5",
+                 limit ?3 offset ?4",
             )
             .map_err(|error| {
                 AppError::internal(
@@ -204,8 +210,7 @@ impl Repository {
         let rows = statement
             .query_map(
                 params![
-                    search_query.trim().to_lowercase(),
-                    like_query,
+                    normalized_search_query,
                     connection_profile_id,
                     limit as i64,
                     offset as i64,
@@ -264,7 +269,7 @@ impl Repository {
         offset: usize,
     ) -> Result<Vec<SavedQuery>, AppError> {
         let connection = self.open()?;
-        let like_query = format!("%{}%", search_query.trim().to_lowercase());
+        let normalized_search_query = search_query.trim().to_lowercase();
         let connection_profile_id = connection_profile_id.map(str::to_owned);
         let mut statement = connection
             .prepare(
@@ -277,10 +282,15 @@ impl Repository {
                     created_at,
                     updated_at
                  from saved_queries
-                 where (?1 = '' or lower(title) like ?2 or lower(sql) like ?2 or lower(tags_json) like ?2)
-                   and (?3 is null or connection_profile_id = ?3)
+                 where (
+                    ?1 = ''
+                    or instr(lower(title), ?1) > 0
+                    or instr(lower(sql), ?1) > 0
+                    or instr(lower(tags_json), ?1) > 0
+                 )
+                   and (?2 is null or connection_profile_id = ?2)
                  order by datetime(updated_at) desc, id desc
-                 limit ?4 offset ?5",
+                 limit ?3 offset ?4",
             )
             .map_err(|error| {
                 AppError::internal(
@@ -293,8 +303,7 @@ impl Repository {
         let rows = statement
             .query_map(
                 params![
-                    search_query.trim().to_lowercase(),
-                    like_query,
+                    normalized_search_query,
                     connection_profile_id,
                     limit as i64,
                     offset as i64,

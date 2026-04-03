@@ -101,6 +101,7 @@ export function ConnectionsRail({
     left: number;
   } | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const newConnectionButtonRef = useRef<HTMLButtonElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
@@ -133,6 +134,7 @@ export function ConnectionsRail({
     registerFocusTarget?.(() => {
       const targetId = selectedConnectionId ?? connections[0]?.id ?? null;
       if (!targetId) {
+        newConnectionButtonRef.current?.focus();
         return;
       }
 
@@ -154,6 +156,7 @@ export function ConnectionsRail({
             className="h-6 w-6 rounded p-0"
             data-testid="new-connection-button"
             onClick={onCreateConnection}
+            ref={newConnectionButtonRef}
             size="sm"
             type="button"
             variant="ghost"

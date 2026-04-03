@@ -88,6 +88,7 @@ export function CommandPalette({
           <label className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-3">
             <Command className="h-4 w-4 text-[var(--accent-text)]" />
             <Input
+              aria-label="Search commands"
               autoComplete="off"
               className="h-auto border-none bg-transparent px-0 py-0 text-base shadow-none focus:border-none focus:ring-0"
               data-testid="command-palette-input"
@@ -115,7 +116,8 @@ export function CommandPalette({
                   <div className="grid gap-1">
                     {group.items.map((item) => {
                       itemIndex += 1;
-                      const isHighlighted = itemIndex === boundedHighlightedIndex;
+                      const currentItemIndex = itemIndex;
+                      const isHighlighted = currentItemIndex === boundedHighlightedIndex;
 
                       return (
                         <button
@@ -131,7 +133,7 @@ export function CommandPalette({
                             item.onSelect();
                           }}
                           onMouseEnter={() => {
-                            setHighlightedIndex(itemIndex);
+                            setHighlightedIndex(currentItemIndex);
                           }}
                           type="button"
                         >

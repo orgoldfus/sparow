@@ -65,6 +65,7 @@ export function QueryLibraryDialog({
                 <label className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3">
                   <Search className="h-4 w-4 text-[var(--text-muted)]" />
                   <Input
+                    aria-label="Search query history"
                     className="border-none bg-transparent px-0 shadow-none focus:border-none focus:ring-0"
                     data-testid="query-library-history-search"
                     onChange={(event) => {
@@ -77,6 +78,7 @@ export function QueryLibraryDialog({
                 <label className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3">
                   <FileClock className="h-4 w-4 text-[var(--text-muted)]" />
                   <select
+                    aria-label="Filter history by connection"
                     className="h-11 w-full bg-transparent text-sm text-[var(--text-primary)] outline-none"
                     data-testid="query-library-history-connection-filter"
                     onChange={(event) => {
@@ -136,6 +138,7 @@ export function QueryLibraryDialog({
                 <label className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3">
                   <Search className="h-4 w-4 text-[var(--text-muted)]" />
                   <Input
+                    aria-label="Search saved queries"
                     className="border-none bg-transparent px-0 shadow-none focus:border-none focus:ring-0"
                     data-testid="query-library-saved-search"
                     onChange={(event) => {

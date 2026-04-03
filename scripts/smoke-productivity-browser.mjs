@@ -206,13 +206,17 @@ async function stopProcess(child) {
       if (timeout) {
         clearTimeout(timeout);
       }
+      child.off('exit', resolveIfStopped);
+      child.off('close', resolveIfStopped);
+      child.off('error', resolveIfStopped);
       resolvePromise(undefined);
     };
 
     child.once('exit', resolveIfStopped);
+    child.once('close', resolveIfStopped);
+    child.once('error', resolveIfStopped);
     if (child.exitCode !== null) {
-      child.off('exit', resolveIfStopped);
-      resolvePromise(undefined);
+      resolveIfStopped();
       return;
     }
 

@@ -314,6 +314,7 @@ pub struct SavedQuery {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Requests a paginated slice of accepted-query history filtered by text and optional connection.
 pub struct ListQueryHistoryRequest {
     pub search_query: String,
     pub connection_id: Option<String>,
@@ -323,6 +324,7 @@ pub struct ListQueryHistoryRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Returns accepted-query history entries plus a has-more flag for pagination.
 pub struct ListQueryHistoryResult {
     pub entries: Vec<HistoryEntry>,
     pub has_more: bool,
@@ -330,6 +332,7 @@ pub struct ListQueryHistoryResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Requests a paginated slice of saved queries filtered by text and optional connection.
 pub struct ListSavedQueriesRequest {
     pub search_query: String,
     pub connection_id: Option<String>,
@@ -339,6 +342,7 @@ pub struct ListSavedQueriesRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Returns saved queries plus a has-more flag for pagination.
 pub struct ListSavedQueriesResult {
     pub entries: Vec<SavedQuery>,
     pub has_more: bool,
@@ -346,6 +350,7 @@ pub struct ListSavedQueriesResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Creates or updates a saved query definition and its associated connection profile metadata.
 pub struct SaveSavedQueryRequest {
     pub id: Option<String>,
     pub title: String,
@@ -356,6 +361,7 @@ pub struct SaveSavedQueryRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Returns the identifier of the deleted saved query.
 pub struct DeleteSavedQueryResult {
     pub id: String,
 }

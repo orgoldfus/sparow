@@ -125,7 +125,13 @@ fn inspect_saved_queries(options: &HashMap<String, String>) -> Result<InspectorO
             ],
             |row| {
                 let tags_json: String = row.get(3)?;
-                let tags = serde_json::from_str::<Vec<String>>(&tags_json).unwrap_or_default();
+                let tags = serde_json::from_str::<Vec<String>>(&tags_json).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
                 Ok(SavedQueryRow {
                     id: row.get(0)?,
                     title: row.get(1)?,
