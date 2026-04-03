@@ -4,11 +4,13 @@ use crate::foundation::{
     AppBootstrap, AppError, AppState, BackgroundJobAccepted, BackgroundJobProgressEvent,
     BackgroundJobRequest, CancelJobResult, CancelQueryExecutionResult, ConnectionDetails,
     ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
-    DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
-    QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-    QueryResultCountRequest, QueryResultCountResult, QueryResultExportAccepted,
-    QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultWindow,
-    QueryResultWindowRequest, RefreshSchemaScopeRequest, SaveConnectionRequest,
+    DeleteSavedQueryResult, DisconnectSessionResult, ListQueryHistoryRequest,
+    ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
+    ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
+    QueryExecutionProgressEvent, QueryExecutionRequest, QueryResultCountRequest,
+    QueryResultCountResult, QueryResultExportAccepted, QueryResultExportProgressEvent,
+    QueryResultExportRequest, QueryResultWindow, QueryResultWindowRequest,
+    RefreshSchemaScopeRequest, SaveConnectionRequest, SaveSavedQueryRequest, SavedQuery,
     SchemaRefreshAccepted, SchemaSearchRequest, SchemaSearchResult, TestConnectionRequest,
     BACKGROUND_JOB_EVENT, QUERY_EXECUTION_EVENT, QUERY_RESULT_EXPORT_EVENT,
 };
@@ -70,6 +72,42 @@ pub async fn delete_saved_connection(
     id: String,
 ) -> Result<DeleteConnectionResult, AppError> {
     state.delete_saved_connection(&id).await
+}
+
+/// Returns paginated accepted-query history filtered by text and optional connection.
+#[tauri::command]
+pub async fn list_query_history(
+    state: State<'_, AppState>,
+    request: ListQueryHistoryRequest,
+) -> Result<ListQueryHistoryResult, AppError> {
+    state.list_query_history(request).await
+}
+
+/// Returns paginated saved queries filtered by text and optional connection.
+#[tauri::command]
+pub async fn list_saved_queries(
+    state: State<'_, AppState>,
+    request: ListSavedQueriesRequest,
+) -> Result<ListSavedQueriesResult, AppError> {
+    state.list_saved_queries(request).await
+}
+
+/// Creates or updates a saved query and returns the persisted definition.
+#[tauri::command]
+pub async fn save_saved_query(
+    state: State<'_, AppState>,
+    request: SaveSavedQueryRequest,
+) -> Result<SavedQuery, AppError> {
+    state.save_saved_query(request).await
+}
+
+/// Deletes a saved query by id and returns the deleted identifier.
+#[tauri::command]
+pub async fn delete_saved_query(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<DeleteSavedQueryResult, AppError> {
+    state.delete_saved_query(id).await
 }
 
 #[tauri::command]

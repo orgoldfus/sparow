@@ -13,10 +13,12 @@ vi.mock('@monaco-editor/react', () => ({
     onChange?: (value: string) => void;
   }) => {
     const commandRef = useRef<(() => void) | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const valueRef = useRef(value ?? '');
     const onMountRef = useRef(onMount);
     const editorRef = useRef<{
       addCommand: (_binding: number, command: () => void) => number;
+      focus: () => void;
       getModel: () => { getValue: () => string };
       getSelection: () => null;
       updateOptions: (_options: unknown) => void;
@@ -40,6 +42,9 @@ vi.mock('@monaco-editor/react', () => ({
         addCommand: (_binding: number, command: () => void) => {
           commandRef.current = command;
           return 1;
+        },
+        focus: () => {
+          textareaRef.current?.focus();
         },
         getModel: () => ({ getValue: () => valueRef.current }),
         getSelection: () => null,
@@ -77,6 +82,9 @@ vi.mock('@monaco-editor/react', () => ({
         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
           commandRef.current?.();
         }
+      },
+      ref: (element: HTMLTextAreaElement | null) => {
+        textareaRef.current = element;
       },
       value: value ?? '',
     });

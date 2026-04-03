@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useEffectEvent, useState } from 'react';
-import { ChevronDown, Database, Hash, HelpCircle, Settings2 } from 'lucide-react';
+import { ChevronDown, Command, Database, Hash, HelpCircle, LibraryBig, Settings2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   Dialog,
@@ -8,10 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from './components/ui/dialog';
+import { Button } from './components/ui/button';
 import { TooltipProvider } from './components/ui/tooltip';
 import { DiagnosticsPanel } from './features/diagnostics/DiagnosticsPanel';
 import { ConnectionEditor, ConnectionsRail } from './features/connections/ConnectionWorkspace';
 import { useConnectionWorkspace } from './features/connections/useConnectionWorkspace';
+import { CommandPalette } from './features/productivity/CommandPalette';
+import { QueryLibraryDialog } from './features/productivity/QueryLibraryDialog';
+import { SaveQueryDialog } from './features/productivity/SaveQueryDialog';
+import { useProductivityWorkspace } from './features/productivity/useProductivityWorkspace';
+import { useShellFocusRegistry } from './features/productivity/useShellFocusRegistry';
 import {
   QueryResultsPanel,
   QueryTabStrip,
@@ -80,6 +86,13 @@ export default function App() {
     resultExportEvents: deferredResultExportEvents,
     selectedConnectionId: workspace.selectedConnectionId,
     onError: setError,
+  });
+  const focusRegistry = useShellFocusRegistry();
+  const productivity = useProductivityWorkspace({
+    connectionWorkspace: workspace,
+    focusTarget: focusRegistry.focusTarget,
+    onError: setError,
+    queryWorkspace,
   });
 
   const handleJobEvent = useEffectEvent((event: BackgroundJobProgressEvent) => {
@@ -279,6 +292,115 @@ export default function App() {
     setIsConnectionDialogOpen(true);
   }
 
+  const cycleTabs = useEffectEvent((direction: 1 | -1) => {
+    if (queryWorkspace.tabs.length === 0) {
+      return;
+    }
+
+    const activeIndex = queryWorkspace.tabs.findIndex((tab) => tab.id === queryWorkspace.activeTabId);
+    const baseIndex = activeIndex === -1 ? 0 : activeIndex;
+    const nextIndex = (baseIndex + direction + queryWorkspace.tabs.length) % queryWorkspace.tabs.length;
+    const nextTab = queryWorkspace.tabs[nextIndex];
+    if (nextTab) {
+      queryWorkspace.selectTab(nextTab.id);
+    }
+  });
+
+  const handleGlobalKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    const hasProductivityOverlayOpen =
+      productivity.isCommandPaletteOpen || productivity.isQueryLibraryOpen || productivity.isSaveDialogOpen;
+    const hasBlockingOverlayOpen =
+      isConnectionDialogOpen || isDiagnosticsDialogOpen || hasProductivityOverlayOpen;
+    const mod = event.metaKey || event.ctrlKey;
+    const key = event.key.toLowerCase();
+
+    if (event.key === 'Escape') {
+      if (hasProductivityOverlayOpen) {
+        event.preventDefault();
+        productivity.closeTopOverlay();
+      }
+      return;
+    }
+
+    if (event.ctrlKey && event.key === 'Tab') {
+      if (hasBlockingOverlayOpen) {
+        return;
+      }
+
+      event.preventDefault();
+      cycleTabs(event.shiftKey ? -1 : 1);
+      return;
+    }
+
+    if (!mod) {
+      return;
+    }
+
+    if (key === 'k' || (event.shiftKey && key === 'p')) {
+      if (isConnectionDialogOpen || isDiagnosticsDialogOpen || productivity.isSaveDialogOpen) {
+        return;
+      }
+
+      event.preventDefault();
+      productivity.openCommandPalette();
+      return;
+    }
+
+    if (hasBlockingOverlayOpen) {
+      return;
+    }
+
+    switch (key) {
+      case 'n':
+        event.preventDefault();
+        queryWorkspace.createTab();
+        break;
+      case 's':
+        event.preventDefault();
+        productivity.openSaveDialogForActiveTab();
+        break;
+      case 'w':
+        event.preventDefault();
+        if (queryWorkspace.activeTabId) {
+          queryWorkspace.closeTab(queryWorkspace.activeTabId);
+        }
+        break;
+      case '1':
+        event.preventDefault();
+        focusRegistry.focusTarget('connections');
+        break;
+      case '2':
+        event.preventDefault();
+        focusRegistry.focusTarget('schema');
+        break;
+      case '3':
+        event.preventDefault();
+        focusRegistry.focusTarget('editor');
+        break;
+      case '4':
+        event.preventDefault();
+        focusRegistry.focusTarget('results');
+        break;
+      default:
+        break;
+    }
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      handleGlobalKeyboardShortcuts(event);
+    };
+
+    window.addEventListener('keydown', listener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <TooltipProvider delayDuration={150}>
@@ -343,6 +465,94 @@ export default function App() {
               </DialogContent>
             </Dialog>
           }
+          productivityDialogs={
+            <>
+              <QueryLibraryDialog
+                activeTab={productivity.queryLibraryTab}
+                connections={workspace.connections}
+                deletingSavedQueryId={productivity.deletingSavedQueryId}
+                historyConnectionId={productivity.historyConnectionId}
+                historyEntries={productivity.historyEntries}
+                historyHasMore={productivity.historyHasMore}
+                historyLoading={productivity.historyLoading}
+                historySearchQuery={productivity.historySearchQuery}
+                onActiveTabChange={productivity.setQueryLibraryTab}
+                onDeleteSavedQuery={(savedQuery) => {
+                  void productivity.deleteSavedQueryEntry(savedQuery);
+                }}
+                onEditSavedQuery={productivity.openSaveDialogForSavedQuery}
+                onHistoryConnectionIdChange={productivity.setHistoryConnectionId}
+                onHistorySearchQueryChange={productivity.setHistorySearchQuery}
+                onOpenChange={productivity.setIsQueryLibraryOpen}
+                onOpenHistoryEntry={productivity.openHistoryEntry}
+                onOpenSavedQuery={productivity.openSavedQueryEntry}
+                onRunHistoryEntry={(entry) => {
+                  void productivity.runHistoryEntry(entry);
+                }}
+                onRunSavedQuery={(savedQuery) => {
+                  void productivity.runSavedQueryEntry(savedQuery);
+                }}
+                onSaveHistoryEntry={productivity.openSaveDialogForHistoryEntry}
+                onSavedQueriesSearchQueryChange={productivity.setSavedQueriesSearchQuery}
+                open={productivity.isQueryLibraryOpen}
+                savedQueries={productivity.savedQueries}
+                savedQueriesHasMore={productivity.savedQueriesHasMore}
+                savedQueriesLoading={productivity.savedQueriesLoading}
+                savedQueriesSearchQuery={productivity.savedQueriesSearchQuery}
+              />
+              <SaveQueryDialog
+                connections={workspace.connections}
+                draft={productivity.saveDialogState}
+                onConnectionProfileIdChange={(connectionProfileId) => {
+                  productivity.setSaveDialogState((current) =>
+                    current
+                      ? {
+                          ...current,
+                          connectionProfileId,
+                          hasExplicitConnectionProfileId: true,
+                        }
+                      : current,
+                  );
+                }}
+                onOpenChange={(open) => {
+                  productivity.setIsSaveDialogOpen(open);
+                  if (!open) {
+                    productivity.setSaveDialogState(null);
+                  }
+                }}
+                onSaveAsNew={
+                  productivity.saveDialogState?.allowSaveAsNew
+                    ? () => {
+                        void productivity.submitSaveDialog('create');
+                      }
+                    : null
+                }
+                onSubmit={() => {
+                  void productivity.submitSaveDialog();
+                }}
+                onTagsTextChange={(value) => {
+                  productivity.setSaveDialogState((current) =>
+                    current ? { ...current, tagsText: value } : current,
+                  );
+                }}
+                onTitleChange={(value) => {
+                  productivity.setSaveDialogState((current) =>
+                    current ? { ...current, title: value } : current,
+                  );
+                }}
+                open={productivity.isSaveDialogOpen}
+                pending={productivity.isSavePending}
+              />
+              <CommandPalette
+                items={productivity.commandPaletteItems}
+                loading={productivity.isPaletteLoading}
+                onOpenChange={productivity.setIsCommandPaletteOpen}
+                onSearchQueryChange={productivity.setCommandPaletteSearchQuery}
+                open={productivity.isCommandPaletteOpen}
+                searchQuery={productivity.commandPaletteSearchQuery}
+              />
+            </>
+          }
           headerBar={
             <div className="flex h-10 items-center justify-between px-3">
               {/* Left: logo + divider + menu */}
@@ -352,6 +562,38 @@ export default function App() {
                     <Database className="h-3.5 w-3.5 text-[var(--accent-text)]" />
                   </div>
                   <span className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">Sparow</span>
+                </div>
+
+                <div className="hidden items-center gap-1 md:flex">
+                  <Button
+                    className="h-7 gap-1.5 rounded px-2 text-xs"
+                    data-testid="query-library-launcher"
+                    onClick={() => {
+                      productivity.openQueryLibrary('saved');
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <LibraryBig className="h-3.5 w-3.5" />
+                    Query Library
+                  </Button>
+                  <Button
+                    className="h-7 gap-1.5 rounded px-2 text-xs"
+                    data-testid="command-palette-launcher"
+                    onClick={() => {
+                      productivity.openCommandPalette();
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Command className="h-3.5 w-3.5" />
+                    Command Palette
+                    <span className="rounded border border-[var(--border-subtle)] px-1 py-0.5 text-[10px] text-[var(--text-muted)]">
+                      Mod+K
+                    </span>
+                  </Button>
                 </div>
               </div>
 
@@ -447,6 +689,7 @@ export default function App() {
               onError={(caught) => {
                 setError(logger.asAppError(caught, 'query_workspace'));
               }}
+              registerEditorFocusTarget={focusRegistry.registerEditorFocusTarget}
               showTabStrip={false}
               workspace={queryWorkspace}
             />
@@ -467,9 +710,14 @@ export default function App() {
                   openEditConnectionDialog(connectionId);
                 }}
                 onSelectConnection={workspace.selectConnection}
+                registerFocusTarget={focusRegistry.registerConnectionsFocusTarget}
                 selectedConnectionId={workspace.selectedConnectionId}
               />
-              <SchemaSidebar activeSession={workspace.activeSession} schema={schemaBrowser} />
+              <SchemaSidebar
+                activeSession={workspace.activeSession}
+                registerFocusTarget={focusRegistry.registerSchemaFocusTarget}
+                schema={schemaBrowser}
+              />
             </div>
           }
           results={
@@ -477,6 +725,7 @@ export default function App() {
               activeSession={workspace.activeSession}
               activeView={activeResultsTab}
               onActiveViewChange={setActiveResultsTab}
+              registerResultsFocusTarget={focusRegistry.registerResultsFocusTarget}
               workspace={queryWorkspace}
             />
           }

@@ -48,6 +48,7 @@ type ConnectionsRailProps = {
   onDisconnectSelected: () => Promise<void>;
   onEditSelected: (connectionId: string) => void;
   onSelectConnection: (connectionId: string) => void;
+  registerFocusTarget?: (focus: (() => void) | null) => void;
   selectedConnectionId: string | null;
 };
 
@@ -91,6 +92,7 @@ export function ConnectionsRail({
   onDisconnectSelected,
   onEditSelected,
   onSelectConnection,
+  registerFocusTarget,
   selectedConnectionId,
 }: ConnectionsRailProps) {
   const [menuState, setMenuState] = useState<{
@@ -99,6 +101,8 @@ export function ConnectionsRail({
     left: number;
   } | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const newConnectionButtonRef = useRef<HTMLButtonElement | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
     if (!menuState) {
@@ -125,6 +129,22 @@ export function ConnectionsRail({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [menuState]);
+
+  useEffect(() => {
+    registerFocusTarget?.(() => {
+      const targetId = selectedConnectionId ?? connections[0]?.id ?? null;
+      if (!targetId) {
+        newConnectionButtonRef.current?.focus();
+        return;
+      }
+
+      rowRefs.current.get(targetId)?.focus();
+    });
+
+    return () => {
+      registerFocusTarget?.(null);
+    };
+  }, [connections, registerFocusTarget, selectedConnectionId]);
   const activeConnectionId = activeSession?.connectionId ?? null;
   return (
     <section className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)]" ref={railRef}>
@@ -136,6 +156,7 @@ export function ConnectionsRail({
             className="h-6 w-6 rounded p-0"
             data-testid="new-connection-button"
             onClick={onCreateConnection}
+            ref={newConnectionButtonRef}
             size="sm"
             type="button"
             variant="ghost"
@@ -163,6 +184,30 @@ export function ConnectionsRail({
                   )}
                   data-testid={`connection-row-${connection.id}`}
                   key={connection.id}
+                  onKeyDown={(event) => {
+                    const currentIndex = connections.findIndex((entry) => entry.id === connection.id);
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      const nextIndex =
+                        event.key === 'ArrowDown'
+                          ? Math.min(currentIndex + 1, connections.length - 1)
+                          : Math.max(currentIndex - 1, 0);
+                      const nextConnection = connections[nextIndex];
+                      if (!nextConnection) {
+                        return;
+                      }
+
+                      onSelectConnection(nextConnection.id);
+                      rowRefs.current.get(nextConnection.id)?.focus();
+                      return;
+                    }
+
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      onSelectConnection(connection.id);
+                      void onActivateConnection(connection.id);
+                    }
+                  }}
                   onClick={() => {
                     onSelectConnection(connection.id);
                   }}
@@ -180,6 +225,14 @@ export function ConnectionsRail({
                       top: event.clientY - (bounds?.top ?? 0),
                       left: event.clientX - (bounds?.left ?? 0),
                     });
+                  }}
+                  ref={(element) => {
+                    if (element) {
+                      rowRefs.current.set(connection.id, element);
+                      return;
+                    }
+
+                    rowRefs.current.delete(connection.id);
                   }}
                   type="button"
                 >

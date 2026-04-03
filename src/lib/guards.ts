@@ -10,9 +10,15 @@ import type {
   DatabaseEngine,
   DatabaseSessionSnapshot,
   DeleteConnectionResult,
+  DeleteSavedQueryResult,
   DisconnectSessionResult,
+  HistoryEntry,
   ListSchemaChildrenRequest,
   ListSchemaChildrenResult,
+  ListQueryHistoryRequest,
+  ListQueryHistoryResult,
+  ListSavedQueriesRequest,
+  ListSavedQueriesResult,
   QueryExecutionAccepted,
   QueryExecutionOrigin,
   QueryExecutionProgressEvent,
@@ -37,6 +43,8 @@ import type {
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
+  SaveSavedQueryRequest,
+  SavedQuery,
   SchemaCacheStatus,
   SchemaNode,
   SchemaNodeBase,
@@ -372,6 +380,84 @@ export function isDeleteConnectionResult(value: unknown): value is DeleteConnect
 
 export function isDisconnectSessionResult(value: unknown): value is DisconnectSessionResult {
   return isRecord(value) && (typeof value.connectionId === 'string' || value.connectionId === null);
+}
+
+export function isHistoryEntry(value: unknown): value is HistoryEntry {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.sql === 'string' &&
+    isNullableString(value.connectionProfileId) &&
+    typeof value.createdAt === 'string'
+  );
+}
+
+export function isSavedQuery(value: unknown): value is SavedQuery {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.sql === 'string' &&
+    isStringArray(value.tags) &&
+    isNullableString(value.connectionProfileId) &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+export function isListQueryHistoryRequest(value: unknown): value is ListQueryHistoryRequest {
+  return (
+    isRecord(value) &&
+    typeof value.searchQuery === 'string' &&
+    isNullableString(value.connectionId) &&
+    isNonNegativeInteger(value.limit) &&
+    value.limit > 0 &&
+    isNonNegativeInteger(value.offset)
+  );
+}
+
+export function isListQueryHistoryResult(value: unknown): value is ListQueryHistoryResult {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isHistoryEntry) &&
+    typeof value.hasMore === 'boolean'
+  );
+}
+
+export function isListSavedQueriesRequest(value: unknown): value is ListSavedQueriesRequest {
+  return (
+    isRecord(value) &&
+    typeof value.searchQuery === 'string' &&
+    isNullableString(value.connectionId) &&
+    isNonNegativeInteger(value.limit) &&
+    value.limit > 0 &&
+    isNonNegativeInteger(value.offset)
+  );
+}
+
+export function isListSavedQueriesResult(value: unknown): value is ListSavedQueriesResult {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isSavedQuery) &&
+    typeof value.hasMore === 'boolean'
+  );
+}
+
+export function isSaveSavedQueryRequest(value: unknown): value is SaveSavedQueryRequest {
+  return (
+    isRecord(value) &&
+    (typeof value.id === 'string' || value.id === null) &&
+    typeof value.title === 'string' &&
+    typeof value.sql === 'string' &&
+    isStringArray(value.tags) &&
+    isNullableString(value.connectionProfileId)
+  );
+}
+
+export function isDeleteSavedQueryResult(value: unknown): value is DeleteSavedQueryResult {
+  return isRecord(value) && typeof value.id === 'string';
 }
 
 function isSchemaNodeBase(value: unknown): value is SchemaNodeBase {

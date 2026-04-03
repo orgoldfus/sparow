@@ -2,5 +2,5 @@ mod repository;
 
 pub(crate) use repository::{
     CachedSchemaScopeRecord, PersistedSecretRef, ReplaceSchemaScopeRecord, Repository,
-    SaveConnectionRecord, SavedConnectionRecord,
+    SaveConnectionRecord, SaveSavedQueryRecord, SavedConnectionRecord,
 };

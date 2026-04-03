@@ -1,441 +1,219 @@
-# Phase 5 Todo
+# Phase 6 Todo
 
 ## Objective
-Build the Phase 5 streamed results workflow for Sparow: Rust-owned result caching, virtualized result browsing, exact CSV export from cached results, agent-visible browser harness coverage, and AI-friendly diagnostics that keep large-result handling debuggable without a human in the loop.
+Build the Phase 6 developer productivity layer for Sparow: query history and saved-query workflows, a keyboard-first command palette, focus navigation across the shell, AI-friendly local inspection tooling, and browser/test coverage that keeps the new productivity surfaces debuggable by agents.
 
 ## Checklist
-- [completed] Lock the Phase 5 baseline and record kickoff verification results
-- [completed] Lock result-viewer contracts, fixtures, guards, and IPC surface
-- [completed] Implement the Rust result cache, streaming query path, and cleanup rules
-- [completed] Implement result-window fetches, cached sort/filter semantics, and CSV export in Rust
-- [completed] Build the frontend virtualized result viewer, diagnostics updates, and query-state integration
-- [completed] Add the browser harness, browser smoke automation, and Phase 5 AI/debug docs
+- [completed] Lock the Phase 6 baseline and record kickoff artifacts
+- [completed] Lock Phase 6 contracts, fixtures, guards, IPC, and query-tab state extensions
+- [completed] Implement the Rust productivity migration, repository APIs, service layer, state wiring, and commands
+- [completed] Implement the frontend query library, saved-query flows, command palette, and keyboard/focus polish
+- [completed] Replace Python-dependent query-history inspection with repo-native tooling and update AI docs
+- [completed] Add browser harness coverage for command palette and query-library workflows
 - [completed] Run final verification and record the exact results
 
 ## Blockers And Decisions
-- 2026-03-31: Completed the latest CodeRabbit autofix pass for PR #14.
-  - Updated the status-bar `Edit connection` button in `src/App.tsx` so the disabled state now exposes `aria-disabled`, removes the hover affordance when inactive, and applies explicit disabled styling.
-  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
-- 2026-03-31: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
-  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
-- 2026-03-31: Started another CodeRabbit autofix pass on `improve-ui`.
-  - Goal: fix the new PR #14 status-bar accessibility comment in `src/App.tsx`, rerun verification, then commit and push the follow-up.
-- 2026-03-31: Completed a CodeRabbit review-state check for PR #14.
-  - PR [#14](https://github.com/orgoldfus/sparow/pull/14) has 1 new actionable CodeRabbit comment from 2026-03-29 after commit `844339e`.
-  - The remaining unresolved item is in `src/App.tsx`: the status-bar `Edit connection` button still needs explicit disabled styling and `aria-disabled` when `canEditConnection` is false.
-- 2026-03-29: Completed the latest CodeRabbit autofix pass for PR #14.
-  - Fixed the Monaco cursor-listener disposal leak, taught the status bar to describe successful command executions, disabled the dead header connection-settings control when nothing is editable, and restored visible keyboard focus styling for the query and schema filters.
-  - Verified the follow-up with `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` before packaging the commit/push.
-- 2026-03-29: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed under Node `v24.14.0`: TypeScript, ESLint, 97 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully.
-  - ESLint still reports the pre-existing TanStack React Compiler warning around `useReactTable`, and the query-workspace component tests still emit the known jsdom-only `flushSync` warnings from TanStack Virtual.
-- 2026-03-29: Started another CodeRabbit autofix pass on `improve-ui`.
-  - Goal: fetch the current PR's unresolved CodeRabbit review threads, apply any still-valid fixes, rerun verification, then commit and push the follow-up.
-- 2026-03-26: Completed the latest CodeRabbit autofix pass for PR #14.
-  - Moved query cursor tracking out of `App` into a lightweight query-local store so Monaco caret movement no longer rerenders the shell, fixed the remaining query/schema UI review items, and verified the branch end-to-end before packaging the follow-up commit.
-- 2026-03-26: Started another CodeRabbit autofix pass on `improve-ui`.
-  - Goal: fetch the current branch PR's unresolved CodeRabbit review threads, apply any valid fixes, rerun verification, then commit and push the follow-up.
-- 2026-03-25: Completed the latest CodeRabbit autofix pass for PR #13.
-  - Fixed the replayable result-store eviction path so a requested window wider than the default cache budget keeps every page in the active window, and added a regression that proves `load_window()` still returns the full 15-row span for that case.
-- 2026-03-25: Started another CodeRabbit autofix pass on `limit-large-queries`.
-  - Goal: fetch newly unresolved CodeRabbit review threads for the current PR, apply any valid fixes, rerun verification, then commit and push the follow-up.
-- 2026-03-24: Completed the scoped CodeRabbit autofix pass outside the skill workspace.
-  - Fixed the unresolved bounded-cache, terminal-row-count, stale-count-error, and todo-history issues on `limit-large-queries`. Per user instruction, anything under `.agents/skills/**` was explicitly left untouched in this pass.
-- 2026-03-24: The current CodeRabbit follow-up excludes anything under the skill workspace by user instruction.
-  - Only unresolved review comments outside `.agents/skills/**` are being fixed in this pass; skill-folder comments are intentionally left untouched.
-- 2026-03-24: Started another CodeRabbit autofix pass on `limit-large-queries` to pick up any newly unresolved review comments, apply the requested fixes, and push a follow-up commit if needed.
-- 2026-03-24: Completed the latest CodeRabbit autofix pass for PR #13 without additional code changes.
-  - The only remaining unresolved CodeRabbit thread on `limit-large-queries` was stale against the current `src-tauri/src/query/result_store.rs` implementation and its existing terminal-page regression test, so the follow-up was to verify the behavior, resolve the thread on GitHub, and package the required todo/audit updates.
-- 2026-03-24: Started another CodeRabbit autofix pass for the current PR on `limit-large-queries`.
-  - Goal: fetch the latest unresolved CodeRabbit review threads, apply the requested fixes against the current branch state, then rerun verification, commit, and push the autofix changes.
-- 2026-03-24: Completed the CodeRabbit autofix pass for PR #13.
-  - Fixed the repo-side result-grid, replayable-query, and query-workspace issues that were still valid on `limit-large-queries`, and fixed the matching tracked `.agents/skills/octocode-research` source issues that could be verified safely in the current workspace.
-  - The `.agents/skills/octocode-research` integration test/build follow-up is environment-limited in this repo checkout: `express`, `supertest`, and `tsdown` are not installed for that workspace, so only the source-only unit coverage that does not require those missing packages could be rerun locally.
-- 2026-03-24: `npm test -- src/__tests__/unit/logger.test.ts src/__tests__/unit/httpPreprocess.test.ts src/__tests__/unit/readiness.test.ts src/__tests__/integration/routes.test.ts src/__tests__/integration/toolsRoutes.test.ts src/__tests__/integration/promptsRoutes.test.ts src/__tests__/integration/serverHttp.test.ts` inside `.agents/skills/octocode-research` ❌
-  - The logger and HTTP preprocess suites passed, but the broader `.agents` run is blocked in this checkout because the workspace does not have `express` and `supertest` installed, so Vitest cannot import those integration test dependencies.
-- 2026-03-24: `npm run build` inside `.agents/skills/octocode-research` ❌
-  - The build cannot run in this checkout because `tsdown` is not installed for that workspace, so the tracked generated `scripts/` bundle could not be regenerated locally.
-- `cargo test --manifest-path src-tauri/Cargo.toml replayable_window_does_not_report_more_rows_for_terminal_cached_page -- --exact` ✅
-  - The command completed successfully but matched 0 tests because the exact namespaced test name differs from the bare function name; no product code was exercised by this attempt.
-- `cargo test --manifest-path src-tauri/Cargo.toml replayable_window_does_not_report_more_rows_for_terminal_cached_page` ✅
-  - The focused Rust regression passed on `src-tauri/src/query/result_store.rs`: `query::result_store::tests::replayable_window_does_not_report_more_rows_for_terminal_cached_page` stayed green, which confirms the current cache logic already suppresses `has_more_rows` for a fully cached terminal page.
-- 2026-03-24: Started a CodeRabbit autofix pass for the current PR on `limit-large-queries`.
-  - Goal: fetch unresolved CodeRabbit review threads, apply the requested fixes against the current branch state, then re-run verification before committing and pushing the autofix commit.
-- 2026-03-24: Completed the commit, push, and PR packaging pass for the current branch.
-  - Commit `c1fbe30` is pushed to `origin/limit-large-queries`, and PR [#13](https://github.com/orgoldfus/sparow/pull/13) is open against `main`.
-- 2026-03-24: Started the commit, push, and PR packaging pass for the current branch.
-  - The current worktree includes query execution, result-viewer, test, and repo tooling updates plus untracked support files. The goal is to package the full branch state into one commit and open a PR without dropping any tracked or untracked changes.
-- 2026-03-24: Completed the results-pane scroll fix.
-  - The cached result grid now uses the results pane height as its scroll boundary again, and the browser smoke harnesses now fail explicitly if the grid loses real vertical overflow.
-- 2026-03-24: Started the results-pane scroll fix after the cached result grid stopped scrolling in the shell UI.
-  - The active investigation is focused on the results-grid scroll boundary and parent height containment so large result sets stay browseable without clipping or UI freezes.
-- 2026-03-24: Completed the test-runner follow-up. Vitest now extends its default excludes and adds `.agents/**`, so full verification only exercises repo tests instead of agent scratch space or dependency test suites.
-- 2026-03-24: The first Vitest exclusion pass replaced the default exclude list, which accidentally let `node_modules/**` tests into `vitest run`.
-  - The resulting verify run failed on 13 dependency test suites from `node_modules` even though the product tests passed, so the fix was to switch `vite.config.ts` to `exclude: [...configDefaults.exclude, '.agents/**']` instead of a bare custom array.
-- 2026-03-24: Started the Vitest follow-up to exclude `.agents/**` from test discovery so full repo verification only exercises product tests.
-- 2026-03-24: Excluding `.agents` from ESLint fixed the lint blocker, but full `npm run verify` still runs `.agents/skills/octocode-research/**` through Vitest.
-  - The rerun cleared `typecheck` and `lint` with only the longstanding React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`, then failed in `npm run test` because Vitest discovered 10 failing `.agents` suites with missing `express`/`supertest`/`octocode-mcp` dependencies plus one flaky PID assertion.
-- 2026-03-24: Started the ESLint follow-up to exclude the local `.agents` workspace from repo linting so `npm run verify` is not blocked by agent-scratch files outside the product code.
-- 2026-03-23: `npm run verify` is currently blocked by repo-wide ESLint scanning the untracked `.agents/skills/octocode-research` workspace files.
-  - The verify run reached `npm run lint` and failed on 1,371 lint errors plus 3 project-service parsing errors inside `.agents/skills/octocode-research/**`, along with the existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`. The bounded page-cache changes were not the failing surface.
-- 2026-03-23: Started a full post-change verification run with `npm run verify` to validate the bounded replayable page-cache pass against the repo’s standard gate.
-- 2026-03-23: Completed the query-execution follow-up. Replayable results now keep a bounded Rust page cache with viewport-local eviction, page-range fetches with a small prefetch margin, and a scroll-depth estimate driven by `visibleRowCount` instead of the cache size.
-- 2026-03-23: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ❌
-  - Clippy rejected the first bounded-cache pass because `ReplayableQueryResultHandle::new` grew to 8 parameters. The fix was to replace the constructor argument list with a typed `ReplayableQueryResultHandleInit` payload instead of suppressing the lint.
-- 2026-03-23: Started the query-execution follow-up to replace the replayable append-only row cache with a bounded page cache and align the result-window semantics with the 2026-03-22 architecture research note.
-- 2026-03-22: Documented the query-execution research and recommendation in [docs/architecture/query-execution-research.md](docs/architecture/query-execution-research.md) so the implementation follow-up can work from a stable in-repo decision record.
-- 2026-03-22: `sed -n '1,260p' docs/architecture/query-execution-research.md` ✅
-  - Readback verification confirmed the new architecture note is present in-repo with the benchmark repo findings, Sparow-specific analysis, and the recommended bounded page-cache direction. No code verification run was needed because this task only added documentation.
-- 2026-03-22: Started writing a permanent architecture note for the query-execution research so the GitHub benchmark findings and recommended Sparow direction are captured in-repo before implementation work begins.
-- 2026-03-22: Completed the GitHub research pass on query execution strategy.
-  - DBeaver, pgAdmin, Beekeeper Studio, DbGate, and DB Browser for SQLite all keep result rows ephemeral and favor some mix of segment fetches, server cursors/streams, or explicit paged `LIMIT/OFFSET` queries over a persistent local result cache.
-  - Recommendation for Sparow: keep the no-SQLite-result-cache direction, keep replayable queries database-backed, avoid rewriting every ad-hoc query with a hard SQL limit, keep exact counts async/on-demand, and replace the current append-only replayable row cache with a bounded page/window cache so deep scrolling does not turn into unbounded Rust memory growth.
-- 2026-03-22: Started architecture research on database query execution strategy by comparing Sparow's direct-query/current-cache posture against high-star OSS database tools (DBeaver, Beekeeper Studio, DBGate, and similar candidates) before recommending a query path for the product.
-- 2026-03-18: Completed the async replayable-result count pass so large replayable `SELECT`s render the first page immediately, page more rows on demand, and backfill exact totals in the background.
-- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The full verification suite passed under Node `v24.13.0`: typecheck, ESLint, 94 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed, with 84 Rust tests green and 2 expected PostgreSQL smoke tests ignored. The longstanding React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
-- 2026-03-18: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ✅
-  - Clippy now passes cleanly after collapsing the replayable row-batch helper into a typed request struct.
-- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused contract/query workspace suites passed under Node `v24.13.0`: 3 Vitest files and 58 tests green, including the new automatic background-count regression coverage.
-- 2026-03-18: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ❌
-  - Clippy rejected the new replayable row-batch helper in `src-tauri/src/query/driver.rs` for exceeding the argument-count threshold, so that helper needs to be wrapped in a small request struct.
-- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint completed under Node `v24.13.0`. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
-- 2026-03-18: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust workspace now passes after the replayable first-page cache, async count command, and contract updates. Current result: 83 tests passed, 2 PostgreSQL smoke tests ignored, 0 failures.
-- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compile cleanly under Node `v24.13.0` after wiring the new result-count IPC, count state, and nullable total-row semantics through the query workspace.
-- 2026-03-18: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ❌
-  - The first typecheck pass failed because `src/features/query/QueryWorkspace.tsx` referenced `QueryTabState` in the new row-count label helper without importing the type.
-- 2026-03-18: `cargo test --manifest-path src-tauri/Cargo.toml` ❌
-  - The first Rust pass failed because the `src-tauri/src/foundation/contracts.rs` fixture tests needed the new `QueryResultCountRequest` and `QueryResultCountResult` imports, and the replayable driver/store changes left a couple of warnings to clean up afterward.
-- 2026-03-18: Started the async replayable-result count pass to render the first query page immediately, page additional rows on scroll, and compute exact totals in the background without blocking the grid.
-- 2026-03-17: Completed the connection-rail UX pass by making single click selection-only, moving activation to double click, and showing an inline row loader for the connection currently being opened.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint completed under Node `v24.13.0` after the interaction change. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compiled cleanly under Node `v24.13.0` after the rail received the row-specific connecting state and the shell harness was updated to pass the new prop.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 17 tests green, including the new single-click selection, double-click activation, and inline loader coverage.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ❌
-  - The first typecheck pass failed because `src/features/shell/ShellHarness.tsx` had not yet been updated for the new `connectingConnectionId` prop on `ConnectionsRail`. The harness was aligned before the next rerun.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ❌
-  - The first focused shell pass failed because the loader test targeted the already-active local connection, which short-circuited the connect flow before the spinner could render. The test was moved to a staged non-active connection before the rerun.
-- 2026-03-17: Started a connection-rail UX pass to require double click for activation, keep single click as selection only, and surface an inline loading state on the row that is currently connecting.
-- 2026-03-17: Completed the compact connection-rail polish by collapsing each connection entry into a slim name-first row with a single live-status dot and by removing the old saved-target summary strip that made the sidebar feel oversized.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint completed under Node `v24.13.0` after the rail cleanup. The existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx` is still present, but this pass introduced no new lint errors or warnings.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 15 tests green, including the new compact-connection-row coverage.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compiled cleanly under Node `v24.13.0` after the connection-rail markup reduction and the new regression assertions.
-- 2026-03-17: `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ❌
-  - The first focused shell pass failed because a new assertion matched unrelated editor copy containing the words `saved target`; the expectation was narrowed before the next rerun.
-- 2026-03-17: Started a compact connection-rail polish pass to replace the oversized connection cards with slimmer name-first rows that only surface a connection label plus a live-status dot, matching the updated shell direction.
-- 2026-03-17: Completed the macOS keychain prompt fix by stopping saved-connection summaries/details from reading OS keychain entries during bootstrap, list, and edit flows. `hasStoredSecret` now reflects the persisted secret reference, and a focused Rust regression test locks that non-connect behavior in place.
-- 2026-03-17: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting succeeded after the saved-connection summary change and new secret-store regression test.
-- 2026-03-17: `cargo test --manifest-path src-tauri/Cargo.toml list_and_get_saved_connections_do_not_read_secret_store` ✅
-  - The new focused regression passed and confirmed save, list, and get flows no longer call `load_password`, which removes the keychain read from app bootstrap.
-- 2026-03-17: `cargo test --manifest-path src-tauri/Cargo.toml tests_saved_connection_without_retyping_password` ✅
-  - The existing stored-secret test still passed, confirming deferred keychain reads still work when a connection test actually needs the saved password.
-- 2026-03-17: Started investigating the repeated macOS keychain password prompt during `npm run tauri dev`. The current bootstrap path loads saved connection summaries by reading the OS keychain to derive `hasStoredSecret`, so this pass is removing secret reads from non-connect flows and adding a regression test around saved-connection listing/details.
-- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by recording missing-result-set early returns in `DiagnosticsStore` for both result-window and export requests, eliminating that observability gap.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust suite passed with 80 tests green and 2 expected PostgreSQL smoke tests still ignored. The new missing-result-set diagnostics assertions passed alongside the existing query-service coverage.
-- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
-  - `clippy` remained clean under `-D warnings` after the missing-result diagnostics helper and test additions.
-- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting succeeded after the missing-result diagnostics update.
-- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the remaining missing-result-set diagnostics comment in `src-tauri/src/query/service.rs`. This pass is wiring missing-result-set early returns into `DiagnosticsStore` and adding focused query-service coverage before the next Rust verification run.
-- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by updating the buffered-result byte estimator so the 32 MB cap includes enum storage and owned-string heap payloads instead of undercounting them.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust suite passed with 78 tests green and 2 expected PostgreSQL smoke tests still ignored. The new direct estimator assertions passed alongside the existing buffered-result-cap, cleanup, and query-service coverage.
-- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
-  - `clippy` remained clean under `-D warnings` after tightening the buffered-result memory estimator.
-- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting succeeded after the buffered-result estimator update.
-- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the remaining buffered-result memory-estimation comment in `src-tauri/src/query/service.rs`. This pass is tightening the byte estimator so the 32 MB cap accounts for enum and owned-string overhead before any new verification run.
-- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by making cancelled export cleanup explicit even when the final flush fails and by changing the shared session-error copy from result-specific wording to query-operation wording.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust suite passed with 76 tests green and 2 expected PostgreSQL smoke tests still ignored. The new cleanup-helper and session-error wording tests both passed alongside the earlier buffered-result coverage.
-- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
-  - `clippy` stayed clean under `-D warnings` after the cancelled-export cleanup refactor and shared message update.
-- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting succeeded after the latest query-service edits.
-- 2026-03-16: Started another CodeRabbit autofix pass for PR #10 scoped to the two new `src-tauri/src/query/service.rs` comments. This pass is tightening cancelled-export cleanup semantics and generalizing the shared session-error copy, while leaving the older dismissed `todo.md` thread alone.
-- 2026-03-16: Transient blocker during the latest CodeRabbit autofix commit flow: `git commit -m "fix: apply CodeRabbit auto-fixes"` initially failed on `.git/index.lock`, but no live git process remained and the lock cleared before manual cleanup was needed.
-- 2026-03-16: Completed the latest CodeRabbit autofix pass for PR #10 by bounding the in-memory buffered fallback for non-replayable results and by closing the CSV writer before deleting cancelled export files, while intentionally leaving the dismissed `todo.md` review thread untouched.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust suite passed with 74 tests green and 2 expected PostgreSQL smoke tests still ignored. The new query-service regressions for buffered-result caps and cancelled export cleanup both passed.
-- 2026-03-16: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
-  - `clippy` is clean under `-D warnings` after the bounded-buffering and export-cancellation fixes.
-- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust formatting succeeded after the latest query-service edits.
-- 2026-03-16: Started a new CodeRabbit autofix pass for PR #10 scoped to the fresh Rust query-service comments; this pass is fixing the unbounded buffered-result fallback and the Windows-incompatible export-cancellation cleanup while intentionally ignoring the already-dismissed `todo.md` comment.
-- 2026-03-16: `cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` ✅
-  - The Rust cleanup pass is now formatted and `clippy` clean under `-D warnings` with the direct-query result path in place.
-- 2026-03-16: Completed the cache-removal refactor by replacing the SQLite-backed query-result cache with a direct PostgreSQL window-loading path for replayable queries, a Rust in-memory fallback for non-replayable row-returning statements, and a matching cleanup of the obsolete result-stream contracts, fixtures, and tests.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after removing the SQLite query-result cache and stream contract. Frontend typecheck, ESLint, 87 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining note is the pre-existing TanStack React Compiler warning around `useReactTable`, plus the known jsdom-only `flushSync` noise from the query workspace component tests.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/contract-fixtures.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx src/test/foundation-smoke.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ✅
-  - Focused cross-stack verification passed under Node `v24.13.0`. TypeScript stayed clean, the edited Vitest suites passed 74 tests, and the targeted Rust query-service test stayed green. The only remaining test noise in this pass is the pre-existing jsdom/TanStack `flushSync` warning emitted by the query workspace component tests.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/contract-fixtures.test.ts src/test/app-shell.test.tsx src/test/schema-browser.test.tsx src/test/foundation-smoke.test.tsx && cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ❌
-  - The first focused cross-stack verification failed at TypeScript on two dead helpers left behind in `src/features/query/useQueryWorkspace.ts` after removing the result-stream contract: `isTerminalResultStatus` and `shouldKeepWindow`.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ✅
-  - The targeted Rust pass now compiles and the focused query-service test is green. The remaining backend cleanup is explicit dead code from the removed result-stream event contract and a small `drop(writer)` no-op warning in the export cancellation path, both of which are being removed in the next cleanup pass.
-- 2026-03-16: `cargo test --manifest-path src-tauri/Cargo.toml rejects_empty_sql` ❌
-  - The first Rust compile pass after removing the SQLite result cache failed on three integration issues: `StreamExt` was missing from the new direct-query driver, the replay-query parameter buffer used `Box<dyn ToSql + Sync>` and made the Tauri/window-export futures non-`Send`, and the in-memory buffered-result sort helper missed the `QueryResultCell::Float` branch.
-- 2026-03-16: Started replacing the Phase 5 SQLite query-result cache with a direct PostgreSQL result-loading path so result windows and CSV export no longer depend on the local cached result tables.
-- 2026-03-16: Started a final follow-up CodeRabbit autofix pass after one more accessibility comment landed on the PR header controls; this pass is scoped to the remaining actionable chooser-button state and the standard verification/commit/push flow.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused final follow-up verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after the final CodeRabbit chooser-button autofix. Frontend typecheck, ESLint, 88 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining lint note is the expected TanStack React Compiler warning around `useReactTable`, and the query workspace tests still emit the known jsdom-only `flushSync` noise from TanStack Virtual.
-- 2026-03-16: Completed the final CodeRabbit autofix by disabling the header connection chooser whenever there is no active or selected connection to edit, leaving no dead interactive control in the shell header.
-- 2026-03-16: Started a follow-up CodeRabbit autofix pass after a new accessibility review comment landed on the current PR; this pass is verifying whether older unresolved threads are stale before applying only the remaining code change and rerunning verification.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused follow-up autofix verification passed under Node `v24.13.0`: TypeScript stayed clean, the app-shell suite passed 14 tests, and ESLint still reports only the existing TanStack React Compiler warning around `useReactTable`.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after the follow-up CodeRabbit autofix. Frontend typecheck, ESLint, 88 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining lint note is the expected TanStack React Compiler warning around `useReactTable`, and the query workspace tests still emit the known jsdom-only `flushSync` noise from TanStack Virtual.
-- 2026-03-16: Completed the follow-up CodeRabbit autofix by converting the placeholder top-level menu labels from dead buttons into non-interactive text and confirming the still-open connection-edit thread is already fixed in the current branch state.
-- 2026-03-16: Started another CodeRabbit autofix pass to fetch unresolved review threads for the current branch, apply the required fixes, and re-run the relevant verification before reporting back.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ❌
-  - The first autofix verification pass failed in `src/components/ui/button.tsx` because widening the shared `Button` ref to `HTMLElement` made the native `<button>` branch incompatible with `Ref<HTMLButtonElement>`. The follow-up patch is splitting the `asChild` and native branches so the button keeps a typed native ref while the slotted branch stays generic.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ✅
-  - Focused frontend verification passed under Node `v24.13.0`: TypeScript stayed clean, the edited app/query workspace suites passed 27 tests, and ESLint only reported the pre-existing TanStack React Compiler warning around `useReactTable`. A small follow-up is in flight to remove the new exhaustive-deps warning before the broader verification run.
-- 2026-03-16: `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after the CodeRabbit autofix pass. Frontend typecheck, ESLint, 88 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully. The only remaining lint note is the expected TanStack React Compiler warning around `useReactTable`, and the query workspace tests still emit the known jsdom-only `flushSync` noise from TanStack Virtual.
-- 2026-03-16: Completed the CodeRabbit autofix pass by fixing the shared button submit default, threading explicit connection ids into edit flows, guarding stale connection activations and query-tab retargeting, restoring accessible result controls, correcting numeric harness data, and clearing the pending stylesheet spacing issue.
-- 2026-03-15: Completed the empty-results follow-up by deriving the viewer row count from the fetched window contents when `visibleRowCount` comes back as zero, so loaded rows now stay visible instead of falling through to the empty-state panel.
-- 2026-03-15: Started a follow-up fix for a TanStack results regression where the UI could show buffered row counts in the header while the new table body rendered an empty-state panel because it treated `window.visibleRowCount = 0` as authoritative even when the fetched window already contained rows.
-- 2026-03-15: Completed the query-results foundation migration to TanStack Table + TanStack Virtual while preserving the Rust-backed cached window contract, existing viewer-side sort/filter semantics, and the query workspace’s current diagnostics/messages surfaces.
-- 2026-03-15: Started replacing the hand-rolled query results grid with a TanStack Table + TanStack Virtual foundation while preserving the Rust-owned cached window contract, existing sort/filter semantics, and query-workspace diagnostics.
-- 2026-03-13: Refined the `SELECT *` fix after inspecting the real app cache database and confirming the cached row JSON already contained every column. The remaining bug was a frontend width mismatch: result headers used max-content sizing while body rows did not, so wide result sets could collapse body cells and visually leave only the first column visible.
-- 2026-03-13: Completed the post-screenshot query-workspace bug pass by wrapping long connection metadata in the rail, removing the redundant result-column summary strip, invalidating stale cached windows when a new result set lands, biasing the default shell split toward taller results, and correcting the quick-filter copy to describe row filtering accurately.
-- 2026-03-13: Started a post-screenshot query-workspace bug pass focused on the clipped connection rail, redundant table-definition output, incomplete `SELECT *` result columns, undersized results pane, and any additional regressions uncovered during validation.
-- 2026-03-13: Completed the cached-result follow-up by resetting the result viewer's internal virtualization offset independently of DOM scroll events, so new smaller result sets no longer request an out-of-range cached window and render a blank body.
-- 2026-03-13: Started a follow-up cached-result investigation after the desktop shell still reported `9 / 9 rows` without visible body rows; the active focus is whether the Rust-owned cache is correct and the frontend window/render state is dropping hydrated rows.
-- 2026-03-13: Completed a browser-validated connection-rail fit fix by widening the desktop shell clamp again and stacking connection metadata within each saved-target card, so the rail no longer cuts off list content under the shell harness viewport.
-- 2026-03-13: Started a browser-validated connection-rail fit fix after the saved-target list still felt cramped in the rendered shell even after the first sidebar-width pass; validation for this pass uses the `agent-browser` shell harness.
-- 2026-03-13: Completed a redundant connection-rail header cleanup by removing the large rail title and live-target summary card, leaving the saved-target list as the primary source of connection context.
-- 2026-03-13: Started a redundant connection-rail header cleanup after the latest shell pass left both a large `Workspace graph` title and a duplicate live-target card above the saved-target list.
-- 2026-03-13: Completed the non-functional UI cleanup by removing placeholder query actions and the unused explain/export surfaces from the query workspace, leaving only controls that map to live behavior.
-- 2026-03-13: Started a non-functional UI cleanup pass to remove placeholder query controls and result sub-panels that are visible but not ready for use, including toolbar affordances like Format, Explain, History, and the unused export surface.
-- 2026-03-13: Completed the connection-rail width fix by widening the left shell pane to a responsive desktop clamp, so saved-target details no longer get squeezed against the query workspace.
-- 2026-03-13: Completed the cached-result viewport fix by resetting the result-grid scroll position when a new result set or viewer descriptor set lands, preventing empty grids caused by stale window offsets after smaller result loads.
-- 2026-03-13: Started a connection-rail width fix after the saved-target list proved too narrow to show profile details in the redesigned shell; the focus is widening the left shell pane without breaking the editor/results split.
-- 2026-03-13: Started a cached-result viewport fix after the viewer reported `8 / 8 rows` for `SELECT * FROM "user" u` while rendering an empty grid; the active investigation is focused on stale scroll/window offsets surviving result-set changes.
-- 2026-03-13: Completed the reserved-identifier editor fix by quoting schema-derived autocomplete insertions, so PostgreSQL names like `user` no longer get emitted as ambiguous bare identifiers from the query editor.
-- 2026-03-13: Started a reserved-identifier query fix after staging cached `SELECT * FROM user u` as the current database username instead of table rows; the active investigation is focused on quoting schema-derived SQL identifiers safely in the editor flow.
-- 2026-03-13: Started a desktop-shell UI overhaul pass to match the new target design, with priority on fixed-height layout containment, independent panel scrolling, tighter connection interactions, and UI regression coverage.
-- 2026-03-13: Started a follow-up CodeRabbit autofix pass after one new CSV export review comment landed on `codex/phase-5`.
-- 2026-03-13: Started another CodeRabbit autofix pass on `codex/phase-5` to clear any newly unresolved review threads before the final commit/push.
-- 2026-03-12: Started a full local CI reproduction pass for the current branch to match `.github/workflows/ci.yml`, fix any failing step (currently suspected `cargo clippy`), and re-verify before handling remaining review feedback.
-- 2026-03-12: Started a second CodeRabbit unresolved-thread pass after CI stabilization so the branch ends with both CI and PR review state aligned.
-- 2026-03-12: Started a CodeRabbit autofix pass on `codex/phase-5` to resolve unresolved PR review threads against the current branch state.
-- 2026-03-12: Started a CI follow-up to fix a failing `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` run and verify the Rust workspace formatting state locally.
-- 2026-03-13: Started the desktop shell UI refinement pass against the provided target screenshots, with focus on fixed-height layout containment, isolated scrolling, and direct connection-target interactions.
-- 2026-03-12: Started Phase 5 implementation. `docs/MVP/PHASE5_PLAN.md` is present as an untracked file; it is being left untouched because it is not part of the current tracked baseline.
-- 2026-03-12: Phase 5 keeps the current shell layout and upgrades the results region instead of starting the broader shell redesign.
-- 2026-03-12: Phase 5 uses a Rust/SQLite cached result store rather than a React-held full-row buffer so large-result behavior stays inspectable and bounded.
-- 2026-03-12: Sort and filter semantics are viewer-only over the cached result set. There is no SQL rewriting in this phase.
-- 2026-03-12: CSV export will use the cached result set plus the current viewer descriptors rather than rerunning the SQL.
-- 2026-03-12: Prefer repo-local scripts and docs for AI/browser automation in this phase. Add a new skill only if the existing `agent-browser` workflow proves insufficient during implementation.
-- 2026-03-12: Rust command/state/service wiring now targets cached result windows and export jobs. The next gate is focused Rust verification to flush out compile errors and any SQLite/streaming regressions before the frontend result viewer is replaced.
-- 2026-03-13: Completed the desktop shell UI refinement pass with a contained app shell, independent pane scrolling, direct connection activation plus a context menu for secondary actions, and a browser smoke harness for screenshot verification.
+- 2026-04-03: Started a local app-startup failure investigation from the current branch.
+  - Goal is to reproduce the failure through the real dev entrypoint, identify the exact failing layer, and patch only the code/config required to restore local startup.
+  - Reproduced a Tauri startup regression: `npm run tauri dev` failed because Tauri shells out to `cargo run`, and the new `sqlite_inspector` utility introduced a second binary without a manifest `default-run`.
+  - Completed by setting `default-run = "sparow"` in `src-tauri/Cargo.toml`, which preserves the desktop app as the default binary while keeping `sqlite_inspector` available via `--bin sqlite_inspector`.
+- 2026-04-03: Started an autofix pass for the newest CodeRabbit comments on the current Phase 6 PR.
+  - Scope is limited to newly actionable CodeRabbit review feedback on the current branch, followed by focused local verification before commit/push.
+  - Completed by hardening `QueryLibraryDialog` against duplicate saved-query tag keys and invalid timestamp strings so the latest CodeRabbit review threads have code fixes ready to ship.
+- 2026-04-03: Started a full remaining CodeRabbit cleanup pass for PR #15.
+  - Scope is the 11 unresolved review threads still open on the PR after earlier targeted fixes, covering script robustness, Rust docs/persistence correctness, accessibility, and repo-log path cleanup.
+  - Completed by hardening the SQLite inspector and productivity smoke scripts, documenting the new Rust IPC surface, switching query-history/saved-query text search to literal substring matching, improving empty-state focus/accessibility in the productivity shell, and redacting machine-specific artifact paths from the repo log.
+- 2026-04-03: Checked PR #15 for another CodeRabbit pass after commit `b07ddef`.
+  - The latest CodeRabbit review run reported no actionable comments for the delta from `9f21ca2` to `b07ddef`, so no further code changes were required.
+- 2026-04-01: Started a second CodeRabbit autofix pass for PR #15.
+  - Scope is limited to the newly unresolved CodeRabbit threads after commit `9f21ca2`, with local verification before any code change.
+  - Completed by downgrading uncached saved-query tabs to "save as new", wiring the harness query-library Run actions through `startTabQuery`, syncing open tabs after saved-query metadata edits, and tightening the productivity smoke to verify the real tab/overlay flow.
+- 2026-04-01: Started a CodeRabbit autofix pass for PR #15.
+  - Scope is limited to unresolved actionable CodeRabbit review threads on the current branch, with local verification before any code change.
+  - The first full CI rerun produced invalid Node-side failures because `npm ci` was launched in parallel with `typecheck`, `lint`, `test`, and `build`, leaving those commands to read a partially rewritten `node_modules` tree. The fix is to rerun the Node checks serially after `npm ci` finishes.
+  - Completed by fixing the unresolved CodeRabbit findings around stale productivity searches, explicit `null` connection targets, results-tab focus routing, schema disabled-state focus, bubbled tree keyboard events, and fire-and-forget query error handling. The branch is back to a full local CI-equivalent green state.
+- 2026-04-01: Started a full local CI parity pass for `codex/phase-6`.
+  - Scope mirrors `.github/workflows/ci.yml`: Rust format check, Clippy, locked Rust tests, `npm ci`, TypeScript typecheck, ESLint, Vitest, and frontend build.
+  - The branch will only be committed and pushed again if every local CI-equivalent check passes.
+  - Clippy initially failed because `AppState::new` grew to eight parameters, which tripped `clippy::too_many_arguments` under `-D warnings`; the fix is to bundle the service dependencies into a small `AppServices` struct and rerun the Rust gates.
+  - Completed with all local CI-equivalent checks green. The only non-failing output left is the existing React Compiler warning for `useReactTable()`, the longstanding jsdom `flushSync` test warnings, and Vite’s chunk-size advisory during production build.
+- 2026-04-01: Started a Rust formatting check pass on `codex/phase-6`.
+  - Scope is `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` plus any formatter-reported fixes needed to make the Rust workspace check-clean.
+  - Completed by rerunning `cargo fmt --manifest-path src-tauri/Cargo.toml --all` to normalize the remaining drift in `src-tauri/src/bin/sqlite_inspector.rs`, then confirming the workspace passes `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
+- 2026-04-01: Started a Rust formatting pass on `codex/phase-6`.
+  - Scope is limited to the Tauri/Rust workspace formatting command and any syntax or formatter-blocking issues it exposes.
+  - Completed with `cargo fmt --manifest-path src-tauri/Cargo.toml --all`; the formatter passed and normalized Rust formatting in the Phase 6 Tauri files without exposing any syntax errors.
+- 2026-04-01: Started post-PR conflict resolution for `codex/phase-6`.
+  - The branch is locally clean, so the conflict appears to be against the updated `main` branch rather than unresolved local merge markers.
+  - Resolution strategy is to merge `origin/main` into `codex/phase-6`, keep the Phase 6 productivity layer intact, and rerun the most relevant checks before pushing the updated branch.
+  - Completed by merging `origin/main` into `codex/phase-6` as `9439cff`, keeping the Phase 6 productivity launchers and focus hooks intact, and pushing the refreshed branch to update PR #15.
+- 2026-03-31: Started Phase 6 implementation from a green baseline.
+  - Phase 6 will preserve the current shell grid and add overlay productivity surfaces that can survive the planned UI replacement.
+  - Shared contract files (`src/lib/contracts.ts`, `src/lib/guards.ts`, Rust contract structs, fixtures, IPC, commands, app state, and `src/App.tsx`) are treated as serial merge hotspots and must land before deeper feature work.
+  - Saved queries will be upgraded in-place with an append-only migration so they can store `connection_profile_id` and `created_at`; existing rows will backfill `created_at` from `updated_at`.
+  - Query history remains an accepted-query audit log, not a successful-query-only log.
+  - Opening history or saved queries will create a new tab by default so existing editor state is never overwritten implicitly.
+  - The Python-dependent SQLite inspection path will be replaced with repo-native tooling during this phase.
+- 2026-03-31: When sandboxed execution already has Node `v24.14.0`, Phase 6 verification can run `npm` directly instead of calling `fnm use`, which fails because `fnm` tries to write multishell state outside the workspace.
 
 ## Verification
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The final 2026-03-26 rerun passed under Node `v24.14.0`: ESLint kept only the existing React Compiler/TanStack `useReactTable` warning in `src/features/query/QueryResultsTable.tsx`, Vitest passed 9 files / 97 tests, `smoke:foundation`, `smoke:results-browser`, and `smoke:shell-browser` completed successfully, and the Rust workspace passed with 93 tests green and 2 PostgreSQL smoke tests ignored.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The second 2026-03-26 rerun cleared the cursor-sync crash and brought the suite down to one failing Vitest case: `src/test/app-shell.test.tsx > App shell > sends a password when saving a selected profile without a stored secret`. The new status-bar edit handler passed `openEditConnectionDialog` directly, so React forwarded the click event into the optional `connectionId` parameter and the save request used the event object instead of the selected connection id.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The 2026-03-26 rerun reached `typecheck`, `lint`, and Vitest, then failed because the new cursor-position sync assumed Monaco's `getPosition()` exists. The test editor stub in `src/test/setup.ts` does not expose that method, which crashed `QueryWorkspace` during mount and broke the shell/schema/component suites until the cursor store was hardened against partial editor mocks.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The full repo gate passed under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
-- `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
-  - The focused replayable result-store suite passed after the latest autofix change: 8 tests green, including the new large-anchor eviction regression that keeps a multi-page active window intact.
-- `cargo test --manifest-path src-tauri/Cargo.toml query::result_store::tests` ✅
-  - The focused Rust replayable-result-store suite passed: 7 tests green, including the new bounded replacement-batch and terminal visible-row-count regressions.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 18 tests green, including the new stale count-error regression. The existing jsdom `flushSync` warnings from the component tests remain unchanged.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The full repo gate passes under Node `v24.14.0`: `typecheck`, ESLint, 9 Vitest files / 96 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in the query-workspace component tests remain unchanged.
-- `cargo test --manifest-path src-tauri/Cargo.toml query::` ✅
-  - The focused Rust query suite passes with the new replayable-order and cache-more-rows regressions: 25 tests green, including the new deterministic-order fallback and terminal-page `has_more_rows` coverage.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 17 tests green, including the stale-window-count guard and the `visibleRowCount` preservation assertion. The existing jsdom `flushSync` warnings remain unchanged.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
-  - The shell harness smoke now asserts the result grid has real vertical overflow before scrolling, and it wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png) after the scroll-fix patch.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
-  - The result-viewer smoke now asserts the grid is vertically scrollable before it drives the large-result scenario, and it wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 16 tests green. This run predates the later stale-window-count regression that raised the same focused scope to 17 tests. The existing jsdom-only React `flushSync` warnings from the TanStack Virtual tests remain unchanged.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The 2026-03-24 rerun passes end-to-end under Node `v24.14.0`: `typecheck`, `lint`, 9 Vitest files / 94 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all completed successfully. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The first 2026-03-24 Vitest exclusion attempt accidentally replaced Vitest's default exclude list, so `vitest run` started discovering `node_modules/**` tests and failed on 13 dependency suites.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The 2026-03-24 rerun now clears `typecheck` and `lint`, which confirms `.agents` is excluded from ESLint. It still fails in `npm run test` because Vitest discovers `.agents/skills/octocode-research/**` tests and reports 10 failing suites there.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint now ignores `.agents/**` and exits successfully. The only remaining output is the existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx`.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The full verify run used Node `v24.14.0`, cleared `typecheck`, then failed in `npm run lint` because ESLint scanned `.agents/skills/octocode-research/**` and reported 1,371 errors plus 3 project-service parsing errors there. The existing React Compiler/TanStack warning in `src/features/query/QueryResultsTable.tsx` also remained present.
-- `cargo test --manifest-path src-tauri/Cargo.toml query::` ✅
-  - The focused Rust query suite passes after the bounded page-cache refactor: 23 tests green, including new result-store regressions for cross-page windows, deep-scroll `visible_row_count`, and viewport-distance eviction.
-- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` ✅
-  - Clippy is clean after replacing the replayable-handle constructor argument list with a typed init struct.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references still compile under Node `v24.14.0` after the result-grid row-count estimate switched to `window.visibleRowCount`.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace suites passed under Node `v24.14.0`: 2 Vitest files and 15 tests green. The existing React `flushSync` warnings from the component tests remain unchanged.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full repo verification passes again after the wide-grid body-width fix: frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
-  - The widened results-browser harness now renders a wide cached grid with visible body values across multiple columns and wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png), validating the actual `SELECT *` layout failure mode instead of the old narrow-grid scenario.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
-  - The focused query-results component suite stays green after the wide-grid width fix, including the regression that now checks result rows keep `min-w-max`/`w-max` sizing instead of collapsing under wide column sets.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/ResultViewerHarness.tsx src/test/query-workspace-component.test.tsx` ✅
-  - ESLint stayed clean on the touched query-grid files after the width-synchronization patch and the wider harness data.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
-  - The widened results-browser harness reached the new wide-grid scenario, but the smoke assertion matched both the `name` and `email` cells for `customer-0110`; the validation needs an exact grid-cell selector instead of a broad text match.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full repo verification now passes under Node `v24.13.0`: frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and Rust tests all completed successfully.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ✅
-  - The refreshed results-viewer smoke now validates the current viewer flow by filtering to `customer-0110`, toggling the messages tab, and capturing [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png) without relying on removed export controls.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
-  - The shell smoke passed against the long-host harness scenario and wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png), confirming the wrapped connection metadata, taller results split, and multi-column grid rendering in the rendered shell.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
-  - The refreshed results-browser smoke reached the current harness and exercised the new controls, but the interim assertion for `Cached result` was too broad under Playwright strict mode; the smoke needs a unique messages-tab assertion before it can serve as a stable verifier.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The second full verify run cleared typecheck, lint, tests, and `smoke:foundation`, then failed in `smoke:results-browser` because that script still waits for the removed `result-export-path` control instead of validating the current cached-results UI.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ❌
-  - The first full verify run failed at TypeScript strict-null checks: `ResultGrid` was reading `tab.result.window` before the local null guard, and the new `applyQueryEvent` invalidation branch needed to prove `nextSummary` was non-null before comparing `resultSetId`.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
-  - The focused shell and query suites now pass with 25 tests green, including the new stale-window regression that proves a completed query clears the previous cached window before a new result window is fetched.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/useQueryWorkspace.ts src/features/connections/ConnectionWorkspace.tsx src/features/shell/AppShell.tsx src/features/shell/ShellHarness.tsx src/App.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
-  - The touched shell/query files now pass ESLint after removing the dead `ConnectionsRail.pending` prop and tightening the new regression coverage.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
-  - The focused frontend suite failed on the new stale-window regression because the test reused the same query-event signature with a different `tabId`; `useQueryWorkspace` intentionally dedupes by job/status/timestamps/message, so the test setup is being rewritten to avoid masking the state transition.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint -- src/features/query/QueryWorkspace.tsx src/features/query/useQueryWorkspace.ts src/features/connections/ConnectionWorkspace.tsx src/features/shell/AppShell.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
-  - ESLint failed on an unused `pending` prop in `ConnectionsRail`; that prop is not read anywhere in the rail, so the fix is to remove the dead API surface instead of suppressing the warning.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace component suite passed under Node `v24.13.0`: 1 Vitest file and 3 tests green after the viewer reset stopped depending on a synthetic scroll event to clear stale cached-window offsets.
-- `eval "$(fnm env --shell zsh)" && fnm use && npx eslint src/features/query/QueryWorkspace.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The touched query viewer files pass ESLint after the virtualization reset switched from an effect-driven state write to a ref-backed scroll offset plus revision tick.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:results-browser` ❌
-  - The existing smoke script timed out waiting for `result-export-path`, which is expected on the current tree because the placeholder export controls were removed in the shell cleanup pass. That script needs a separate update and was not used as the gate for this cached-result fix.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 13 tests green after widening the desktop rail clamp again.
-- `agent-browser set viewport 1280 900` + `agent-browser open 'http://127.0.0.1:4175/?harness=shell'` + `agent-browser screenshot /Users/orgoldfus/Workspace/personal/sparow/artifacts/connection-rail-desktop-after-fix.png` ✅
-  - Browser validation under the shell harness confirmed the desktop rail widened to roughly `435px` at `1280px` viewport width and the saved-target cards no longer squeeze database/username metadata into a side-by-side row.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 13 tests green, including the new assertion that the redundant `Workspace graph` title and live-target summary no longer render in the connection rail.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx` ✅
-  - The focused query workspace component suite passed under Node `v24.13.0`: 1 Vitest file and 3 tests green, including the new assertion that placeholder query actions and the explain/export affordances are absent from the rendered UI.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compiled cleanly under Node `v24.13.0` after narrowing the result-view union and removing the dead query-workspace controls.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/app-shell.test.tsx` ✅
-  - The focused app-shell regression suite passed under Node `v24.13.0`: 1 Vitest file and 12 tests green, including the new assertion that keeps the widened responsive connection-rail column in the shell grid.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/query-workspace-component.test.tsx src/test/sql-autocomplete.test.ts` ✅
-  - The focused query-viewer regression suite passed under Node `v24.13.0`: 2 Vitest files and 6 tests green, including the new scroll-reset coverage for replacing a large cached result with a smaller one in the same tab.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compiled cleanly under Node `v24.13.0` after the result-grid scroll reset and viewer regression test were added.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint passed cleanly under Node `v24.13.0` after the result-grid viewport reset switched to a DOM-driven scroll event and the test ResizeObserver mock was tightened.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/sql-autocomplete.test.ts` ✅
-  - The focused autocomplete regression suite passed under Node `v24.13.0`: 1 Vitest file and 4 tests green, including the new quoted-identifier coverage for schema-derived `user` suggestions.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - TypeScript project references compiled cleanly under Node `v24.13.0` after the autocomplete insert-text change.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint` ✅
-  - ESLint passed cleanly under Node `v24.13.0` after the query-editor autocomplete update and test additions.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run smoke:shell-browser` ✅
-  - The shell harness smoke passed under Node `v24.13.0` and wrote [artifacts/shell-harness-smoke.png](artifacts/shell-harness-smoke.png), confirming the redesigned shell renders with contained panes and the updated connection rail.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The final post-refactor verification passed under Node `v24.13.0`: typecheck, ESLint, 78 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed, with 75 Rust tests green and 4 expected PostgreSQL smoke tests ignored.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - The UI overhaul tree compiles under Node `v24.13.0` after the shell/layout refactor, the new results-view union, and the connection-rail interaction changes were wired through the React surface.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - Re-ran after adding the full shell harness, browser smoke route, and app-shell interaction tests; the React/Tauri frontend still compiles cleanly under Node `v24.13.0`.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint && npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx` ✅
-  - The focused UI regression pass is green under Node `v24.13.0`: ESLint passed, the new connection-rail interaction tests passed, and the query-tab keyboard regression test stayed green after the shell redesign.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run lint && npm run test` ✅
-  - The full frontend suite is green under Node `v24.13.0`: ESLint passed with no remaining hook/ref warnings, and all 78 Vitest checks passed after the app-shell timing fixes and the results-panel effect cleanup.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - The final follow-up verification passed under Node `v24.13.0`: `npm run verify` stayed green with typecheck, ESLint, 76 Vitest tests, both smoke suites, and the Rust workspace finishing with 75 passing tests plus 4 expected ignored PostgreSQL smoke tests.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping` ✅
-  - The CSV export follow-up verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, and the updated CSV sanitization unit test confirmed formula hardening still applies to string cells without mutating negative numeric exports.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && npm run verify` ✅
-  - The final autofix verification passed under Node `v24.13.0`: Rust formatting stayed clean, `clippy -D warnings` passed, `npm run verify` passed with 76 Vitest tests plus both smoke suites green, and the Rust workspace finished with 75 tests passed and 4 expected PostgreSQL smoke tests ignored.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked csv_field_for_cell_sanitizes_formula_prefixes_before_escaping && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ✅
-  - The focused autofix verification passed under Node `v24.13.0`: Rust formatting stayed clean, the new CSV sanitization unit test passed, the contract-fixture suite passed with the tightened result guards, and ESLint stayed green.
-- `fnm use` ✅
-  - Warning about shell initialization is unchanged; the command still resolved to `Using Node v24.13.0`.
-- `npm run verify` ✅
-  - Typecheck, lint, Vitest, `smoke:foundation`, and `cargo test --manifest-path src-tauri/Cargo.toml` all passed at the Phase 5 kickoff, with 69 frontend tests, 63 Rust tests, and 4 expected ignored PostgreSQL smoke tests green.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ❌
-  - Failed before compilation because `tokio-postgres 0.7.16` does not expose the `with-bigdecimal-0_4` feature. The dependency config was corrected before the next verification run.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust backend compiled and passed after the Phase 5 service/driver integration, with 70 tests green and the same 4 PostgreSQL-dependent tests still ignored.
+- `cargo build --manifest-path src-tauri/Cargo.toml --bins` ✅
+  - Ran on 2026-04-03 after adding `default-run = "sparow"` to `src-tauri/Cargo.toml`. Both declared Rust binaries built successfully.
+- `npm run tauri dev` ✅
+  - Ran on 2026-04-03 after adding `default-run = "sparow"` to `src-tauri/Cargo.toml`. Tauri got past the previous Cargo ambiguity, compiled the app, and reached `Running target/debug/sparow`; the process was then stopped manually after confirming startup.
+- `npm run tauri dev` ❌
+  - Ran on 2026-04-03 before the manifest fix. Tauri failed because `cargo run` could not choose between the `sparow` and `sqlite_inspector` binaries.
+- `npm run test -- src/test/productivity-workspace.test.tsx` ✅
+  - Ran on 2026-04-03 during the latest CodeRabbit autofix pass. The focused productivity slice passed (5 tests).
 - `npm run typecheck` ✅
-  - TypeScript compiled after the query workspace moved to cached result summaries, result windows, and export job state.
-- `node ./scripts/run-with-node-version.mjs vitest run src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ❌
-  - The wrapper could not resolve `vitest` directly in PATH on this machine, so the targeted frontend run was retried through `npm run test -- ...` instead of treating this as an application failure.
-- `npm run test -- src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/app-shell.test.tsx` ✅
-  - The query workspace, query editor component, and app-shell integration tests all passed after the cached-result viewer state and listener mocks were updated.
-- `npm run smoke:results-browser` ❌
-  - The harness booted and the browser reached the page, but the smoke assertion matched a hidden scenario `<option>` containing the word `running` instead of the visible export-status badge. The script was tightened before retrying.
-- `npm run verify` ❌
-  - Typecheck passed, but lint failed on a missing result-grid effect dependency and several harness lint issues. Those were fixed before the next full verification run.
-- `npm run smoke:results-browser` ✅
-  - The harness smoke completed after the teardown fix and wrote [artifacts/result-viewer-smoke.png](artifacts/result-viewer-smoke.png).
-- `npm run verify` ✅
-  - Phase 5 full verification passed with frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and Rust tests green.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Re-ran after silencing the cached-result metadata warning. The Rust suite stayed green with 70 passed tests and 4 expected ignored PostgreSQL smoke tests.
-- `npm run verify` ✅
-  - Re-ran after the final result-grid accessibility pass. The full stack stayed green with 76 frontend tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all passing.
-- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - Rust verification is green again after the Phase 5 backend wiring pass: 70 tests passed, 4 PostgreSQL smoke tests remained ignored as expected, and the service/contract suite now builds against cached result summaries plus export commands.
+  - Ran on 2026-04-03 during the latest CodeRabbit autofix pass. TypeScript compilation passed after the `QueryLibraryDialog` fixes.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. Rust formatting completed successfully after the repository, command, contract, and inspector updates.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ❌
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The first run failed because the new SQLite `ESCAPE` clauses in `src-tauri/src/persistence/repository.rs` were rejected at runtime (`ESCAPE expression must be a single character`), so the search implementation was simplified to literal `instr(lower(...), ?)` matching and rerun.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass before the first Rust test run. Rust formatting completed successfully.
+- `npm run smoke:productivity-browser` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
+- `npm run test -- src/test/app-shell.test.tsx src/test/productivity-workspace.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. The focused shell, productivity, and schema-browser slices all passed (29 tests).
+- `npm run lint` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-03 during the full remaining CodeRabbit cleanup pass. TypeScript compilation passed.
+- `npm run smoke:productivity-browser` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass after correcting the harness smoke to reuse the already-open query-library overlay following metadata edits. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
+- `npm run smoke:productivity-browser` ❌
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. The updated smoke initially failed because it tried to relaunch the query library after editing saved-query metadata even though the dialog intentionally stayed open behind the save modal, so Playwright hit the existing overlay and timed out on the launcher click.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. The focused productivity and shell slices passed (22 tests).
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during the second CodeRabbit autofix pass. TypeScript compilation passed after the new saved-query/harness fixes.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during the targeted CodeRabbit regression pass. TypeScript compilation passed after the productivity/query/schema fixes.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/schema-browser.test.tsx src/test/query-workspace.test.tsx src/test/query-workspace-component.test.tsx` ✅
+  - Ran on 2026-04-01 during the targeted CodeRabbit regression pass. The focused productivity, schema, query-workspace, and query-results slices all passed (31 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
-  - CI formatting drift was reproduced locally, corrected with `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the Rust workspace now passes the formatter check again.
-- `npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace.test.tsx` ✅
-  - The targeted frontend contract and workspace tests passed after the cached-result status contract switched from `isComplete` to explicit terminal states.
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. The Rust workspace remained formatting-clean.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. Clippy passed with `-D warnings`.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
+- `npm ci` ✅
+  - Ran on 2026-04-01 during the final CodeRabbit verification pass. Dependencies installed successfully from the committed lockfile.
+- `npm run typecheck` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. It failed against a partially rewritten `node_modules` tree (`TS2688: Cannot find type definition file for 'node'`), so the Node checks were rerun serially.
+- `npm run lint` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. It failed against a partially rewritten `node_modules` tree, so the Node checks were rerun serially.
+- `npm run test` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. Vitest worker startup failed because packages under `node_modules` were mid-install, so the Node checks were rerun serially.
+- `npm run build` ❌
+  - Ran on 2026-04-01 in parallel with `npm ci` during the first full CI rerun. The nested typecheck failed against the partially rewritten `node_modules` tree, so the Node checks were rerun serially.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. TypeScript compilation passed.
+- `npm run lint` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run test` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. Vitest passed with 10 test files and 113 tests green. The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run build` ✅
+  - Ran on 2026-04-01 after `npm ci` completed during the final CodeRabbit verification pass. The frontend production build succeeded. Vite reported the existing chunk-size advisory for the main bundle, but the build completed successfully.
+- `npm run build` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. The frontend production build succeeded. Vite reported the existing chunk-size advisory for the main bundle, but the build completed successfully.
+- `npm run test` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. Vitest passed with 10 test files and 109 tests green. The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run lint` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. ESLint passed; the existing React Compiler warning for `useReactTable()` in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. TypeScript compilation passed against the current Phase 6 branch.
+- `npm ci` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. Dependencies installed successfully from the committed lockfile.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
+  - Ran on 2026-04-01 as part of the local CI parity pass. The Rust workspace passed with 107 tests green, 2 expected PostgreSQL tests ignored, and no failures.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 after the `AppServices` refactor during the local CI parity pass. The Rust workspace remained formatting-clean.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ✅
+  - Ran on 2026-04-01 after bundling the app services passed into `AppState::new`. Clippy passed with `-D warnings`.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ❌
+  - Ran on 2026-04-01 as part of the local CI parity pass. Clippy failed on `clippy::too_many_arguments` for `AppState::new` in `src-tauri/src/foundation/state.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 as part of a full local CI parity pass against `.github/workflows/ci.yml`. The Rust workspace is formatting-clean.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ❌
+  - Ran on 2026-04-01 for a Rust formatting gate. It failed on one remaining formatting diff in `src-tauri/src/bin/sqlite_inspector.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-01 after the failed check to normalize the remaining drift in `src-tauri/src/bin/sqlite_inspector.rs`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` ✅
+  - Ran on 2026-04-01 after reformatting the Rust workspace. The Tauri workspace is now formatting-clean in check mode.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all` ✅
+  - Ran on 2026-04-01 for a Rust workspace formatting pass. The command succeeded and rewrote formatting in `src-tauri/src/bin/sqlite_inspector.rs`, `src-tauri/src/foundation/contracts.rs`, `src-tauri/src/foundation/mod.rs`, `src-tauri/src/foundation/state.rs`, `src-tauri/src/persistence/repository.rs`, and `src-tauri/src/productivity/service.rs`.
+- `npm run typecheck` ✅
+  - Ran on 2026-04-01 during post-PR conflict resolution after merging `origin/main` into `codex/phase-6`. TypeScript compilation passed with the merged Phase 6 productivity layer and the updated shell changes from `main`.
+- `npm run test -- src/test/app-shell.test.tsx src/test/productivity-workspace.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-04-01 during post-PR conflict resolution after merging `origin/main` into `codex/phase-6`. The targeted shell, productivity, query-workspace, and schema-browser slices all passed (33 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
+  - Ran on 2026-03-31 under Node `v24.14.0`. `typecheck`, ESLint, 9 Vitest files / 97 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust workspace all passed. The existing TanStack React Compiler warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `eval "$(fnm env --shell zsh)" && fnm use && npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace-component.test.tsx` ❌
+  - Ran on 2026-03-31. Failed before tests started because sandboxed execution could not create the `fnm` multishell symlink under `/Users/orgoldfus/.local/state/fnm_multishells/...`.
+- `cargo test --manifest-path src-tauri/Cargo.toml productivity::service::tests persistence::repository::tests foundation::contracts::tests` ❌
+  - Ran on 2026-03-31. Failed immediately because `cargo test` accepts a single positional test filter and rejected the extra filters.
+- `npm run test -- src/test/contract-fixtures.test.ts src/test/query-workspace-component.test.tsx` ✅
+  - Ran on 2026-03-31 under Node `v24.14.0`. `src/test/contract-fixtures.test.ts` and `src/test/query-workspace-component.test.tsx` both passed (58 tests). The existing jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ❌
-  - The first Rust verification pass failed on a missing `QueryResultStatus` import in the foundation contract tests and a borrow-lifetime issue in the transactional `load_query_result_window` rewrite. Both are being corrected before retrying.
+  - Ran on 2026-03-31. Compilation failed in `src-tauri/src/persistence/repository.rs` because the new repository test module was missing imports for `params!`, `Connection`, `MIGRATIONS`, `HISTORY_RETENTION_LIMIT`, and `SaveSavedQueryRecord`.
 - `cargo test --manifest-path src-tauri/Cargo.toml` ✅
-  - The Rust suite passed after the contract-test import fix and the transactional window-read lifetime cleanup, with 72 tests green and 4 PostgreSQL smoke tests still ignored as expected.
+  - Ran on 2026-03-31 after fixing the new repository test-module imports. The Rust workspace passed with 107 tests green and 2 expected PostgreSQL tests ignored.
+- `npm run typecheck` ❌
+  - Ran on 2026-03-31 during frontend productivity integration. Failed on one unused import: `cn` in `src/features/productivity/QueryLibraryDialog.tsx`.
+- `npm run test -- src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-03-31 under Node `v24.14.0`. `src/test/app-shell.test.tsx`, `src/test/query-workspace-component.test.tsx`, and `src/test/schema-browser.test.tsx` all passed (29 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after removing the unused `cn` import from `src/features/productivity/QueryLibraryDialog.tsx`.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ❌
+  - Ran on 2026-03-31. `src/test/productivity-workspace.test.tsx` exposed three frontend issues: the save-query dialog defaulted `connectionProfileId` to `null` for the active tab, the command-palette assertion needed to wait for the saved-query row itself, and `Mod+4` could not focus the disabled results quick filter.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ❌
+  - Ran again on 2026-03-31 after fixing the command-palette assertion and results focus target. The remaining failure was the active-tab save path still submitting `connectionProfileId: null` when the dialog opened before the tab/connection state had converged.
+- `npm run typecheck` ❌
+  - Ran on 2026-03-31 after adding the productivity harness and inspector tooling. Failed on one unused state setter: `setHistoryEntries` in `src/features/shell/ShellHarness.tsx`.
+- `cargo test --manifest-path src-tauri/Cargo.toml` ✅
+  - Ran on 2026-03-31 after adding the `sqlite_inspector` binary. The Rust workspace passed with 107 tests green, 2 expected PostgreSQL tests ignored, and the new `sqlite_inspector` binary compiled successfully under test.
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after fixing the harness productivity wiring.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-03-31 under Node `v24.14.0`. The productivity, shell, query-workspace, and schema-browser slices all passed (33 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run smoke:productivity-browser` ❌
+  - Ran on 2026-03-31. The harness smoke failed before app assertions because Playwright Chromium hit a macOS permission error during launch: `bootstrap_check_in ... Permission denied (1100)`. This appears environment-related and needs an escalated rerun.
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after adding stable productivity launcher/dialog test IDs and improving the productivity smoke diagnostics.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx src/test/query-workspace-component.test.tsx src/test/schema-browser.test.tsx` ✅
+  - Ran on 2026-03-31 under Node `v24.14.0`. The productivity, shell, query-workspace, and schema-browser slices all passed again (33 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run smoke:productivity-browser` ❌
+  - Ran on 2026-03-31 with Chromium outside the sandbox. The new diagnostics showed the harness page was crashing after opening the command palette with a browser-only `Maximum update depth exceeded` loop inside Radix Presence/ref composition, before any productivity assertions could run.
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after converting the dialog primitive wrappers to proper ref-forwarding components for browser-safe Radix mounting.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
+  - Ran on 2026-03-31 after the dialog wrapper ref fix. The productivity and shell slices both passed (21 tests).
+- `npm run smoke:productivity-browser` ❌
+  - Ran again on 2026-03-31 with Chromium outside the sandbox after the dialog wrapper ref-forwarding change. The same browser-only `Maximum update depth exceeded` loop remained when opening the command palette, which confirmed the issue lived in the shared dialog primitive rather than in a single productivity dialog.
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after replacing the shared dialog primitive with a repo-local modal implementation that avoids the Radix dialog ref loop in real browsers.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx src/test/foundation-smoke.test.tsx` ✅
+  - Ran on 2026-03-31 after the dialog primitive replacement. The productivity, shell, and foundation smoke slices all passed (22 tests).
+- `npm run typecheck` ✅
+  - Ran on 2026-03-31 after disabling unused TanStack pagination resets in `QueryResultsTable` and tightening the productivity smoke selector.
+- `npm run test -- src/test/query-workspace-component.test.tsx src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
+  - Ran on 2026-03-31 after the result-table pagination change. The query-workspace, productivity, and shell slices all passed (28 tests). The longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run smoke:productivity-browser` ✅
+  - Ran on 2026-03-31 after tightening the browser-only selectors. The productivity harness smoke completed successfully and wrote `artifacts/productivity-harness-smoke.png`.
+- `npm run verify` ❌
+  - Ran on 2026-03-31. The full verify failed in the lint step on new React rules in the productivity code: the command palette reset effect used synchronous `setState`, `useProductivityWorkspace` called `useEffectEvent` helpers from non-effect code, and the harness command-palette `useMemo` violated the repo’s React Compiler preservation rules.
+- `npm run lint` ✅
+  - Ran on 2026-03-31 after restructuring the new productivity code around `useCallback`/plain render-time derivation. ESLint passed; the existing TanStack React Compiler warning in `src/features/query/QueryResultsTable.tsx` remains unchanged.
+- `npm run test -- src/test/productivity-workspace.test.tsx src/test/app-shell.test.tsx` ✅
+  - Ran on 2026-03-31 after the lint-oriented productivity refactor. The productivity and shell slices both passed (21 tests).
+- `npm run verify` ❌
+  - Ran on 2026-03-31 inside the default sandbox. The repo checks passed through typecheck, lint, Vitest, and `smoke:foundation`, but `smoke:results-browser` failed on the known macOS Chromium permission error (`bootstrap_check_in ... Permission denied (1100)`), so the full verify needed an escalated rerun.
 - `npm run verify` ✅
-  - Full verification passed after the CodeRabbit autofix pass: frontend typecheck, lint, 76 Vitest tests, `smoke:foundation`, `smoke:results-browser`, and the Rust suite all stayed green with the new cached-result status contract and export/runtime fixes.
-- `fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings` ❌
-  - `fnm use` resolved `Using Node v24.13.0` with the same shell-path warning, `cargo fmt --check` passed, and `cargo clippy` failed on `clippy::let_and_return` in `src-tauri/src/persistence/repository.rs` within the cached-row decode path. Fixing that lint before rerunning the Rust CI steps.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked` ✅
-  - The Rust CI sequence now passes locally after removing the unnecessary `let`/return binding in the cached-row decode path. `clippy` is clean under `-D warnings`, and the locked Rust suite passed with 72 tests green plus the same 4 ignored PostgreSQL smoke tests.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ✅
-  - The frontend CI sequence passed under the repo-pinned Node `v24.13.0` and npm `11.6.2`, which matches the workflow expectations better than the machine-default Node `20.17.0`. Typecheck, ESLint, 76 Vitest tests, and the production Vite build all completed cleanly.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked persistence::repository::tests::preserves_requested_result_sets_when_clearing_a_tab_cache query::service::tests::records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ❌
-  - The targeted follow-up verification failed immediately on `cargo fmt --check` because the new repository/query-service edits needed Rust formatting. Running `cargo fmt --manifest-path src-tauri/Cargo.toml` before retrying the targeted checks.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked persistence::repository::tests::preserves_requested_result_sets_when_clearing_a_tab_cache query::service::tests::records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ❌
-  - Rust formatting succeeded, but the targeted command itself was invalid because `cargo test` only accepts a single name filter per invocation. Retrying with separate Rust test commands before treating this as an application failure.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo test --manifest-path src-tauri/Cargo.toml --locked preserves_requested_result_sets_when_clearing_a_tab_cache && cargo test --manifest-path src-tauri/Cargo.toml --locked records_query_history_after_accepting_a_query && npm run test -- src/test/contract-fixtures.test.ts && npm run lint` ✅
-  - The targeted regression checks passed after formatting: the new repository preservation test passed, the existing query-history service test stayed green, the frontend contract-fixture suite passed, and ESLint stayed clean. That run also exposed a now-unused `delete_query_result_set` helper, which is being removed before the next `clippy -D warnings` pass.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ❌
-  - The post-fix full CI rerun failed at `cargo clippy` on `dead_code`: `Repository::delete_query_result_set` is no longer used after the tab cleanup switched to one transactional delete. Removing that helper before rerunning the entire workflow.
-- `eval "$(fnm env --shell zsh)" && fnm use && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm ci && npm run typecheck && npm run lint && npm run test && npm run build` ✅
-  - The full CI workflow now passes locally on the current tree under Node `v24.13.0`: Rust format, `clippy -D warnings`, and 74 Rust tests (plus 4 expected ignored PostgreSQL smoke tests) all passed; `npm ci`, typecheck, ESLint, 76 Vitest tests, and the production Vite build also completed successfully.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ❌
-  - The first TanStack grid migration pass failed on strict TypeScript cell typing in `QueryResultsTable.tsx`, a missing hook dependency warning promoted by ESLint review, and two query-results component regressions in tests: the virtualized window request was not advancing after scroll and the fallback render path produced no visible rows in the jsdom test environment.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ✅
-  - The focused frontend migration checks now pass: strict TypeScript is clean, ESLint reports only the expected TanStack React Compiler compatibility warning around `useReactTable`, and the query workspace plus results-panel suites are green with the TanStack table/virtualized renderer in place.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after the TanStack migration. Frontend typecheck, ESLint, 86 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust test suite all completed successfully. The only remaining frontend note is the expected React Compiler compatibility warning from `useReactTable`, plus jsdom-only `flushSync` noise emitted by TanStack Virtual during component tests.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck && npm run lint && npm run test -- src/test/query-workspace-component.test.tsx src/test/query-workspace.test.tsx` ✅
-  - The empty-results follow-up fix passes focused verification. The query workspace keeps rendering loaded rows when a fetched window reports `visibleRowCount = 0`, strict TypeScript is clean, and ESLint still reports only the expected TanStack React Compiler warning around `useReactTable`.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run verify` ✅
-  - Full verification passed after the empty-results follow-up. Frontend typecheck, ESLint, 87 Vitest tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, and the Rust suite all completed successfully, with the same expected TanStack React Compiler warning and jsdom-only `flushSync` noise from TanStack Virtual tests.
-- Final cleanup pass aligned Phase 5 docs and harness copy with the direct-query result implementation and removed the obsolete `scripts/inspect-result-cache.mjs` helper.
-- `eval "$(fnm env --shell zsh)" && fnm use && npm run typecheck` ✅
-  - Post-cleanup typecheck passed after the final harness/doc cleanup and the removal of the obsolete SQLite result-cache inspection script.
+  - Ran on 2026-03-31 outside the sandbox so the browser smokes could launch Chromium. `typecheck`, `eslint`, 10 Vitest files / 109 tests, `smoke:foundation`, `smoke:results-browser`, `smoke:shell-browser`, `smoke:productivity-browser`, and the Rust workspace all passed. The existing TanStack React Compiler warning in `src/features/query/QueryResultsTable.tsx` and the longstanding jsdom `flushSync` warnings in `src/test/query-workspace-component.test.tsx` remain unchanged.
+- `npm run smoke:postgres` skipped
+  - Ran decision on 2026-03-31. The required PostgreSQL smoke environment variables (`SPAROW_PG_HOST`, `SPAROW_PG_DATABASE`, `SPAROW_PG_USERNAME`, `SPAROW_PG_PASSWORD`) were not present in this shell, so the optional Phase 6 PostgreSQL smoke was not executed.

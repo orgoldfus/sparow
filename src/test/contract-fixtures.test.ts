@@ -7,10 +7,18 @@ import connectionSummaryFixture from '../../fixtures/contracts/connection-summar
 import connectionTestResultFixture from '../../fixtures/contracts/connection-test-result.json';
 import databaseSessionSnapshotFixture from '../../fixtures/contracts/database-session-snapshot.json';
 import deleteConnectionResultFixture from '../../fixtures/contracts/delete-connection-result.json';
+import deleteSavedQueryResultFixture from '../../fixtures/contracts/delete-saved-query-result.json';
 import disconnectSessionResultFixture from '../../fixtures/contracts/disconnect-session-result.json';
+import historyEntryFixture from '../../fixtures/contracts/history-entry.json';
+import listQueryHistoryRequestFixture from '../../fixtures/contracts/list-query-history-request.json';
+import listQueryHistoryResultFixture from '../../fixtures/contracts/list-query-history-result.json';
+import listSavedQueriesRequestFixture from '../../fixtures/contracts/list-saved-queries-request.json';
+import listSavedQueriesResultFixture from '../../fixtures/contracts/list-saved-queries-result.json';
 import listSchemaChildrenRequestFixture from '../../fixtures/contracts/list-schema-children-request.json';
 import listSchemaChildrenResultFixture from '../../fixtures/contracts/list-schema-children-result.json';
 import saveConnectionRequestFixture from '../../fixtures/contracts/save-connection-request.json';
+import saveSavedQueryRequestFixture from '../../fixtures/contracts/save-saved-query-request.json';
+import savedQueryFixture from '../../fixtures/contracts/saved-query.json';
 import refreshSchemaScopeRequestFixture from '../../fixtures/contracts/refresh-schema-scope-request.json';
 import schemaNodeFixture from '../../fixtures/contracts/schema-node.json';
 import schemaRefreshAcceptedFixture from '../../fixtures/contracts/schema-refresh-accepted.json';
@@ -40,7 +48,13 @@ import {
   isConnectionTestResult,
   isDatabaseSessionSnapshot,
   isDeleteConnectionResult,
+  isDeleteSavedQueryResult,
   isDisconnectSessionResult,
+  isHistoryEntry,
+  isListQueryHistoryRequest,
+  isListQueryHistoryResult,
+  isListSavedQueriesRequest,
+  isListSavedQueriesResult,
   isListSchemaChildrenRequest,
   isListSchemaChildrenResult,
   isQueryExecutionAccepted,
@@ -59,6 +73,8 @@ import {
   isQueryResultWindowRequest,
   isRefreshSchemaScopeRequest,
   isSaveConnectionRequest,
+  isSaveSavedQueryRequest,
+  isSavedQuery,
   isSchemaNode,
   isSchemaRefreshAccepted,
   isSchemaRefreshProgressEvent,
@@ -129,6 +145,38 @@ describe('contract fixtures', () => {
 
   it('validate the delete connection result fixture', () => {
     expect(isDeleteConnectionResult(deleteConnectionResultFixture)).toBe(true);
+  });
+
+  it('validate the history entry fixture', () => {
+    expect(isHistoryEntry(historyEntryFixture)).toBe(true);
+  });
+
+  it('validate the saved query fixture', () => {
+    expect(isSavedQuery(savedQueryFixture)).toBe(true);
+  });
+
+  it('validate the list query history request fixture', () => {
+    expect(isListQueryHistoryRequest(listQueryHistoryRequestFixture)).toBe(true);
+  });
+
+  it('validate the list query history result fixture', () => {
+    expect(isListQueryHistoryResult(listQueryHistoryResultFixture)).toBe(true);
+  });
+
+  it('validate the list saved queries request fixture', () => {
+    expect(isListSavedQueriesRequest(listSavedQueriesRequestFixture)).toBe(true);
+  });
+
+  it('validate the list saved queries result fixture', () => {
+    expect(isListSavedQueriesResult(listSavedQueriesResultFixture)).toBe(true);
+  });
+
+  it('validate the save saved query request fixture', () => {
+    expect(isSaveSavedQueryRequest(saveSavedQueryRequestFixture)).toBe(true);
+  });
+
+  it('validate the delete saved query result fixture', () => {
+    expect(isDeleteSavedQueryResult(deleteSavedQueryResultFixture)).toBe(true);
   });
 
   it('validate the disconnect session result fixture', () => {

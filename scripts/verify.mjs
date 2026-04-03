@@ -7,6 +7,7 @@ const commands = [
   ['npm', ['run', 'smoke:foundation']],
   ['npm', ['run', 'smoke:results-browser']],
   ['npm', ['run', 'smoke:shell-browser']],
+  ['npm', ['run', 'smoke:productivity-browser']],
   ['cargo', ['test', '--manifest-path', 'src-tauri/Cargo.toml']],
 ];
 

@@ -68,11 +68,19 @@ export type QueryTabState = {
   title: string;
   sql: string;
   targetConnectionId: string | null;
+  savedQueryId: string | null;
   dirty: boolean;
   lastExecutionSummary: string | null;
   lastRunSql: string | null;
   execution: QueryTabExecutionState;
   result: QueryTabResultState;
+};
+
+export type OpenQueryTabInput = {
+  sql: string;
+  title?: string | null;
+  targetConnectionId?: string | null;
+  savedQueryId?: string | null;
 };
 
 type UseQueryWorkspaceArgs = {
@@ -91,10 +99,19 @@ export type QueryWorkspaceState = {
   tabs: QueryTabState[];
   createTab: () => void;
   createNewTab: () => void;
+  openQueryTab: (input: OpenQueryTabInput) => string;
   closeTab: (tabId: string) => void;
   selectTab: (tabId: string) => void;
   setTabSql: (tabId: string, sql: string) => void;
   updateTabSql: (tabId: string, sql: string) => void;
+  updateTabMetadata: (
+    tabId: string,
+    updates: {
+      savedQueryId?: string | null;
+      targetConnectionId?: string | null;
+      title?: string | null;
+    },
+  ) => void;
   setTabTargetConnection: (tabId: string, connectionId: string | null) => void;
   updateTabTargetConnection: (tabId: string, connectionId: string | null) => void;
   startTabQuery: (tabId: string, intent: QueryExecutionIntent) => Promise<void>;
@@ -120,6 +137,7 @@ export function useQueryWorkspace({
 }: UseQueryWorkspaceArgs): QueryWorkspaceState {
   const [tabs, setTabs] = useState<QueryTabState[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const previousActiveConnectionIdRef = useRef<string | null>(activeSession?.connectionId ?? null);
   const seenQueryEventsRef = useRef<Set<string>>(new Set());
   const seenResultExportEventsRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<QueryTabState[]>(tabs);
@@ -142,7 +160,9 @@ export function useQueryWorkspace({
 
     const initialTargetConnectionId =
       activeSession?.connectionId ?? selectedConnectionId ?? connections[0]?.id ?? null;
-    const initialTab = createTabState(initialTargetConnectionId);
+    const initialTab = createTabState({
+      targetConnectionId: initialTargetConnectionId,
+    });
     startTransition(() => {
       commitTabs([initialTab]);
       setActiveTabId(initialTab.id);
@@ -150,20 +170,27 @@ export function useQueryWorkspace({
   }, [activeSession?.connectionId, connections, selectedConnectionId, tabs.length]);
 
   useEffect(() => {
-    if (!activeSession?.connectionId || !activeTabId) {
+    const nextConnectionId = activeSession?.connectionId ?? null;
+    const previousConnectionId = previousActiveConnectionIdRef.current;
+
+    if (!nextConnectionId || !activeTabId) {
+      previousActiveConnectionIdRef.current = nextConnectionId;
       return;
     }
 
     commitTabs((currentTabs) =>
       currentTabs.map((tab) =>
-        tab.id === activeTabId && !tab.execution.jobId
+        tab.id === activeTabId &&
+        !tab.execution.jobId &&
+        tab.targetConnectionId === previousConnectionId
           ? {
               ...tab,
-              targetConnectionId: activeSession.connectionId,
+              targetConnectionId: nextConnectionId,
             }
           : tab,
       ),
     );
+    previousActiveConnectionIdRef.current = nextConnectionId;
   }, [
     activeSession?.connectionId,
     activeTabId,
@@ -219,13 +246,33 @@ export function useQueryWorkspace({
   );
 
   function createTab() {
-    const nextTargetConnectionId =
-      activeSession?.connectionId ?? selectedConnectionId ?? connections[0]?.id ?? null;
-    const nextTab = createTabState(nextTargetConnectionId);
+    openQueryTab({
+      sql: INITIAL_SQL,
+      targetConnectionId:
+        activeSession?.connectionId ?? selectedConnectionId ?? connections[0]?.id ?? null,
+    });
+  }
+
+  function openQueryTab(input: OpenQueryTabInput): string {
+    const nextTab = createTabState({
+      sql: input.sql,
+      title: input.title ?? null,
+      targetConnectionId:
+        input.targetConnectionId !== undefined
+          ? input.targetConnectionId
+          : activeSession?.connectionId ??
+            selectedConnectionId ??
+            connections[0]?.id ??
+            null,
+      savedQueryId: input.savedQueryId ?? null,
+    });
+
     startTransition(() => {
       commitTabs((currentTabs) => [...currentTabs, nextTab]);
       setActiveTabId(nextTab.id);
     });
+
+    return nextTab.id;
   }
 
   function closeTab(tabId: string) {
@@ -253,7 +300,9 @@ export function useQueryWorkspace({
     let nextActiveTabId = activeTabId;
 
     if (remainingTabs.length === 0) {
-      const fallbackTab = createTabState(fallbackTargetConnectionId);
+      const fallbackTab = createTabState({
+        targetConnectionId: fallbackTargetConnectionId,
+      });
       nextTabs = [fallbackTab];
       nextActiveTabId = fallbackTab.id;
     } else if (isClosingActiveTab) {
@@ -290,6 +339,34 @@ export function useQueryWorkspace({
   function setTabTargetConnection(tabId: string, connectionId: string | null) {
     commitTabs((currentTabs) =>
       currentTabs.map((tab) => (tab.id === tabId ? { ...tab, targetConnectionId: connectionId } : tab)),
+    );
+  }
+
+  function updateTabMetadata(
+    tabId: string,
+    updates: {
+      savedQueryId?: string | null;
+      targetConnectionId?: string | null;
+      title?: string | null;
+    },
+  ) {
+    commitTabs((currentTabs) =>
+      currentTabs.map((tab) => {
+        if (tab.id !== tabId) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          savedQueryId:
+            updates.savedQueryId === undefined ? tab.savedQueryId : updates.savedQueryId,
+          targetConnectionId:
+            updates.targetConnectionId === undefined
+              ? tab.targetConnectionId
+              : updates.targetConnectionId,
+          title: updates.title?.trim() || tab.title,
+        };
+      }),
     );
   }
 
@@ -751,10 +828,12 @@ export function useQueryWorkspace({
     tabs,
     createTab,
     createNewTab: createTab,
+    openQueryTab,
     closeTab,
     selectTab,
     setTabSql,
     updateTabSql: setTabSql,
+    updateTabMetadata,
     setTabTargetConnection,
     updateTabTargetConnection: setTabTargetConnection,
     startTabQuery,
@@ -781,12 +860,23 @@ export function useQueryWorkspace({
   };
 }
 
-function createTabState(targetConnectionId: string | null): QueryTabState {
+function createTabState({
+  sql = INITIAL_SQL,
+  savedQueryId = null,
+  targetConnectionId,
+  title,
+}: {
+  sql?: string;
+  savedQueryId?: string | null;
+  targetConnectionId: string | null;
+  title?: string | null;
+}): QueryTabState {
   return {
     id: `tab-${crypto.randomUUID()}`,
-    title: deriveTabTitle(INITIAL_SQL),
-    sql: INITIAL_SQL,
+    title: title?.trim() || deriveTabTitle(sql),
+    sql,
     targetConnectionId,
+    savedQueryId,
     dirty: false,
     lastExecutionSummary: null,
     lastRunSql: null,

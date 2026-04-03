@@ -10,7 +10,12 @@ import type {
   ConnectionTestResult,
   DatabaseSessionSnapshot,
   DeleteConnectionResult,
+  DeleteSavedQueryResult,
   DisconnectSessionResult,
+  ListQueryHistoryRequest,
+  ListQueryHistoryResult,
+  ListSavedQueriesRequest,
+  ListSavedQueriesResult,
   ListSchemaChildrenRequest,
   ListSchemaChildrenResult,
   CancelQueryExecutionResult,
@@ -27,6 +32,8 @@ import type {
   QueryResultWindowRequest,
   RefreshSchemaScopeRequest,
   SaveConnectionRequest,
+  SaveSavedQueryRequest,
+  SavedQuery,
   SchemaRefreshAccepted,
   SchemaRefreshProgressEvent,
   SchemaSearchRequest,
@@ -42,7 +49,12 @@ import {
   isConnectionTestResult,
   isDatabaseSessionSnapshot,
   isDeleteConnectionResult,
+  isDeleteSavedQueryResult,
   isDisconnectSessionResult,
+  isListQueryHistoryRequest,
+  isListQueryHistoryResult,
+  isListSavedQueriesRequest,
+  isListSavedQueriesResult,
   isListSchemaChildrenResult,
   isQueryExecutionAccepted,
   isQueryExecutionProgressEvent,
@@ -53,9 +65,11 @@ import {
   isQueryResultCountResult,
   isQueryResultWindow,
   isQueryResultWindowRequest,
+  isSaveSavedQueryRequest,
   isSchemaRefreshAccepted,
   isSchemaRefreshProgressEvent,
   isSchemaSearchResult,
+  isSavedQuery,
 } from './guards';
 
 type CancelJobResult = {
@@ -124,6 +138,42 @@ export async function disconnectActiveConnection(): Promise<DisconnectSessionRes
 export async function deleteSavedConnection(id: string): Promise<DeleteConnectionResult> {
   const payload = await invoke<unknown>('delete_saved_connection', { id });
   return assertContract(isDeleteConnectionResult, payload, 'delete_saved_connection');
+}
+
+export async function listQueryHistory(
+  request: ListQueryHistoryRequest,
+): Promise<ListQueryHistoryResult> {
+  if (!isListQueryHistoryRequest(request)) {
+    throw new Error('Invalid ListQueryHistoryRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('list_query_history', { request });
+  return assertContract(isListQueryHistoryResult, payload, 'list_query_history');
+}
+
+export async function listSavedQueries(
+  request: ListSavedQueriesRequest,
+): Promise<ListSavedQueriesResult> {
+  if (!isListSavedQueriesRequest(request)) {
+    throw new Error('Invalid ListSavedQueriesRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('list_saved_queries', { request });
+  return assertContract(isListSavedQueriesResult, payload, 'list_saved_queries');
+}
+
+export async function saveSavedQuery(request: SaveSavedQueryRequest): Promise<SavedQuery> {
+  if (!isSaveSavedQueryRequest(request)) {
+    throw new Error('Invalid SaveSavedQueryRequest payload.');
+  }
+
+  const payload = await invoke<unknown>('save_saved_query', { request });
+  return assertContract(isSavedQuery, payload, 'save_saved_query');
+}
+
+export async function deleteSavedQuery(id: string): Promise<DeleteSavedQueryResult> {
+  const payload = await invoke<unknown>('delete_saved_query', { id });
+  return assertContract(isDeleteSavedQueryResult, payload, 'delete_saved_query');
 }
 
 export async function listSchemaChildren(

@@ -28,6 +28,7 @@ type QueryWorkspaceProps = {
   /** @deprecated - no longer used in rendering but kept for API compatibility */
   connections?: ConnectionSummary[];
   onError: (error: AppError | Error) => void;
+  registerEditorFocusTarget?: (focus: (() => void) | null) => void;
   showTabStrip?: boolean;
   workspace: QueryWorkspaceState;
 };
@@ -38,6 +39,7 @@ type QueryResultsPanelProps = {
   activeSession: DatabaseSessionSnapshot | null;
   activeView: QueryResultsView;
   onActiveViewChange: (view: QueryResultsView) => void;
+  registerResultsFocusTarget?: (focus: (() => void) | null) => void;
   workspace: QueryWorkspaceState;
 };
 
@@ -117,6 +119,7 @@ export function QueryTabStrip({ workspace }: { workspace: QueryWorkspaceState })
 export function QueryWorkspace({
   activeSession,
   onError,
+  registerEditorFocusTarget,
   showTabStrip = true,
   workspace,
 }: QueryWorkspaceProps) {
@@ -131,6 +134,20 @@ export function QueryWorkspace({
   runActiveEditorRef.current = () => {
     void runActiveEditor();
   };
+
+  useEffect(() => {
+    registerEditorFocusTarget?.(
+      editorRef.current
+        ? () => {
+            editorRef.current?.focus();
+          }
+        : null,
+    );
+
+    return () => {
+      registerEditorFocusTarget?.(null);
+    };
+  }, [registerEditorFocusTarget]);
 
   useEffect(() => {
     if (!monacoRef.current) {
@@ -175,6 +192,9 @@ export function QueryWorkspace({
     cursorListenerRef.current?.dispose();
     editorRef.current = editorInstance;
     monacoRef.current = monacoInstance;
+    registerEditorFocusTarget?.(() => {
+      editorInstance.focus();
+    });
 
     monacoInstance.editor.defineTheme('sparow-dark', {
       base: 'vs-dark',
@@ -325,14 +345,34 @@ export function QueryResultsPanel({
   activeSession,
   activeView,
   onActiveViewChange,
+  registerResultsFocusTarget,
   workspace,
 }: QueryResultsPanelProps) {
+  const quickFilterRef = useRef<HTMLInputElement | null>(null);
   const tab = workspace.activeTab;
   const result = tab?.execution.lastResult ?? null;
   const summary = tab?.result.summary ?? (result?.kind === 'rows' ? result : null);
   const totalRows = resolveVisibleResultRowCount(summary, tab?.result.window ?? null);
   const displayResultCount = formatResultTabCount(summary);
   const resultKind = result?.kind ?? null;
+
+  useEffect(() => {
+    registerResultsFocusTarget?.(() => {
+      if (activeView !== 'results') {
+        onActiveViewChange('results');
+        window.requestAnimationFrame(() => {
+          quickFilterRef.current?.focus();
+        });
+        return;
+      }
+
+      quickFilterRef.current?.focus();
+    });
+
+    return () => {
+      registerResultsFocusTarget?.(null);
+    };
+  }, [activeView, onActiveViewChange, registerResultsFocusTarget]);
 
   return (
     <Tabs
@@ -387,8 +427,8 @@ export function QueryResultsPanel({
                 aria-label="Filter result rows"
                 className="w-full bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                 data-testid="result-quick-filter"
-                disabled={!summary}
                 placeholder="Filter result rows"
+                ref={quickFilterRef}
                 value={tab?.result.quickFilter ?? ''}
                 onChange={(event) => {
                   if (tab) {
@@ -399,7 +439,9 @@ export function QueryResultsPanel({
             </label>
             {activeSession ? (
               <span className="shrink-0 text-xs text-[var(--text-muted)]">{activeSession.name}</span>
-            ) : null}
+            ) : (
+              <span className="shrink-0 text-xs text-[var(--text-muted)]">Connect a saved target to run queries.</span>
+            )}
           </div>
 
           <div className="min-h-0 overflow-hidden">

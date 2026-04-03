@@ -131,6 +131,18 @@ function Harness({
       </button>
       <button
         onClick={() => {
+          workspace.openQueryTab({
+            sql: 'select 42',
+            title: 'saved-without-default',
+            targetConnectionId: null,
+          });
+        }}
+        type="button"
+      >
+        open-null-target
+      </button>
+      <button
+        onClick={() => {
           if (workspace.activeTabId) {
             workspace.setTabSql(workspace.activeTabId, 'select 1');
           }
@@ -271,6 +283,18 @@ describe('useQueryWorkspace', () => {
     fireEvent.click(screen.getByText('update-sql'));
     expect(screen.getByTestId('active-tab-title')).toHaveTextContent('select 1');
     expect(screen.getByTestId('active-tab-dirty')).toHaveTextContent('dirty');
+  });
+
+  it('preserves an explicit null target connection when opening a tab', async () => {
+    const onError = vi.fn();
+    render(<Harness onError={onError} queryEvents={[]} />);
+
+    fireEvent.click(screen.getByText('open-null-target'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-tab-title')).toHaveTextContent('saved-without-default');
+    });
+    expect(screen.getByTestId('active-tab-target')).toHaveTextContent('none');
   });
 
   it('blocks running when the tab target does not match the active session', async () => {

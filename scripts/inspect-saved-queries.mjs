@@ -8,10 +8,11 @@ if (!args.db) {
   printUsage();
   process.exitCode = 1;
 } else {
-  runSqliteInspector('history', [
+  runSqliteInspector('saved-queries', [
     '--db',
     args.db,
     ...(args.connection ? ['--connection', args.connection] : []),
+    ...(args.search ? ['--search', args.search] : []),
     '--limit',
     String(args.limit),
   ]);
@@ -21,6 +22,7 @@ function parseArgs(argv) {
   const parsed = {
     db: null,
     connection: null,
+    search: null,
     limit: 20,
   };
 
@@ -33,6 +35,10 @@ function parseArgs(argv) {
         break;
       case '--connection':
         parsed.connection = argv[index + 1] ?? null;
+        index += 1;
+        break;
+      case '--search':
+        parsed.search = argv[index + 1] ?? null;
         index += 1;
         break;
       case '--limit':
@@ -49,6 +55,6 @@ function parseArgs(argv) {
 
 function printUsage() {
   process.stderr.write(
-    'Usage: node ./scripts/inspect-query-history.mjs --db <sqlite-path> [--connection <connection-id>] [--limit <n>]\n',
+    'Usage: node ./scripts/inspect-saved-queries.mjs --db <sqlite-path> [--connection <connection-id>] [--search <query>] [--limit <n>]\n',
   );
 }

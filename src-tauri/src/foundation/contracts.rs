@@ -307,7 +307,63 @@ pub struct SavedQuery {
     pub title: String,
     pub sql: String,
     pub tags: Vec<String>,
+    pub connection_profile_id: Option<String>,
+    pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Requests a paginated slice of accepted-query history filtered by text and optional connection.
+pub struct ListQueryHistoryRequest {
+    pub search_query: String,
+    pub connection_id: Option<String>,
+    pub limit: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Returns accepted-query history entries plus a has-more flag for pagination.
+pub struct ListQueryHistoryResult {
+    pub entries: Vec<HistoryEntry>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Requests a paginated slice of saved queries filtered by text and optional connection.
+pub struct ListSavedQueriesRequest {
+    pub search_query: String,
+    pub connection_id: Option<String>,
+    pub limit: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Returns saved queries plus a has-more flag for pagination.
+pub struct ListSavedQueriesResult {
+    pub entries: Vec<SavedQuery>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Creates or updates a saved query definition and its associated connection profile metadata.
+pub struct SaveSavedQueryRequest {
+    pub id: Option<String>,
+    pub title: String,
+    pub sql: String,
+    pub tags: Vec<String>,
+    pub connection_profile_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Returns the identifier of the deleted saved query.
+pub struct DeleteSavedQueryResult {
+    pub id: String,
 }
 
 #[allow(dead_code)]
@@ -850,13 +906,16 @@ mod tests {
         AppBootstrap, AppError, BackgroundJobAccepted, BackgroundJobProgressEvent,
         CancelQueryExecutionResult, CancelQueryResultExportResult, ConnectionDetails,
         ConnectionSummary, ConnectionTestResult, DatabaseSessionSnapshot, DeleteConnectionResult,
-        DisconnectSessionResult, ListSchemaChildrenRequest, ListSchemaChildrenResult,
-        QueryExecutionAccepted, QueryExecutionProgressEvent, QueryExecutionRequest,
-        QueryExecutionResult, QueryResultCell, QueryResultCountRequest, QueryResultCountResult,
-        QueryResultExportAccepted, QueryResultExportProgressEvent, QueryResultExportRequest,
-        QueryResultStatus, QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
-        SaveConnectionRequest, SchemaNode, SchemaRefreshAccepted, SchemaRefreshProgressEvent,
-        SchemaSearchRequest, SchemaSearchResult, SslMode, TestConnectionRequest,
+        DeleteSavedQueryResult, DisconnectSessionResult, HistoryEntry, ListQueryHistoryRequest,
+        ListQueryHistoryResult, ListSavedQueriesRequest, ListSavedQueriesResult,
+        ListSchemaChildrenRequest, ListSchemaChildrenResult, QueryExecutionAccepted,
+        QueryExecutionProgressEvent, QueryExecutionRequest, QueryExecutionResult, QueryResultCell,
+        QueryResultCountRequest, QueryResultCountResult, QueryResultExportAccepted,
+        QueryResultExportProgressEvent, QueryResultExportRequest, QueryResultStatus,
+        QueryResultWindow, QueryResultWindowRequest, RefreshSchemaScopeRequest,
+        SaveConnectionRequest, SaveSavedQueryRequest, SavedQuery, SchemaNode,
+        SchemaRefreshAccepted, SchemaRefreshProgressEvent, SchemaSearchRequest, SchemaSearchResult,
+        SslMode, TestConnectionRequest,
     };
 
     const APP_BOOTSTRAP_FIXTURE: &str =
@@ -880,6 +939,21 @@ mod tests {
         include_str!("../../../fixtures/contracts/database-session-snapshot.json");
     const DELETE_CONNECTION_RESULT_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/delete-connection-result.json");
+    const HISTORY_ENTRY_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/history-entry.json");
+    const SAVED_QUERY_FIXTURE: &str = include_str!("../../../fixtures/contracts/saved-query.json");
+    const LIST_QUERY_HISTORY_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-query-history-request.json");
+    const LIST_QUERY_HISTORY_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-query-history-result.json");
+    const LIST_SAVED_QUERIES_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-saved-queries-request.json");
+    const LIST_SAVED_QUERIES_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/list-saved-queries-result.json");
+    const SAVE_SAVED_QUERY_REQUEST_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/save-saved-query-request.json");
+    const DELETE_SAVED_QUERY_RESULT_FIXTURE: &str =
+        include_str!("../../../fixtures/contracts/delete-saved-query-result.json");
     const DISCONNECT_SESSION_RESULT_FIXTURE: &str =
         include_str!("../../../fixtures/contracts/disconnect-session-result.json");
     const SCHEMA_NODE_FIXTURE: &str = include_str!("../../../fixtures/contracts/schema-node.json");
@@ -1007,6 +1081,79 @@ mod tests {
             serde_json::from_str(DELETE_CONNECTION_RESULT_FIXTURE)
                 .expect("delete fixture should deserialize");
         assert!(fixture.disconnected);
+    }
+
+    #[test]
+    fn deserializes_history_entry_fixture() {
+        let fixture: HistoryEntry = serde_json::from_str(HISTORY_ENTRY_FIXTURE)
+            .expect("history fixture should deserialize");
+        assert_eq!(
+            fixture.connection_profile_id.as_deref(),
+            Some("conn-local-postgres")
+        );
+    }
+
+    #[test]
+    fn deserializes_saved_query_fixture() {
+        let fixture: SavedQuery = serde_json::from_str(SAVED_QUERY_FIXTURE)
+            .expect("saved query fixture should deserialize");
+        assert_eq!(fixture.title, "Active users");
+        assert_eq!(
+            fixture.connection_profile_id.as_deref(),
+            Some("conn-local-postgres")
+        );
+    }
+
+    #[test]
+    fn deserializes_list_query_history_request_fixture() {
+        let fixture: ListQueryHistoryRequest =
+            serde_json::from_str(LIST_QUERY_HISTORY_REQUEST_FIXTURE)
+                .expect("list query history request fixture should deserialize");
+        assert_eq!(fixture.search_query, "users");
+        assert_eq!(fixture.limit, 25);
+    }
+
+    #[test]
+    fn deserializes_list_query_history_result_fixture() {
+        let fixture: ListQueryHistoryResult =
+            serde_json::from_str(LIST_QUERY_HISTORY_RESULT_FIXTURE)
+                .expect("list query history result fixture should deserialize");
+        assert_eq!(fixture.entries.len(), 1);
+        assert!(fixture.has_more);
+    }
+
+    #[test]
+    fn deserializes_list_saved_queries_request_fixture() {
+        let fixture: ListSavedQueriesRequest =
+            serde_json::from_str(LIST_SAVED_QUERIES_REQUEST_FIXTURE)
+                .expect("list saved queries request fixture should deserialize");
+        assert_eq!(fixture.search_query, "active");
+        assert_eq!(fixture.limit, 25);
+    }
+
+    #[test]
+    fn deserializes_list_saved_queries_result_fixture() {
+        let fixture: ListSavedQueriesResult =
+            serde_json::from_str(LIST_SAVED_QUERIES_RESULT_FIXTURE)
+                .expect("list saved queries result fixture should deserialize");
+        assert_eq!(fixture.entries.len(), 1);
+        assert!(!fixture.has_more);
+    }
+
+    #[test]
+    fn deserializes_save_saved_query_request_fixture() {
+        let fixture: SaveSavedQueryRequest = serde_json::from_str(SAVE_SAVED_QUERY_REQUEST_FIXTURE)
+            .expect("save saved query request fixture should deserialize");
+        assert_eq!(fixture.id, None);
+        assert_eq!(fixture.tags, vec!["users".to_string(), "ops".to_string()]);
+    }
+
+    #[test]
+    fn deserializes_delete_saved_query_result_fixture() {
+        let fixture: DeleteSavedQueryResult =
+            serde_json::from_str(DELETE_SAVED_QUERY_RESULT_FIXTURE)
+                .expect("delete saved query result fixture should deserialize");
+        assert_eq!(fixture.id, "saved-query-active-users");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { ChevronRight, FolderTree, LoaderCircle, RefreshCcw, Search, Table2 } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { cn } from '../../lib/utils';
@@ -11,10 +11,35 @@ import type { SchemaBrowserState } from './useSchemaBrowser';
 
 type SchemaSidebarProps = {
   activeSession: DatabaseSessionSnapshot | null;
+  registerFocusTarget?: (focus: (() => void) | null) => void;
   schema: SchemaBrowserState;
 };
 
-export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
+export function SchemaSidebar({ activeSession, registerFocusTarget, schema }: SchemaSidebarProps) {
+  const disabledFocusRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const treeRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    registerFocusTarget?.(() => {
+      if (!schema.isDisabled) {
+        if (treeRef.current) {
+          treeRef.current.focus();
+          return;
+        }
+
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      disabledFocusRef.current?.focus();
+    });
+
+    return () => {
+      registerFocusTarget?.(null);
+    };
+  }, [registerFocusTarget, schema.isDisabled]);
+
   return (
     <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-[var(--border-subtle)] bg-[color-mix(in_oklch,_var(--surface-sidebar)_94%,_black_6%)]">
       <div className="px-4 py-2.5">
@@ -42,6 +67,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
               <input
                 aria-label="Search schema cache"
                 className="w-full bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+                ref={searchInputRef}
                 onChange={(event) => { schema.setSearchQuery(event.currentTarget.value); }}
                 placeholder="Search tables, views, columns…"
                 value={schema.searchQuery}
@@ -54,7 +80,9 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
       <ScrollArea className="min-h-0 px-3 pb-3">
         <div className="grid gap-2">
           {schema.isDisabled ? (
-            <EmptyState message="Connect a saved PostgreSQL target to browse cached schema and relation metadata." />
+            <div data-testid="schema-disabled-focus-target" ref={disabledFocusRef} tabIndex={-1}>
+              <EmptyState message="Connect a saved PostgreSQL target to browse cached schema and relation metadata." />
+            </div>
           ) : schema.searchQuery.trim().length > 0 ? (
             schema.searchResults.length > 0 ? (
               schema.searchResults.map((node) => (
@@ -84,6 +112,7 @@ export function SchemaSidebar({ activeSession, schema }: SchemaSidebarProps) {
               onKeyDown={(event) => {
                 void handleTreeKeyDown(event, schema);
               }}
+              ref={treeRef}
               role="tree"
               tabIndex={0}
             >
@@ -167,6 +196,10 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function handleTreeKeyDown(event: KeyboardEvent<HTMLDivElement>, schema: SchemaBrowserState) {
+  if (event.target !== event.currentTarget) {
+    return;
+  }
+
   switch (event.key) {
     case 'ArrowUp':
       event.preventDefault();
@@ -183,6 +216,19 @@ function handleTreeKeyDown(event: KeyboardEvent<HTMLDivElement>, schema: SchemaB
     case 'ArrowRight':
       event.preventDefault();
       void schema.handleTreeNavigation('right');
+      break;
+    case 'Enter':
+    case ' ':
+      event.preventDefault();
+      if (schema.selectedNode) {
+        if (schema.selectedNode.hasChildren) {
+          void schema.toggleNode(schema.selectedNode);
+        } else {
+          schema.selectNode(schema.selectedNode);
+        }
+      } else if (schema.visibleRows[0]) {
+        schema.selectNode(schema.visibleRows[0].node);
+      }
       break;
     default:
       break;
